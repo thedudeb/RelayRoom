@@ -608,6 +608,10 @@ td strong {
   gap: 10px;
 }
 
+.auth-form {
+  display: contents;
+}
+
 .landing-nav nav > a:not(.button) {
   color: var(--muted);
   font-size: 13px;

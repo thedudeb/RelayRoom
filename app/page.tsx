@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { signIn } from "@/auth";
 
 const heroRows = [
   {
@@ -51,6 +52,22 @@ const queueStates = [
   ["Uploaded", "1"]
 ];
 
+async function signInWithGoogle() {
+  "use server";
+  await signIn("google", { redirectTo: "/dashboard" });
+}
+
+function GoogleSignInButton({ className = "button" }: { className?: string }) {
+  return (
+    <form action={signInWithGoogle} className="auth-form">
+      <button className={className} type="submit">
+        <span className="google-mark" aria-hidden="true">G</span>
+        Log in with Google
+      </button>
+    </form>
+  );
+}
+
 export default function Home() {
   return (
     <main className="landing">
@@ -72,10 +89,7 @@ export default function Home() {
             <a href="/dashboard?demo=true">Demo</a>
             <Link href="/settings">API</Link>
             <ThemeToggle compact />
-            <Link className="button" href="/api/auth/signin/google">
-              <span className="google-mark" aria-hidden="true">G</span>
-              Log in with Google
-            </Link>
+            <GoogleSignInButton />
           </nav>
         </header>
 
@@ -93,10 +107,7 @@ export default function Home() {
                 <Play aria-hidden="true" size={17} />
                 Demo login
               </a>
-              <Link className="button landing-cta" href="/api/auth/signin/google">
-                <span className="google-mark" aria-hidden="true">G</span>
-                Log in with Google
-              </Link>
+              <GoogleSignInButton className="button landing-cta" />
             </div>
             <div className="landing-stats" aria-label="Reliability highlights">
               <span><strong>0</strong> silent drops</span>
