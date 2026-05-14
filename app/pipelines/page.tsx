@@ -1,21 +1,34 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { RulePreview } from "@/components/pipelines/RulePreview";
-import { getCurrentAccount } from "@/lib/auth/account";
-import { getPipelinesForDemo, getQueueItemsForDemo } from "@/lib/data/repository";
+import { requireAppAccess } from "@/lib/auth/account";
+import {
+  getPipelinesForDemo,
+  getPipelinesForUser,
+  getQueueItemsForDemo,
+  getQueueItemsForUser
+} from "@/lib/data/repository";
 import type { QueueItem } from "@/lib/domain/types";
 
-export default async function PipelinesPage() {
-  const [account, pipelines, queueItems] = await Promise.all([
-    getCurrentAccount(),
-    getPipelinesForDemo(),
-    getQueueItemsForDemo()
-  ]);
+export default async function PipelinesPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ demo?: string }>;
+}) {
+  const params = await searchParams;
+  const access = await requireAppAccess(params);
+  const [pipelines, queueItems] = access.isDemo
+    ? await Promise.all([getPipelinesForDemo(), getQueueItemsForDemo()])
+    : await Promise.all([
+        getPipelinesForUser(access.userId),
+        getQueueItemsForUser(access.userId)
+      ]);
 
   return (
     <AppShell
       title="Pipelines"
       subtitle="Configure watched Drive folders, destination channels, privacy, and routing rules."
-      account={account}
+      account={access.account}
+      isDemo={access.isDemo}
     >
       <div className="split">
         <section className="stack">
@@ -44,6 +57,12 @@ export default async function PipelinesPage() {
               </p>
             </div>
           ))}
+          {pipelines.length === 0 ? (
+            <div className="empty-state">
+              <strong>No pipelines yet.</strong>
+              <p>Connect Drive and YouTube first, then create a watched-folder pipeline.</p>
+            </div>
+          ) : null}
         </section>
         <aside className="stack">
           <div className="panel">

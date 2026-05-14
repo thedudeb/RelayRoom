@@ -257,17 +257,40 @@ textarea {
   justify-content: flex-end;
 }
 
+.account-menu {
+  position: relative;
+}
+
+.account-menu summary {
+  list-style: none;
+}
+
+.account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
 .account-badge {
   align-items: center;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   border: 1px solid var(--line);
   border-radius: 999px;
   box-shadow: var(--shadow-tight);
+  color: var(--ink);
+  cursor: pointer;
   display: inline-flex;
   gap: 9px;
   min-height: 40px;
   max-width: min(280px, 32vw);
   padding: 4px 11px 4px 5px;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.account-badge:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
 }
 
 .account-badge img,
@@ -314,6 +337,60 @@ textarea {
 .account-badge small {
   color: var(--muted);
   font-size: 11px;
+}
+
+.account-menu-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 8px;
+  min-width: 240px;
+  padding: 10px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+}
+
+.account-menu-identity {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 6px 10px;
+}
+
+.account-menu-identity strong,
+.account-menu-identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu-identity span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.account-menu-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  min-height: 34px;
+  padding: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.account-menu-item:hover {
+  background: var(--surface-muted);
 }
 
 .topbar h1 {

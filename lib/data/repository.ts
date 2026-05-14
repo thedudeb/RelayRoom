@@ -34,6 +34,25 @@ export async function getQueueItemsForDemo(): Promise<QueueItem[]> {
   }
 }
 
+export async function getQueueItemsForUser(userId: string): Promise<QueueItem[]> {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  try {
+    const items = await prisma.queueItem.findMany({
+      where: { userId },
+      include: { pipeline: true },
+      orderBy: { detectedAt: "desc" }
+    });
+
+    return items.map(mapQueueItem);
+  } catch (error) {
+    console.warn("Unable to load user queue data.", error);
+    return [];
+  }
+}
+
 export async function getConnectionsForDemo(): Promise<ConnectionSummary[]> {
   if (!hasDatabaseUrl()) {
     return demoConnections;
@@ -53,6 +72,25 @@ export async function getConnectionsForDemo(): Promise<ConnectionSummary[]> {
   }
 }
 
+export async function getConnectionsForUser(userId: string): Promise<ConnectionSummary[]> {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  try {
+    const connections = await prisma.oAuthConnection.findMany({
+      where: { userId },
+      include: { drivePipelines: true, youtubePipelines: true },
+      orderBy: { connectedAt: "asc" }
+    });
+
+    return connections.map(mapConnection);
+  } catch (error) {
+    console.warn("Unable to load user connection data.", error);
+    return [];
+  }
+}
+
 export async function getPipelinesForDemo(): Promise<Pipeline[]> {
   if (!hasDatabaseUrl()) {
     return demoPipelines;
@@ -69,6 +107,25 @@ export async function getPipelinesForDemo(): Promise<Pipeline[]> {
   } catch (error) {
     console.warn("Falling back to in-memory pipeline demo data.", error);
     return demoPipelines;
+  }
+}
+
+export async function getPipelinesForUser(userId: string): Promise<Pipeline[]> {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  try {
+    const pipelines = await prisma.pipeline.findMany({
+      where: { userId },
+      include: { rules: { orderBy: { priority: "asc" } } },
+      orderBy: { createdAt: "asc" }
+    });
+
+    return pipelines.map(mapPipeline);
+  } catch (error) {
+    console.warn("Unable to load user pipeline data.", error);
+    return [];
   }
 }
 

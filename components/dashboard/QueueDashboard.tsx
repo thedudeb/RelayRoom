@@ -131,8 +131,12 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
         </table>
         {visibleItems.length === 0 ? (
           <div className="empty-state">
-            <strong>No queue items match these filters.</strong>
-            <p>Try another status tab or switch back to all pipelines.</p>
+            <strong>{items.length === 0 ? "No queue items yet." : "No queue items match these filters."}</strong>
+            <p>
+              {items.length === 0
+                ? "Connect accounts and create a pipeline to start detecting recordings."
+                : "Try another status tab or switch back to all pipelines."}
+            </p>
           </div>
         ) : null}
       </div>

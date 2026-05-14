@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ChevronDown,
   GitBranch,
   ListChecks,
+  LogOut,
   PlugZap,
   Settings,
   SlidersHorizontal
 } from "lucide-react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { signOutFromApp } from "@/lib/auth/actions";
 
 export interface AccountSummary {
   name?: string | null;
@@ -29,14 +32,17 @@ export function AppShell({
   title,
   subtitle,
   account,
+  isDemo = false,
   children
 }: {
   title: string;
   subtitle: string;
   account?: AccountSummary | null;
+  isDemo?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const demoSuffix = isDemo ? "?demo=true" : "";
 
   return (
     <div className="app-shell">
@@ -51,7 +57,7 @@ export function AppShell({
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={`${item.href}${demoSuffix}`}
                 data-active={pathname.startsWith(item.href)}
               >
                 <Icon aria-hidden="true" size={18} />
@@ -93,17 +99,38 @@ function AccountBadge({ account }: { account?: AccountSummary | null }) {
     .join("") || "RR";
 
   return (
-    <div className="account-badge" title={supportingText}>
-      {account?.image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={account.image} alt="" referrerPolicy="no-referrer" />
-      ) : (
-        <span aria-hidden="true">{initials}</span>
-      )}
-      <div>
-        <strong>{displayName}</strong>
-        <small>{supportingText}</small>
+    <details className="account-menu">
+      <summary className="account-badge" title={supportingText}>
+        {account?.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={account.image} alt="" referrerPolicy="no-referrer" />
+        ) : (
+          <span aria-hidden="true">{initials}</span>
+        )}
+        <div>
+          <strong>{displayName}</strong>
+          <small>{supportingText}</small>
+        </div>
+        <ChevronDown aria-hidden="true" size={15} />
+      </summary>
+      <div className="account-menu-panel">
+        <div className="account-menu-identity">
+          <strong>{displayName}</strong>
+          <span>{supportingText}</span>
+        </div>
+        {account ? (
+          <form action={signOutFromApp}>
+            <button className="account-menu-item" type="submit">
+              <LogOut aria-hidden="true" size={15} />
+              Sign out
+            </button>
+          </form>
+        ) : (
+          <Link className="account-menu-item" href="/">
+            Sign in with Google
+          </Link>
+        )}
       </div>
-    </div>
+    </details>
   );
 }

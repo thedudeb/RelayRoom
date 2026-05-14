@@ -1,14 +1,20 @@
 import { AppShell } from "@/components/layout/AppShell";
-import { getCurrentAccount } from "@/lib/auth/account";
+import { requireAppAccess } from "@/lib/auth/account";
 
-export default async function SettingsPage() {
-  const account = await getCurrentAccount();
+export default async function SettingsPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ demo?: string }>;
+}) {
+  const params = await searchParams;
+  const access = await requireAppAccess(params);
 
   return (
     <AppShell
       title="Settings"
       subtitle="Timezone, API access, and platform-owner account controls."
-      account={account}
+      account={access.account}
+      isDemo={access.isDemo}
     >
       <div className="split">
         <section className="panel">

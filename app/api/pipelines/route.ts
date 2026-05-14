@@ -1,11 +1,25 @@
-import { NextResponse } from "next/server";
-import { getPipelinesForDemo, getQueueItemsForDemo } from "@/lib/data/repository";
+import { NextRequest, NextResponse } from "next/server";
+import { getApiAccess } from "@/lib/auth/account";
+import {
+  getPipelinesForDemo,
+  getPipelinesForUser,
+  getQueueItemsForDemo,
+  getQueueItemsForUser
+} from "@/lib/data/repository";
 
-export async function GET() {
-  const [pipelineData, queueItems] = await Promise.all([
-    getPipelinesForDemo(),
-    getQueueItemsForDemo()
-  ]);
+export async function GET(request: NextRequest) {
+  const access = await getApiAccess(request.nextUrl.searchParams);
+
+  if (!access) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const [pipelineData, queueItems] = access.isDemo
+    ? await Promise.all([getPipelinesForDemo(), getQueueItemsForDemo()])
+    : await Promise.all([
+        getPipelinesForUser(access.userId),
+        getQueueItemsForUser(access.userId)
+      ]);
 
   const pipelines = pipelineData.map((pipeline) => {
     const items = queueItems.filter((item) => item.pipelineId === pipeline.id);

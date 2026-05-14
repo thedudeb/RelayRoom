@@ -1,18 +1,24 @@
 import { AppShell } from "@/components/layout/AppShell";
-import { getCurrentAccount } from "@/lib/auth/account";
-import { getConnectionsForDemo } from "@/lib/data/repository";
+import { requireAppAccess } from "@/lib/auth/account";
+import { getConnectionsForDemo, getConnectionsForUser } from "@/lib/data/repository";
 
-export default async function ConnectionsPage() {
-  const [account, connections] = await Promise.all([
-    getCurrentAccount(),
-    getConnectionsForDemo()
-  ]);
+export default async function ConnectionsPage({
+  searchParams
+}: {
+  searchParams?: Promise<{ demo?: string }>;
+}) {
+  const params = await searchParams;
+  const access = await requireAppAccess(params);
+  const connections = access.isDemo
+    ? await getConnectionsForDemo()
+    : await getConnectionsForUser(access.userId);
 
   return (
     <AppShell
       title="Connections"
       subtitle="Separate OAuth grants for sign-in, Drive sources, and YouTube destinations."
-      account={account}
+      account={access.account}
+      isDemo={access.isDemo}
     >
       <div className="section-header">
         <div className="actions">
@@ -65,6 +71,12 @@ export default async function ConnectionsPage() {
             ))}
           </tbody>
         </table>
+        {connections.length === 0 ? (
+          <div className="empty-state">
+            <strong>No connections yet.</strong>
+            <p>Connect Drive and YouTube accounts to start building real pipelines.</p>
+          </div>
+        ) : null}
       </div>
     </AppShell>
   );

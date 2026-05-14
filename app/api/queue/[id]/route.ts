@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getApiAccess } from "@/lib/auth/account";
 import { demoTimezone } from "@/lib/data/seed";
-import { getPipelinesForDemo, getQueueItemsForDemo } from "@/lib/data/repository";
+import {
+  getPipelinesForDemo,
+  getPipelinesForUser,
+  getQueueItemsForDemo,
+  getQueueItemsForUser
+} from "@/lib/data/repository";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const [queueItems, pipelines] = await Promise.all([
-    getQueueItemsForDemo(),
-    getPipelinesForDemo()
-  ]);
+  const access = await getApiAccess(request.nextUrl.searchParams);
+
+  if (!access) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const [queueItems, pipelines] = access.isDemo
+    ? await Promise.all([getQueueItemsForDemo(), getPipelinesForDemo()])
+    : await Promise.all([
+        getQueueItemsForUser(access.userId),
+        getPipelinesForUser(access.userId)
+      ]);
   const item = queueItems.find((queueItem) => queueItem.id === id);
   if (!item) {
     return NextResponse.json({ error: "Queue item not found." }, { status: 404 });

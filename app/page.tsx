@@ -76,6 +76,22 @@ export default async function Home({
 }) {
   const params = await searchParams;
   const showAccessDenied = params?.error === "AccessDenied";
+  const showSignInRequired = params?.error === "SignInRequired";
+  const authDialog = showAccessDenied
+    ? {
+        eyebrow: "Access restricted",
+        title: "This Google account is not on the RelayRoom allowlist.",
+        body:
+          "Ask the RelayRoom owner to add your email to `AUTH_ALLOWED_EMAILS`, or use the approved Google account for this workspace."
+      }
+    : showSignInRequired
+      ? {
+          eyebrow: "Sign in required",
+          title: "Please log in before opening RelayRoom.",
+          body:
+            "The app pages are private. Use an approved Google account, or use demo login to explore with seeded sample data."
+        }
+      : null;
 
   return (
     <main className="landing">
@@ -168,7 +184,7 @@ export default async function Home({
         </div>
       </section>
 
-      {showAccessDenied ? (
+      {authDialog ? (
         <div className="access-modal-backdrop" role="presentation">
           <section
             aria-labelledby="access-denied-title"
@@ -179,12 +195,9 @@ export default async function Home({
             <div className="access-modal-icon">
               <LockKeyhole aria-hidden="true" size={28} />
             </div>
-            <p className="eyebrow">Access restricted</p>
-            <h2 id="access-denied-title">This Google account is not on the RelayRoom allowlist.</h2>
-            <p>
-              Ask the RelayRoom owner to add your email to `AUTH_ALLOWED_EMAILS`,
-              or use the approved Google account for this workspace.
-            </p>
+            <p className="eyebrow">{authDialog.eyebrow}</p>
+            <h2 id="access-denied-title">{authDialog.title}</h2>
+            <p>{authDialog.body}</p>
             <div className="access-modal-actions">
               <Link className="button primary" href="/">
                 Try another account
