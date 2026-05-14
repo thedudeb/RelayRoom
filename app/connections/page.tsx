@@ -1,13 +1,18 @@
 import { AppShell } from "@/components/layout/AppShell";
+import { getCurrentAccount } from "@/lib/auth/account";
 import { getConnectionsForDemo } from "@/lib/data/repository";
 
 export default async function ConnectionsPage() {
-  const connections = await getConnectionsForDemo();
+  const [account, connections] = await Promise.all([
+    getCurrentAccount(),
+    getConnectionsForDemo()
+  ]);
 
   return (
     <AppShell
       title="Connections"
       subtitle="Separate OAuth grants for sign-in, Drive sources, and YouTube destinations."
+      account={account}
     >
       <div className="section-header">
         <div className="actions">

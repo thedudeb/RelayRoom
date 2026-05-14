@@ -1,10 +1,14 @@
 import { AppShell } from "@/components/layout/AppShell";
+import { getCurrentAccount } from "@/lib/auth/account";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const account = await getCurrentAccount();
+
   return (
     <AppShell
       title="Settings"
       subtitle="Timezone, API access, and platform-owner account controls."
+      account={account}
     >
       <div className="split">
         <section className="panel">

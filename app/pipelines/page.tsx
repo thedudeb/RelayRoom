@@ -1,10 +1,12 @@
 import { AppShell } from "@/components/layout/AppShell";
 import { RulePreview } from "@/components/pipelines/RulePreview";
+import { getCurrentAccount } from "@/lib/auth/account";
 import { getPipelinesForDemo, getQueueItemsForDemo } from "@/lib/data/repository";
 import type { QueueItem } from "@/lib/domain/types";
 
 export default async function PipelinesPage() {
-  const [pipelines, queueItems] = await Promise.all([
+  const [account, pipelines, queueItems] = await Promise.all([
+    getCurrentAccount(),
     getPipelinesForDemo(),
     getQueueItemsForDemo()
   ]);
@@ -13,6 +15,7 @@ export default async function PipelinesPage() {
     <AppShell
       title="Pipelines"
       subtitle="Configure watched Drive folders, destination channels, privacy, and routing rules."
+      account={account}
     >
       <div className="split">
         <section className="stack">
