@@ -7,6 +7,7 @@ import {
   FileVideo,
   Gauge,
   KeyRound,
+  LockKeyhole,
   Play,
   RefreshCcw,
   Route,
@@ -116,11 +117,6 @@ export default async function Home({
               </a>
               <GoogleSignInButton className="button landing-cta" />
             </div>
-            {showAccessDenied ? (
-              <p className="landing-auth-error" role="alert">
-                This Google account is not on the RelayRoom allowlist.
-              </p>
-            ) : null}
             <div className="landing-stats" aria-label="Reliability highlights">
               <span><strong>0</strong> silent drops</span>
               <span><strong>1h</strong> detection target</span>
@@ -171,6 +167,35 @@ export default async function Home({
           </div>
         </div>
       </section>
+
+      {showAccessDenied ? (
+        <div className="access-modal-backdrop" role="presentation">
+          <section
+            aria-labelledby="access-denied-title"
+            aria-modal="true"
+            className="access-modal"
+            role="dialog"
+          >
+            <div className="access-modal-icon">
+              <LockKeyhole aria-hidden="true" size={28} />
+            </div>
+            <p className="eyebrow">Access restricted</p>
+            <h2 id="access-denied-title">This Google account is not on the RelayRoom allowlist.</h2>
+            <p>
+              Ask the RelayRoom owner to add your email to `AUTH_ALLOWED_EMAILS`,
+              or use the approved Google account for this workspace.
+            </p>
+            <div className="access-modal-actions">
+              <Link className="button primary" href="/">
+                Try another account
+              </Link>
+              <Link className="button" href="/dashboard?demo=true">
+                Demo login
+              </Link>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       <section className="landing-workflow" aria-label="Workflow">
         {workflow.map((step, index) => (

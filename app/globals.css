@@ -723,17 +723,6 @@ td strong {
   margin-top: 30px;
 }
 
-.landing-auth-error {
-  background: color-mix(in srgb, var(--red) 9%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--red) 35%, var(--line));
-  border-radius: 8px;
-  color: var(--red);
-  font-size: 13px;
-  margin: 16px 0 0;
-  max-width: 420px;
-  padding: 10px 12px;
-}
-
 .landing-stats {
   display: flex;
   flex-wrap: wrap;
@@ -760,6 +749,64 @@ td strong {
 .landing-cta {
   min-height: 44px;
   padding-inline: 16px;
+}
+
+.access-modal-backdrop {
+  align-items: center;
+  background: rgba(12, 10, 9, 0.58);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 50;
+}
+
+.access-modal {
+  background:
+    radial-gradient(circle at 90% 0, color-mix(in srgb, var(--red) 10%, transparent), transparent 30%),
+    var(--surface);
+  border: 1px solid color-mix(in srgb, var(--red) 26%, var(--line));
+  border-radius: 8px;
+  box-shadow: 0 30px 100px rgba(12, 10, 9, 0.28);
+  max-width: 520px;
+  padding: 28px;
+  width: min(100%, 520px);
+}
+
+.access-modal-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--red) 11%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--red) 30%, var(--line));
+  border-radius: 8px;
+  color: var(--red);
+  display: inline-flex;
+  height: 52px;
+  justify-content: center;
+  margin-bottom: 18px;
+  width: 52px;
+}
+
+.access-modal h2 {
+  font-size: 30px;
+  font-weight: 620;
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.access-modal p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 16px 0 0;
+}
+
+.access-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
 }
 
 .google-mark {
