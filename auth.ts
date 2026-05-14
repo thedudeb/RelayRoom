@@ -17,6 +17,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: {
     signIn: "/"
   },
+  callbacks: {
+    async signIn({ user, profile }) {
+      const email = user.email || profile?.email;
+      if (!email) {
+        return "/?error=AccessDenied";
+      }
+
+      const allowedEmails = getAllowedSignInEmails();
+      if (allowedEmails.size === 0) {
+        return true;
+      }
+
+      return allowedEmails.has(email.toLowerCase()) || "/?error=AccessDenied";
+    }
+  },
   events: {
     async createUser({ user }) {
       const initialAdminEmail = process.env.INITIAL_ADMIN_EMAIL;
@@ -33,3 +48,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }
   }
 });
+
+function getAllowedSignInEmails() {
+  const configuredEmails = [
+    process.env.INITIAL_ADMIN_EMAIL,
+    ...(process.env.AUTH_ALLOWED_EMAILS || "").split(",")
+  ];
+
+  return new Set(
+    configuredEmails
+      .map((email) => email?.trim().toLowerCase())
+      .filter((email): email is string => Boolean(email))
+  );
+}

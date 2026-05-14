@@ -723,6 +723,17 @@ td strong {
   margin-top: 30px;
 }
 
+.landing-auth-error {
+  background: color-mix(in srgb, var(--red) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--red) 35%, var(--line));
+  border-radius: 8px;
+  color: var(--red);
+  font-size: 13px;
+  margin: 16px 0 0;
+  max-width: 420px;
+  padding: 10px 12px;
+}
+
 .landing-stats {
   display: flex;
   flex-wrap: wrap;

@@ -68,7 +68,14 @@ function GoogleSignInButton({ className = "button" }: { className?: string }) {
   );
 }
 
-export default function Home() {
+export default async function Home({
+  searchParams
+}: {
+  searchParams?: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
+  const showAccessDenied = params?.error === "AccessDenied";
+
   return (
     <main className="landing">
       <section className="landing-hero">
@@ -109,6 +116,11 @@ export default function Home() {
               </a>
               <GoogleSignInButton className="button landing-cta" />
             </div>
+            {showAccessDenied ? (
+              <p className="landing-auth-error" role="alert">
+                This Google account is not on the RelayRoom allowlist.
+              </p>
+            ) : null}
             <div className="landing-stats" aria-label="Reliability highlights">
               <span><strong>0</strong> silent drops</span>
               <span><strong>1h</strong> detection target</span>

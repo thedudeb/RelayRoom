@@ -89,7 +89,7 @@ For local development, register these redirect URIs:
 
 For deployed environments, add the same paths under the production domain.
 
-Google sign-in is wired through Auth.js. Set `GOOGLE_SIGNIN_CLIENT_ID`, `GOOGLE_SIGNIN_CLIENT_SECRET`, `NEXTAUTH_URL`, and `AUTH_SECRET`/`NEXTAUTH_SECRET` before testing the real Google login button. `INITIAL_ADMIN_EMAIL` is promoted to the `OWNER` role the first time that account signs in.
+Google sign-in is wired through Auth.js. Set `GOOGLE_SIGNIN_CLIENT_ID`, `GOOGLE_SIGNIN_CLIENT_SECRET`, `NEXTAUTH_URL`, and `AUTH_SECRET`/`NEXTAUTH_SECRET` before testing the real Google login button. Sign-in is restricted to `INITIAL_ADMIN_EMAIL` plus any comma-separated emails in `AUTH_ALLOWED_EMAILS`. `INITIAL_ADMIN_EMAIL` is promoted to the `OWNER` role the first time that account signs in.
 
 ## Detection Design
 
