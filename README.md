@@ -73,7 +73,7 @@ npm run seed
 
 If `DATABASE_URL` is omitted, the dashboard, connection list, pipeline list, and demo APIs fall back to the in-memory fixtures in `lib/data/seed.ts`.
 
-## OAuth Setup Plan
+## OAuth Setup
 
 Google Cloud Console will need three OAuth clients:
 
@@ -84,12 +84,27 @@ Google Cloud Console will need three OAuth clients:
 For local development, register these redirect URIs:
 
 - `http://localhost:3000/api/auth/callback/google`
+- `http://127.0.0.1:3000/api/auth/callback/google`
 - `http://localhost:3000/api/oauth/drive/callback`
+- `http://127.0.0.1:3000/api/oauth/drive/callback`
 - `http://localhost:3000/api/oauth/youtube/callback`
+- `http://127.0.0.1:3000/api/oauth/youtube/callback`
 
 For deployed environments, add the same paths under the production domain.
 
 Google sign-in is wired through Auth.js. Set `GOOGLE_SIGNIN_CLIENT_ID`, `GOOGLE_SIGNIN_CLIENT_SECRET`, `NEXTAUTH_URL`, and `AUTH_SECRET`/`NEXTAUTH_SECRET` before testing the real Google login button. Sign-in is restricted to `INITIAL_ADMIN_EMAIL` plus any comma-separated emails in `AUTH_ALLOWED_EMAILS`. `INITIAL_ADMIN_EMAIL` is promoted to the `OWNER` role the first time that account signs in.
+
+Drive and YouTube connections are separate OAuth grants. Set these before testing the Connections page buttons:
+
+- `GOOGLE_DRIVE_CLIENT_ID`
+- `GOOGLE_DRIVE_CLIENT_SECRET`
+- `GOOGLE_DRIVE_REDIRECT_URI`
+- `GOOGLE_YOUTUBE_CLIENT_ID`
+- `GOOGLE_YOUTUBE_CLIENT_SECRET`
+- `GOOGLE_YOUTUBE_REDIRECT_URI`
+- `TOKEN_ENCRYPTION_KEY`
+
+The callbacks encrypt Google access and refresh tokens before saving them to `OAuthConnection`.
 
 ## Detection Design
 

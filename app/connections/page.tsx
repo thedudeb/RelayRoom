@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { requireAppAccess } from "@/lib/auth/account";
 import { getConnectionsForDemo, getConnectionsForUser } from "@/lib/data/repository";
@@ -5,7 +6,7 @@ import { getConnectionsForDemo, getConnectionsForUser } from "@/lib/data/reposit
 export default async function ConnectionsPage({
   searchParams
 }: {
-  searchParams?: Promise<{ demo?: string }>;
+  searchParams?: Promise<{ connected?: string; demo?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
@@ -22,10 +23,33 @@ export default async function ConnectionsPage({
     >
       <div className="section-header">
         <div className="actions">
-          <button className="button primary" type="button">Connect Drive</button>
-          <button className="button" type="button">Connect YouTube</button>
+          {access.isDemo ? (
+            <>
+              <button className="button primary" disabled type="button">Connect Drive</button>
+              <button className="button" disabled type="button">Connect YouTube</button>
+            </>
+          ) : (
+            <>
+              <Link className="button primary" href="/api/oauth/drive/start">
+                Connect Drive
+              </Link>
+              <Link className="button" href="/api/oauth/youtube/start">
+                Connect YouTube
+              </Link>
+            </>
+          )}
         </div>
       </div>
+      {params?.connected ? (
+        <div className="notice success" role="status">
+          Connection saved. RelayRoom can now use this account in pipelines.
+        </div>
+      ) : null}
+      {params?.error ? (
+        <div className="notice danger" role="alert">
+          {connectionErrorMessage(params.error)}
+        </div>
+      ) : null}
       <div className="table-wrap">
         <table>
           <thead>
@@ -80,4 +104,19 @@ export default async function ConnectionsPage({
       </div>
     </AppShell>
   );
+}
+
+function connectionErrorMessage(error: string) {
+  const messages: Record<string, string> = {
+    InvalidOAuthState: "The OAuth session expired. Please try connecting again.",
+    MissingGOOGLE_DRIVEConfig: "Drive OAuth is not configured yet. Add the Drive client ID and secret.",
+    MissingGOOGLE_YOUTUBEConfig:
+      "YouTube OAuth is not configured yet. Add the YouTube client ID and secret.",
+    MissingRefreshToken:
+      "Google did not return a refresh token. Remove RelayRoom from your Google account permissions, then connect again.",
+    MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing. Add it before saving OAuth tokens.",
+    TokenExchangeFailed: "Google did not accept the OAuth code. Please try again."
+  };
+
+  return messages[error] || `Connection failed: ${error}`;
 }

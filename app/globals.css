@@ -495,6 +495,13 @@ textarea {
   transform: translateY(-1px);
 }
 
+.button:disabled,
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
 .tab[data-active="true"],
 .button.primary {
   background: var(--blue);
@@ -530,6 +537,25 @@ textarea {
   border-radius: 8px;
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+
+.notice {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 14px;
+  padding: 11px 12px;
+}
+
+.notice.success {
+  background: var(--green-soft);
+  border-color: color-mix(in srgb, var(--green) 32%, var(--line));
+  color: var(--green);
+}
+
+.notice.danger {
+  background: var(--red-soft);
+  border-color: color-mix(in srgb, var(--red) 32%, var(--line));
+  color: var(--red);
 }
 
 table {
