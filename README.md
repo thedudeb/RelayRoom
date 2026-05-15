@@ -78,7 +78,7 @@ If `DATABASE_URL` is omitted, the dashboard, connection list, pipeline list, and
 Google Cloud Console will need three OAuth clients:
 
 - **Sign-in client:** basic profile and email scopes.
-- **Drive connection client:** `drive.file`, paired with Google Picker for folder selection.
+- **Drive connection client:** `drive.readonly`, paired with Google Picker for folder selection.
 - **YouTube connection client:** `youtube.upload` and `youtube`.
 
 For local development, register these redirect URIs:

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { PipelineStatus } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
@@ -46,7 +47,7 @@ const connectionConfig = {
       "openid",
       "email",
       "profile",
-      "https://www.googleapis.com/auth/drive.file"
+      "https://www.googleapis.com/auth/drive.readonly"
     ]
   },
   youtube: {
@@ -179,6 +180,8 @@ export async function handleGoogleConnectionCallback(
         status: "ACTIVE"
       }
     });
+
+    await resetPipelinesAfterReconnect(existingConnection.id, kind);
   } else {
     await prisma.oAuthConnection.create({
       data: {
@@ -199,6 +202,24 @@ export async function handleGoogleConnectionCallback(
   }
 
   redirect("/connections?connected=true");
+}
+
+async function resetPipelinesAfterReconnect(
+  connectionId: string,
+  kind: GoogleConnectionKind
+) {
+  const where =
+    kind === "drive"
+      ? { driveConnectionId: connectionId, status: PipelineStatus.ERRORED }
+      : { youtubeConnectionId: connectionId, status: PipelineStatus.ERRORED };
+
+  await prisma.pipeline.updateMany({
+    where,
+    data: {
+      errorMessage: null,
+      status: PipelineStatus.DISABLED
+    }
+  });
 }
 
 async function requireSignedInUser() {

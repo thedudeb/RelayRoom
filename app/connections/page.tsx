@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
+import { ConnectionActions } from "@/components/connections/ConnectionActions";
 import { requireAppAccess } from "@/lib/auth/account";
 import { getConnectionsForDemo, getConnectionsForUser } from "@/lib/data/repository";
 
 export default async function ConnectionsPage({
   searchParams
 }: {
-  searchParams?: Promise<{ connected?: string; demo?: string; error?: string }>;
+  searchParams?: Promise<{ connected?: string; demo?: string; disconnected?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
@@ -43,6 +44,11 @@ export default async function ConnectionsPage({
       {params?.connected ? (
         <div className="notice success" role="status">
           Connection saved. RelayRoom can now use this account in pipelines.
+        </div>
+      ) : null}
+      {params?.disconnected ? (
+        <div className="notice success" role="status">
+          Connection disconnected. Dependent pipelines were paused until you reconnect.
         </div>
       ) : null}
       {params?.error ? (
@@ -87,8 +93,11 @@ export default async function ConnectionsPage({
                 </td>
                 <td>
                   <div className="actions">
-                    <button className="button" type="button">Reconnect</button>
-                    <button className="button danger" type="button">Disconnect</button>
+                    <ConnectionActions
+                      connectionId={connection.id}
+                      kind={connection.kind}
+                      label={connection.label}
+                    />
                   </div>
                 </td>
               </tr>

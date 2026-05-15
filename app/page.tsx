@@ -55,7 +55,7 @@ const queueStates = [
 
 async function signInWithGoogle() {
   "use server";
-  await signIn("google", { redirectTo: "/dashboard" });
+  await signIn("google", { redirectTo: "/dashboard" }, { prompt: "select_account" });
 }
 
 function GoogleSignInButton({ className = "button" }: { className?: string }) {

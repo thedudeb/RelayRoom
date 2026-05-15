@@ -184,6 +184,7 @@ function mapPipeline(pipeline: PipelineWithRules): Pipeline {
     mode: pipeline.mode.toLowerCase() as Pipeline["mode"],
     status: pipeline.status.toLowerCase() as Pipeline["status"],
     privacyStatus: pipeline.privacyStatus.toLowerCase() as Pipeline["privacyStatus"],
+    pollingIntervalMinutes: pipeline.pollingIntervalMinutes,
     defaultTitleTemplate: pipeline.defaultTitleTemplate,
     defaultDescriptionTemplate: pipeline.defaultDescriptionTemplate,
     processedFromTime: pipeline.processedFromTime?.toISOString() || "",

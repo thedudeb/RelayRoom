@@ -10,7 +10,7 @@ export const demoConnections: ConnectionSummary[] = [
     accountEmail: "alex@acme.example",
     status: "active",
     connectedAt: "2026-05-10T14:00:00.000Z",
-    scopes: ["drive.file"],
+    scopes: ["drive.readonly"],
     usedByPipelines: ["Engineering Meeting Recordings", "Client Calls"]
   },
   {
@@ -20,7 +20,7 @@ export const demoConnections: ConnectionSummary[] = [
     accountEmail: "alex.personal@example.com",
     status: "expired",
     connectedAt: "2026-04-28T10:30:00.000Z",
-    scopes: ["drive.file"],
+    scopes: ["drive.readonly"],
     usedByPipelines: []
   },
   {
@@ -47,6 +47,7 @@ export const demoPipelines: Pipeline[] = [
     mode: "auto",
     status: "enabled",
     privacyStatus: "unlisted",
+    pollingIntervalMinutes: 15,
     defaultTitleTemplate: "{filename_no_ext} - {date}",
     defaultDescriptionTemplate:
       "Recorded on {date} at {time}. Source: {source_folder_name}.",
@@ -121,6 +122,7 @@ export const demoPipelines: Pipeline[] = [
     mode: "manual_approval",
     status: "enabled",
     privacyStatus: "unlisted",
+    pollingIntervalMinutes: 30,
     defaultTitleTemplate: "{filename_no_ext}",
     defaultDescriptionTemplate:
       "Client recording captured on {date} at {time}. Routed by {rule_name}.",

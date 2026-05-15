@@ -96,6 +96,7 @@ export interface Pipeline {
   mode: PipelineMode;
   status: PipelineStatus;
   privacyStatus: PrivacyStatus;
+  pollingIntervalMinutes: number;
   defaultTitleTemplate: string;
   defaultDescriptionTemplate: string;
   processedFromTime: string;

@@ -8,8 +8,7 @@ import {
   ListChecks,
   LogOut,
   PlugZap,
-  Settings,
-  SlidersHorizontal
+  Settings
 } from "lucide-react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -47,10 +46,10 @@ export function AppShell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
+        <Link className="brand" href={`/dashboard${demoSuffix}`}>
           <RelayRoomLogo />
           <span>Drive to YouTube operations</span>
-        </div>
+        </Link>
         <nav className="nav" aria-label="Primary navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -75,10 +74,6 @@ export function AppShell({
           </div>
           <div className="topbar-actions">
             <ThemeToggle />
-            <button className="button" type="button">
-              <SlidersHorizontal aria-hidden="true" size={16} />
-              Operator view
-            </button>
             <AccountBadge account={account} />
           </div>
         </header>

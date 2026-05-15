@@ -4,7 +4,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "RelayRoom",
-  description: "Route Drive recordings to YouTube playlists with observable operations."
+  description: "Route Drive recordings to YouTube playlists with observable operations.",
+  icons: {
+    icon: "/icon.svg"
+  }
 };
 
 export default function RootLayout({
