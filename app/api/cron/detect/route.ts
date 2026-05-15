@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       userId: true,
       youtubeConnection: { select: { encryptedRefreshToken: true } }
     },
-    where: { status: PipelineStatus.ENABLED }
+    where: { archivedAt: null, status: PipelineStatus.ENABLED }
   });
   const runnablePipelines = pipelines.filter((pipeline) => !usesSeedTokenPlaceholder(pipeline));
 

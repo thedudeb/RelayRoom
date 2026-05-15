@@ -175,6 +175,7 @@ model Pipeline {
   defaultTitleTemplate       String
   defaultDescriptionTemplate String
   errorMessage               String?
+  archivedAt                 DateTime?
   createdAt                  DateTime          @default(now())
   updatedAt                  DateTime          @updatedAt
   user                       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -184,6 +185,7 @@ model Pipeline {
   queueItems                 QueueItem[]
 
   @@index([userId, status])
+  @@index([userId, archivedAt])
   @@index([sourceFolderId])
 }
 

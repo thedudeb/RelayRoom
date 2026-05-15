@@ -58,6 +58,7 @@ export async function runDriveDetectionForPipeline({
 }): Promise<DetectionResult> {
   const pipeline = await prisma.pipeline.findFirst({
     where: {
+      archivedAt: null,
       id: pipelineId,
       userId
     },
@@ -213,6 +214,7 @@ export async function probeDriveFolderForPipeline({
 }) {
   const pipeline = await prisma.pipeline.findFirst({
     where: {
+      archivedAt: null,
       id: pipelineId,
       userId
     },

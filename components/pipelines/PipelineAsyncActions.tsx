@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleStop, Play, Search } from "lucide-react";
+import { Archive, CircleStop, Play, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -104,9 +104,9 @@ export function PipelineStatusControls({
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [state, setState] = useState<ActionState>();
-  const [busyAction, setBusyAction] = useState<"detect" | "disable" | "enable" | "probe" | null>(
-    null
-  );
+  const [busyAction, setBusyAction] = useState<
+    "archive" | "detect" | "disable" | "enable" | "probe" | null
+  >(null);
   const isEnabled = status === "enabled";
 
   async function togglePipeline() {
@@ -187,6 +187,35 @@ export function PipelineStatusControls({
     }
   }
 
+  async function archivePipeline() {
+    if (
+      !window.confirm(
+        "Archive this pipeline? RelayRoom will stop detecting this folder and hide the pipeline from this page. Existing queue history will stay visible."
+      )
+    ) {
+      return;
+    }
+
+    setBusyAction("archive");
+    setState(undefined);
+
+    try {
+      await postAction(`/api/pipelines/${pipelineId}/archive`);
+      setState({
+        tone: "success",
+        message: "Pipeline archived. Existing queue history remains visible."
+      });
+      router.push("/pipelines?archived=true");
+    } catch (error) {
+      setState({
+        tone: "danger",
+        message: error instanceof Error ? error.message : "Pipeline archive failed."
+      });
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <div className="actions">
       <button
@@ -229,6 +258,15 @@ export function PipelineStatusControls({
           </button>
         </>
       ) : null}
+      <button
+        className="button"
+        disabled={busyAction !== null}
+        onClick={archivePipeline}
+        type="button"
+      >
+        <Archive aria-hidden="true" size={16} />
+        {busyAction === "archive" ? "Archiving..." : "Archive pipeline"}
+      </button>
       {state ? (
         <div className={`notice inline ${state.tone}`} role={state.tone === "danger" ? "alert" : "status"}>
           {state.message}
@@ -259,6 +297,7 @@ function pipelineErrorMessage(error?: string) {
     MissingActiveDriveConnection: "Reconnect Google Drive before running detection.",
     MissingPipelineFields: "Fill out every required pipeline field.",
     MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing.",
+    PipelineArchived: "This pipeline has been archived.",
     PipelineNotEnabled: "Enable the pipeline before running detection.",
     PipelineNotFound: "Pipeline not found.",
     TokenRefreshFailed: "Google could not refresh the Drive token. Reconnect Drive and try again.",

@@ -27,6 +27,7 @@ import type {
 import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
 import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField";
 import { YouTubePlaylistPicker } from "@/components/pipelines/YouTubePlaylistPicker";
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -40,6 +41,7 @@ export default async function PipelinesPage({
   searchParams
 }: {
   searchParams?: Promise<{
+    archived?: string;
     created?: string;
     demo?: string;
     detected?: string;
@@ -51,14 +53,19 @@ export default async function PipelinesPage({
     ruleUpdated?: string;
     skipped?: string;
     updated?: string;
+    view?: string;
   }>;
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
+  const showingArchived = params?.view === "archived";
   const [pipelines, queueItems] = access.isDemo
-    ? await Promise.all([getPipelinesForDemo(), getQueueItemsForDemo()])
+    ? await Promise.all([
+        getPipelinesForDemo({ archived: showingArchived }),
+        getQueueItemsForDemo()
+      ])
     : await Promise.all([
-        getPipelinesForUser(access.userId),
+        getPipelinesForUser(access.userId, { archived: showingArchived }),
         getQueueItemsForUser(access.userId)
       ]);
   const connectionOptions = access.isDemo
@@ -81,6 +88,11 @@ export default async function PipelinesPage({
       {params?.updated ? (
         <div className="notice success" role="status">
           Pipeline updated.
+        </div>
+      ) : null}
+      {params?.archived ? (
+        <div className="notice success" role="status">
+          Pipeline archived. Existing queue history remains visible.
         </div>
       ) : null}
       {params?.ruleCreated ? (
@@ -115,13 +127,31 @@ export default async function PipelinesPage({
           {pipelineErrorMessage(params.error)}
         </div>
       ) : null}
+      <div className="actions" aria-label="Pipeline views">
+        <Link className={showingArchived ? "button" : "button primary"} href="/pipelines">
+          Active pipelines
+        </Link>
+        <Link
+          className={showingArchived ? "button primary" : "button"}
+          href="/pipelines?view=archived"
+        >
+          Archived pipelines
+        </Link>
+      </div>
       <div className="split">
         <section className="stack">
-          <CreatePipelinePanel
-            driveConnections={connectionOptions.driveConnections}
-            isDemo={access.isDemo}
-            youtubeConnections={connectionOptions.youtubeConnections}
-          />
+          {showingArchived ? (
+            <div className="notice" role="status">
+              Archived pipelines are read-only and do not run detection. Queue history stays on
+              the Queue page.
+            </div>
+          ) : (
+            <CreatePipelinePanel
+              driveConnections={connectionOptions.driveConnections}
+              isDemo={access.isDemo}
+              youtubeConnections={connectionOptions.youtubeConnections}
+            />
+          )}
           {pipelines.map((pipeline) => (
             <div className="panel" key={pipeline.id}>
               <div className="section-header">
@@ -133,7 +163,7 @@ export default async function PipelinesPage({
                   </p>
                 </div>
                 <span className={`badge ${pipelineStatusBadgeClass(pipeline.status)}`}>
-                  {pipeline.status}
+                  {showingArchived ? "archived" : pipeline.status}
                 </span>
               </div>
               <div className="filter-row">
@@ -144,9 +174,11 @@ export default async function PipelinesPage({
                 </span>
               </div>
               <p className="muted">
-                Cold start watermark: {new Date(pipeline.processedFromTime).toLocaleString()}
+                {showingArchived
+                  ? `Archived: ${pipeline.archivedAt ? new Date(pipeline.archivedAt).toLocaleString() : "date unknown"}`
+                  : `Cold start watermark: ${new Date(pipeline.processedFromTime).toLocaleString()}`}
               </p>
-              {pipeline.status === "disabled" ? (
+              {!showingArchived && pipeline.status === "disabled" ? (
                 <div className="pipeline-next-step" role="status">
                   <strong>Next: enable this pipeline</strong>
                   <p>
@@ -155,7 +187,7 @@ export default async function PipelinesPage({
                   </p>
                 </div>
               ) : null}
-              {pipeline.status === "errored" ? (
+              {!showingArchived && pipeline.status === "errored" ? (
                 <div className="pipeline-next-step danger" role="alert">
                   <strong>Connection attention needed</strong>
                   <p>
@@ -164,14 +196,14 @@ export default async function PipelinesPage({
                   </p>
                 </div>
               ) : null}
-              {!access.isDemo ? <EditPipelinePanel pipeline={pipeline} /> : null}
-              {!access.isDemo ? (
+              {!showingArchived && !access.isDemo ? <EditPipelinePanel pipeline={pipeline} /> : null}
+              {!showingArchived && !access.isDemo ? (
                 <RuleManager
                   pipeline={pipeline}
                   playlistOptions={playlistOptionsForConnection(pipelines, pipeline.youtubeConnectionId)}
                 />
               ) : null}
-              {!access.isDemo ? (
+              {!showingArchived && !access.isDemo ? (
                 <PipelineStatusControls
                   initialStatus={pipeline.status}
                   pipelineId={pipeline.id}
@@ -181,8 +213,12 @@ export default async function PipelinesPage({
           ))}
           {pipelines.length === 0 ? (
             <div className="empty-state">
-              <strong>No pipelines yet.</strong>
-              <p>Use the new pipeline form above to create your first watched-folder pipeline.</p>
+              <strong>{showingArchived ? "No archived pipelines yet." : "No pipelines yet."}</strong>
+              <p>
+                {showingArchived
+                  ? "Pipelines you archive will show here for reference."
+                  : "Use the new pipeline form above to create your first watched-folder pipeline."}
+              </p>
             </div>
           ) : null}
         </section>
@@ -692,6 +728,7 @@ async function updatePipelineAction(formData: FormData) {
 
   const pipeline = await prisma.pipeline.findFirst({
     where: {
+      archivedAt: null,
       id: pipelineId,
       userId: access.userId
     },
@@ -753,6 +790,7 @@ async function createRuleAction(formData: FormData) {
 
   const pipeline = await prisma.pipeline.findFirst({
     where: {
+      archivedAt: null,
       id: pipelineId,
       userId: access.userId
     },
@@ -772,6 +810,7 @@ async function createRuleAction(formData: FormData) {
   const knownPlaylists = await prisma.rule.findMany({
     where: {
       pipeline: {
+        archivedAt: null,
         userId: access.userId,
         youtubeConnectionId: pipeline.youtubeConnectionId
       }
@@ -828,7 +867,7 @@ async function updateRuleAction(formData: FormData) {
   const rule = await prisma.rule.findFirst({
     where: {
       id: ruleId,
-      pipeline: { userId: access.userId }
+      pipeline: { archivedAt: null, userId: access.userId }
     },
     select: {
       pipelineId: true,
@@ -847,6 +886,7 @@ async function updateRuleAction(formData: FormData) {
   const knownPlaylists = await prisma.rule.findMany({
     where: {
       pipeline: {
+        archivedAt: null,
         userId: access.userId,
         youtubeConnectionId: rule.pipeline.youtubeConnectionId
       }
@@ -895,7 +935,7 @@ async function deleteRuleAction(formData: FormData) {
   const rule = await prisma.rule.findFirst({
     where: {
       id: ruleId,
-      pipeline: { userId: access.userId }
+      pipeline: { archivedAt: null, userId: access.userId }
     },
     select: {
       pipelineId: true
@@ -907,7 +947,7 @@ async function deleteRuleAction(formData: FormData) {
   }
 
   const rules = await prisma.rule.findMany({
-    where: { pipelineId: rule.pipelineId },
+    where: { pipeline: { archivedAt: null }, pipelineId: rule.pipelineId },
     orderBy: { priority: "asc" },
     select: { id: true }
   });
@@ -1112,6 +1152,7 @@ function findEnabledPipelineForFolder({
   return prisma.pipeline.findFirst({
     where: {
       ...(excludePipelineId ? { id: { not: excludePipelineId } } : {}),
+      archivedAt: null,
       sourceFolderId,
       status: PipelineStatus.ENABLED,
       userId
@@ -1132,6 +1173,7 @@ function pipelineErrorMessage(error: string) {
     MissingPipelineFields: "Fill out every required pipeline field.",
     MissingRuleFields: "Fill out every required routing rule field.",
     MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing.",
+    PipelineArchived: "This pipeline has been archived.",
     PipelineNotEnabled: "Enable the pipeline before running detection.",
     PipelineNotFound: "Pipeline not found.",
     RuleNotFound: "Routing rule not found.",

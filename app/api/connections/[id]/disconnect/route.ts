@@ -45,8 +45,8 @@ export async function POST(
 
   const pipelineWhere =
     connection.kind === ConnectionKind.DRIVE
-      ? { driveConnectionId: connection.id, userId: access.userId }
-      : { youtubeConnectionId: connection.id, userId: access.userId };
+      ? { archivedAt: null, driveConnectionId: connection.id, userId: access.userId }
+      : { archivedAt: null, youtubeConnectionId: connection.id, userId: access.userId };
 
   await prisma.$transaction([
     prisma.oAuthConnection.update({

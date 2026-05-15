@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import type { AccountSummary } from "@/components/layout/AppShell";
 import { prisma } from "@/lib/db/prisma";
+import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 export type AppAccess =
@@ -112,6 +113,24 @@ export async function getApiAccess(searchParams: URLSearchParams): Promise<AppAc
     isDemo: false,
     userId: user.id
   };
+}
+
+export async function requireOwnerAccess() {
+  const access = await requireAppAccess();
+  if (access.isDemo) {
+    redirect("/settings?demo=true&error=OwnerOnly");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: access.userId },
+    select: { role: true }
+  });
+
+  if (user?.role !== Role.OWNER) {
+    redirect("/settings?error=OwnerOnly");
+  }
+
+  return access;
 }
 
 function isTruthyParam(value: string | string[] | undefined) {

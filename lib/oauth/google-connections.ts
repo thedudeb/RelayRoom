@@ -210,8 +210,8 @@ async function resetPipelinesAfterReconnect(
 ) {
   const where =
     kind === "drive"
-      ? { driveConnectionId: connectionId, status: PipelineStatus.ERRORED }
-      : { youtubeConnectionId: connectionId, status: PipelineStatus.ERRORED };
+      ? { archivedAt: null, driveConnectionId: connectionId, status: PipelineStatus.ERRORED }
+      : { archivedAt: null, youtubeConnectionId: connectionId, status: PipelineStatus.ERRORED };
 
   await prisma.pipeline.updateMany({
     where,

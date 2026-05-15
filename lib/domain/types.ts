@@ -101,6 +101,7 @@ export interface Pipeline {
   defaultDescriptionTemplate: string;
   processedFromTime: string;
   lastDetectionAt?: string;
+  archivedAt?: string;
   rules: RoutingRule[];
 }
 
