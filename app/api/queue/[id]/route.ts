@@ -7,6 +7,7 @@ import {
   getQueueItemsForDemo,
   getQueueItemsForUser
 } from "@/lib/data/repository";
+import { prisma } from "@/lib/db/prisma";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 
 export async function GET(
@@ -44,23 +45,116 @@ export async function GET(
           sourceFolderId: pipeline.sourceFolderId
         },
         demoTimezone
-      )
+    )
     : undefined;
+  const details = access.isDemo
+    ? getDemoQueueDetails(item)
+    : await getQueueDetails(id, access.userId);
 
   return NextResponse.json({
     item,
     evaluation,
+    ...details
+  });
+}
+
+async function getQueueDetails(queueItemId: string, userId: string) {
+  const [activityLog, attempts] = await Promise.all([
+    prisma.activityLogEntry.findMany({
+      where: {
+        queueItemId,
+        queueItem: { userId }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+      select: {
+        actorType: true,
+        createdAt: true,
+        message: true,
+        metadata: true
+      }
+    }),
+    prisma.uploadAttempt.findMany({
+      where: {
+        queueItemId,
+        queueItem: { userId }
+      },
+      orderBy: { attemptNumber: "desc" },
+      take: 8,
+      select: {
+        attemptNumber: true,
+        failureReason: true,
+        finishedAt: true,
+        rawError: true,
+        startedAt: true,
+        success: true,
+        youtubeVideoId: true
+      }
+    })
+  ]);
+
+  return {
+    activityLog: activityLog.map((entry) => ({
+      actor: entry.actorType,
+      at: entry.createdAt.toISOString(),
+      message: entry.message,
+      metadata: entry.metadata
+    })),
+    attempts: attempts.map((attempt) => ({
+      attemptNumber: attempt.attemptNumber,
+      failureReason: attempt.failureReason?.toLowerCase(),
+      finishedAt: attempt.finishedAt?.toISOString(),
+      rawError: attempt.rawError,
+      startedAt: attempt.startedAt.toISOString(),
+      success: attempt.success,
+      youtubeVideoId: attempt.youtubeVideoId
+    }))
+  };
+}
+
+function getDemoQueueDetails(item: Awaited<ReturnType<typeof getQueueItemsForDemo>>[number]) {
+  const attempts =
+    item.status === "failed"
+      ? [
+          {
+            attemptNumber: 1,
+            failureReason: item.failureReason,
+            finishedAt: item.lastActionAt,
+            rawError: item.lastError,
+            startedAt: item.detectedAt,
+            success: false,
+            youtubeVideoId: item.youtubeVideoId
+          }
+        ]
+      : item.status === "uploaded"
+        ? [
+            {
+              attemptNumber: 1,
+              finishedAt: item.lastActionAt,
+              rawError: undefined,
+              startedAt: item.detectedAt,
+              success: true,
+              youtubeVideoId: item.youtubeVideoId
+            }
+          ]
+        : [];
+
+  return {
     activityLog: [
       {
-        at: item.detectedAt,
         actor: "system",
+        at: item.detectedAt,
         message: "Detected file in watched Drive folder."
       },
       {
+        actor: item.status === "externally_handled" ? "user" : "system",
         at: item.lastActionAt,
-        actor: "system",
-        message: `Current status: ${item.status}.`
+        message:
+          item.status === "failed"
+            ? item.lastError || "Upload failed."
+            : `Current status: ${item.status.replaceAll("_", " ")}.`
       }
-    ]
-  });
+    ],
+    attempts
+  };
 }

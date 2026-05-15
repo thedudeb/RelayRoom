@@ -5,12 +5,14 @@ import {
   CheckCircle2,
   CircleDashed,
   ExternalLink,
+  Info,
   Play,
   RotateCcw,
   Route,
-  SkipForward
+  SkipForward,
+  X
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { QueueItem, QueueStatus } from "@/lib/domain/types";
 
@@ -28,6 +30,23 @@ type ActionState =
       tone: "danger" | "success";
     }
   | undefined;
+type QueueDetails = {
+  activityLog?: Array<{
+    actor: string;
+    at: string;
+    message: string;
+  }>;
+  attempts?: Array<{
+    attemptNumber: number;
+    failureReason?: string;
+    finishedAt?: string;
+    rawError?: string;
+    startedAt: string;
+    success: boolean;
+    youtubeVideoId?: string;
+  }>;
+  item: QueueItem;
+};
 
 const demoNow = new Date("2026-05-13T16:00:00.000Z").getTime();
 
@@ -43,6 +62,8 @@ const tabs: { label: string; status?: QueueStatus }[] = [
 
 export function QueueDashboard({ items }: { items: QueueItem[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isDemo = searchParams.get("demo") === "true";
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
   const [pipelineFilter, setPipelineFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("detected_desc");
@@ -50,6 +71,8 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
   const [busyAction, setBusyAction] = useState<{ itemId: string; action: QueueAction } | null>(
     null
   );
+  const [details, setDetails] = useState<QueueDetails>();
+  const [detailsState, setDetailsState] = useState<"idle" | "loading">("idle");
 
   const pipelineNames = useMemo(
     () => Array.from(new Set(items.map((item) => item.pipelineName))).sort(),
@@ -115,6 +138,37 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
       });
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function openDetails(item: QueueItem) {
+    if (details?.item.id === item.id && detailsState !== "loading") {
+      setDetails(undefined);
+      return;
+    }
+
+    setDetailsState("loading");
+    setDetails({ item });
+
+    try {
+      const response = await fetch(
+        `/api/queue/${encodeURIComponent(item.id)}${isDemo ? "?demo=true" : ""}`
+      );
+      const payload = (await response.json().catch(() => ({ item }))) as QueueDetails & {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to load queue details.");
+      }
+
+      setDetails(payload);
+    } catch (error) {
+      setState({
+        tone: "danger",
+        message: error instanceof Error ? error.message : "Unable to load queue details."
+      });
+    } finally {
+      setDetailsState("idle");
     }
   }
 
@@ -199,9 +253,12 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
             {visibleItems.map((item) => (
               <QueueRow
                 busyAction={busyAction}
+                details={details?.item.id === item.id ? details : undefined}
+                isDetailsLoading={details?.item.id === item.id && detailsState === "loading"}
                 item={item}
                 key={item.id}
                 onAction={runQueueAction}
+                onDetails={openDetails}
               />
             ))}
           </tbody>
@@ -223,37 +280,72 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
 
 function QueueRow({
   busyAction,
+  details,
+  isDetailsLoading,
   item,
-  onAction
+  onAction,
+  onDetails
 }: {
   busyAction: { itemId: string; action: QueueAction } | null;
+  details?: QueueDetails;
+  isDetailsLoading: boolean;
   item: QueueItem;
   onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
+  onDetails: (item: QueueItem) => void;
 }) {
+  const isUploading = busyAction?.itemId === item.id && busyAction.action === "upload";
+
   return (
-    <tr>
-      <td>
-        <strong>{item.filename}</strong>
-        <div className="muted">{formatBytes(item.sizeBytes)} · {item.mimeType}</div>
-      </td>
-      <td>
-        {item.pipelineName}
-        <div className="muted">{item.sourceFolderName}</div>
-      </td>
-      <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, demoNow)}</td>
-      <td>
-        <StatusBadge busyAction={busyAction} itemId={item.id} status={item.status} />
-        {item.failureReason ? <div className="muted">{item.failureReason}</div> : null}
-      </td>
-      <td>
-        <PlaylistCell item={item} />
-      </td>
-      <td>{item.matchedRuleName || <span className="muted">No match</span>}</td>
-      <td title={formatAbsolute(item.lastActionAt)}>{relativeAge(item.lastActionAt, demoNow)}</td>
-      <td>
-        <QueueActions busyAction={busyAction} item={item} onAction={onAction} />
-      </td>
-    </tr>
+    <>
+      <tr>
+        <td>
+          <strong>{item.filename}</strong>
+          <div className="muted">{formatBytes(item.sizeBytes)} · {item.mimeType}</div>
+          {isUploading ? <UploadProgressBar /> : null}
+        </td>
+        <td>
+          {item.pipelineName}
+          <div className="muted">{item.sourceFolderName}</div>
+        </td>
+        <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, demoNow)}</td>
+        <td>
+          <button
+            aria-expanded={Boolean(details)}
+            className="status-trigger"
+            onClick={() => onDetails(item)}
+            title="View queue details"
+            type="button"
+          >
+            <StatusBadge busyAction={busyAction} itemId={item.id} status={item.status} />
+          </button>
+          {item.failureReason ? <div className="muted">{item.failureReason}</div> : null}
+        </td>
+        <td>
+          <PlaylistCell item={item} />
+        </td>
+        <td>{item.matchedRuleName || <span className="muted">No match</span>}</td>
+        <td title={formatAbsolute(item.lastActionAt)}>{relativeAge(item.lastActionAt, demoNow)}</td>
+        <td>
+          <QueueActions
+            busyAction={busyAction}
+            item={item}
+            onAction={onAction}
+            onDetails={onDetails}
+          />
+        </td>
+      </tr>
+      {details ? (
+        <tr className="queue-detail-row">
+          <td colSpan={8}>
+            <QueueDetailsPanel
+              details={details}
+              isLoading={isDetailsLoading}
+              onClose={() => onDetails(item)}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }
 
@@ -311,7 +403,7 @@ function StatusBadge({
 
   return (
     <span className={`badge ${busyLabel ? "uploading" : status}`}>
-      <Icon aria-hidden="true" size={14} />
+      <Icon aria-hidden="true" className={busyLabel ? "spin-icon" : undefined} size={14} />
       {busyLabel || status.replaceAll("_", " ")}
     </span>
   );
@@ -320,32 +412,50 @@ function StatusBadge({
 function QueueActions({
   busyAction,
   item,
-  onAction
+  onAction,
+  onDetails
 }: {
   busyAction: { itemId: string; action: QueueAction } | null;
   item: QueueItem;
   onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
+  onDetails: (item: QueueItem) => void;
 }) {
   const isBusy = busyAction?.itemId === item.id;
   const [selectedPlaylistId, setSelectedPlaylistId] = useState(item.routingOptions?.[0]?.id || "");
 
+  const detailsButton = (
+    <button
+      className="icon-button"
+      disabled={isBusy}
+      onClick={() => onDetails(item)}
+      title="View details"
+      type="button"
+    >
+      <Info aria-hidden="true" size={16} />
+    </button>
+  );
+
   if (item.status === "uploaded") {
     return (
-      <button
-        className="icon-button"
-        disabled={!item.youtubeUrl}
-        onClick={() => item.youtubeUrl && window.open(item.youtubeUrl, "_blank", "noopener,noreferrer")}
-        title={item.youtubeUrl ? "Open on YouTube" : "No YouTube URL recorded"}
-        type="button"
-      >
-        <ExternalLink aria-hidden="true" size={16} />
-      </button>
+      <div className="actions">
+        {detailsButton}
+        <button
+          className="icon-button"
+          disabled={!item.youtubeUrl}
+          onClick={() => item.youtubeUrl && window.open(item.youtubeUrl, "_blank", "noopener,noreferrer")}
+          title={item.youtubeUrl ? "Open on YouTube" : "No YouTube URL recorded"}
+          type="button"
+        >
+          <ExternalLink aria-hidden="true" size={16} />
+        </button>
+      </div>
     );
   }
 
   if (item.status === "failed") {
     return (
       <div className="actions">
+        {detailsButton}
         <button
           className="icon-button"
           disabled={isBusy}
@@ -380,6 +490,7 @@ function QueueActions({
   if (item.status === "needs_approval") {
     return (
       <div className="actions">
+        {detailsButton}
         <button
           className="icon-button"
           disabled={isBusy}
@@ -421,6 +532,7 @@ function QueueActions({
 
     return (
       <div className="actions">
+        {detailsButton}
         <select
           aria-label={`Route ${item.filename} to playlist`}
           className="select route-select"
@@ -477,33 +589,141 @@ function QueueActions({
 
   if (item.status === "skipped") {
     return (
-      <button
-        className="icon-button"
-        disabled={isBusy}
-        onClick={() => onAction(item, "restore")}
-        title="Restore to queue"
-        type="button"
-      >
-        <RotateCcw aria-hidden="true" size={16} />
-      </button>
+      <div className="actions">
+        {detailsButton}
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "restore")}
+          title="Restore to queue"
+          type="button"
+        >
+          <RotateCcw aria-hidden="true" size={16} />
+        </button>
+      </div>
     );
   }
 
   if (item.status === "externally_handled") {
     return (
-      <button
-        className="icon-button"
-        disabled={isBusy}
-        onClick={() => onAction(item, "restore")}
-        title="Restore to queue"
-        type="button"
-      >
-        <RotateCcw aria-hidden="true" size={16} />
-      </button>
+      <div className="actions">
+        {detailsButton}
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "restore")}
+          title="Restore to queue"
+          type="button"
+        >
+          <RotateCcw aria-hidden="true" size={16} />
+        </button>
+      </div>
     );
   }
 
-  return <span className="muted">None</span>;
+  return detailsButton;
+}
+
+function UploadProgressBar() {
+  return (
+    <div className="upload-progress" aria-label="Upload in progress">
+      <span />
+    </div>
+  );
+}
+
+function QueueDetailsPanel({
+  details,
+  isLoading,
+  onClose
+}: {
+  details: QueueDetails;
+  isLoading: boolean;
+  onClose: () => void;
+}) {
+  const item = details.item;
+  const attempts = details.attempts || [];
+  const activityLog = details.activityLog || [];
+
+  return (
+    <div className="queue-detail-panel">
+      <div className="queue-detail-header">
+        <div>
+          <span className="eyebrow">Queue details</span>
+          <h2>{item.filename}</h2>
+        </div>
+        <button className="icon-button" onClick={onClose} type="button">
+          <X aria-hidden="true" size={16} />
+        </button>
+      </div>
+
+      {isLoading ? <UploadProgressBar /> : null}
+
+      <div className="detail-grid">
+        <Detail label="Status" value={item.status.replaceAll("_", " ")} />
+        <Detail label="Pipeline" value={item.pipelineName} />
+        <Detail label="Drive file" value={item.driveFileId} />
+        <Detail label="Playlist" value={item.intendedPlaylistName || "Unassigned"} />
+        <Detail label="Rule" value={item.matchedRuleName || "No match"} />
+        <Detail label="Last action" value={formatAbsolute(item.lastActionAt)} />
+      </div>
+
+      {item.lastError ? (
+        <div className="detail-callout danger">
+          <strong>Last error</strong>
+          <p>{item.lastError}</p>
+        </div>
+      ) : null}
+
+      <div className="detail-columns">
+        <section className="detail-section">
+          <h3>Upload attempts</h3>
+          {attempts.length ? (
+            <div className="attempt-list">
+              {attempts.map((attempt) => (
+                <div className="attempt-item" key={attempt.attemptNumber}>
+                  <div>
+                    <strong>Attempt {attempt.attemptNumber}</strong>
+                    <span>{attempt.success ? "Succeeded" : attempt.failureReason || "Failed"}</span>
+                  </div>
+                  <time>{formatAbsolute(attempt.finishedAt || attempt.startedAt)}</time>
+                  {attempt.rawError ? <p>{attempt.rawError}</p> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No upload attempts yet.</p>
+          )}
+        </section>
+
+        <section className="detail-section">
+          <h3>Activity</h3>
+          {activityLog.length ? (
+            <ol className="timeline">
+              {activityLog.map((entry, index) => (
+                <li key={`${entry.at}-${index}`}>
+                  <span>{entry.actor}</span>
+                  <p>{entry.message}</p>
+                  <time>{formatAbsolute(entry.at)}</time>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="muted">No activity recorded yet.</p>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
 
 function Metric({

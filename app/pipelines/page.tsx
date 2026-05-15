@@ -63,7 +63,8 @@ export default async function PipelinesPage({
     >
       {params?.created ? (
         <div className="notice success" role="status">
-          Pipeline created. Enable it after the Drive folder and destination settings look right.
+          Pipeline created in review mode. Check the folder and playlist, then click Enable pipeline
+          to start watching for new recordings.
         </div>
       ) : null}
       {params?.updated ? (
@@ -104,7 +105,7 @@ export default async function PipelinesPage({
                     {pipeline.sourceFolderName} → {pipeline.destinationChannelName}
                   </p>
                 </div>
-                <span className={`badge ${pipeline.status === "enabled" ? "uploaded" : "failed"}`}>
+                <span className={`badge ${pipelineStatusBadgeClass(pipeline.status)}`}>
                   {pipeline.status}
                 </span>
               </div>
@@ -118,6 +119,24 @@ export default async function PipelinesPage({
               <p className="muted">
                 Cold start watermark: {new Date(pipeline.processedFromTime).toLocaleString()}
               </p>
+              {pipeline.status === "disabled" ? (
+                <div className="pipeline-next-step" role="status">
+                  <strong>Next: enable this pipeline</strong>
+                  <p>
+                    RelayRoom is not watching this folder yet. Enable it when the Drive folder,
+                    YouTube playlist, privacy, and cadence look right.
+                  </p>
+                </div>
+              ) : null}
+              {pipeline.status === "errored" ? (
+                <div className="pipeline-next-step danger" role="alert">
+                  <strong>Connection attention needed</strong>
+                  <p>
+                    This pipeline is paused by an account or token issue. Reconnect Drive or
+                    YouTube, then enable the pipeline again.
+                  </p>
+                </div>
+              ) : null}
               {!access.isDemo ? <EditPipelinePanel pipeline={pipeline} /> : null}
               {!access.isDemo ? (
                 <PipelineStatusControls
@@ -237,6 +256,12 @@ function CreatePipelinePanel({
       </form>
     </div>
   );
+}
+
+function pipelineStatusBadgeClass(status: Pipeline["status"]) {
+  if (status === "enabled") return "uploaded";
+  if (status === "errored") return "failed";
+  return "needs_routing";
 }
 
 function waitingCount(queueItems: QueueItem[], pipelineId: string): number {
