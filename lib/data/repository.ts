@@ -8,8 +8,10 @@ type PipelineWithRules = Prisma.PipelineGetPayload<{
 }>;
 
 type QueueItemWithPipeline = Prisma.QueueItemGetPayload<{
-  include: { pipeline: true };
+  include: { pipeline: { include: { rules: { orderBy: { priority: "asc" } } } } };
 }>;
+
+type RoutingOption = NonNullable<QueueItem["routingOptions"]>[number];
 
 type ConnectionWithPipelines = Prisma.OAuthConnectionGetPayload<{
   include: { drivePipelines: true; youtubePipelines: true };
@@ -23,11 +25,11 @@ export async function getQueueItemsForDemo(): Promise<QueueItem[]> {
   try {
     const items = await prisma.queueItem.findMany({
       where: { isSeedData: true },
-      include: { pipeline: true },
+      include: { pipeline: { include: { rules: { orderBy: { priority: "asc" } } } } },
       orderBy: { detectedAt: "desc" }
     });
 
-    return items.length > 0 ? items.map(mapQueueItem) : demoQueueItems;
+    return items.length > 0 ? items.map((item) => mapQueueItem(item)) : demoQueueItems;
   } catch (error) {
     console.warn("Falling back to in-memory queue demo data.", error);
     return demoQueueItems;
@@ -42,11 +44,12 @@ export async function getQueueItemsForUser(userId: string): Promise<QueueItem[]>
   try {
     const items = await prisma.queueItem.findMany({
       where: { userId },
-      include: { pipeline: true },
+      include: { pipeline: { include: { rules: { orderBy: { priority: "asc" } } } } },
       orderBy: { detectedAt: "desc" }
     });
+    const fallbackOptions = await getRoutingOptionsByYouTubeConnection(userId);
 
-    return items.map(mapQueueItem);
+    return items.map((item) => mapQueueItem(item, fallbackOptions));
   } catch (error) {
     console.warn("Unable to load user queue data.", error);
     return [];
@@ -129,7 +132,13 @@ export async function getPipelinesForUser(userId: string): Promise<Pipeline[]> {
   }
 }
 
-function mapQueueItem(item: QueueItemWithPipeline): QueueItem {
+function mapQueueItem(
+  item: QueueItemWithPipeline,
+  fallbackOptionsByConnectionId = new Map<string, RoutingOption[]>()
+): QueueItem {
+  const pipelineOptions = uniquePlaylistOptions(item.pipeline.rules);
+  const fallbackOptions = fallbackOptionsByConnectionId.get(item.pipeline.youtubeConnectionId) || [];
+
   return {
     id: item.id,
     pipelineId: item.pipelineId,
@@ -143,15 +152,73 @@ function mapQueueItem(item: QueueItemWithPipeline): QueueItem {
     detectedAt: item.detectedAt.toISOString(),
     status: item.status.toLowerCase() as QueueItem["status"],
     previousStatus: item.previousStatus?.toLowerCase() as QueueItem["previousStatus"],
+    intendedPlaylistId: item.intendedPlaylistId || undefined,
     matchedRuleName: item.matchedRuleName || undefined,
     intendedPlaylistName: item.intendedPlaylistName || undefined,
+    routingOptions: pipelineOptions.length ? pipelineOptions : fallbackOptions,
     youtubeVideoId: item.youtubeVideoId || undefined,
+    youtubePlaylistId: item.youtubePlaylistId || item.intendedPlaylistId || undefined,
     youtubeUrl: item.youtubeUrl || undefined,
     failureReason: item.failureReason?.toLowerCase() as QueueItem["failureReason"],
     lastError: item.lastError || undefined,
     lastActionAt: item.lastActionAt.toISOString(),
     isSeedData: item.isSeedData
   };
+}
+
+async function getRoutingOptionsByYouTubeConnection(userId: string) {
+  const rules = await prisma.rule.findMany({
+    where: { pipeline: { userId } },
+    orderBy: [{ pipelineId: "asc" }, { priority: "asc" }],
+    select: {
+      youtubePlaylistId: true,
+      youtubePlaylistName: true,
+      pipeline: {
+        select: {
+          youtubeConnectionId: true
+        }
+      }
+    }
+  });
+  const optionsByConnectionId = new Map<string, RoutingOption[]>();
+  const seenByConnectionId = new Map<string, Set<string>>();
+
+  for (const rule of rules) {
+    const connectionId = rule.pipeline.youtubeConnectionId;
+    const seen = seenByConnectionId.get(connectionId) || new Set<string>();
+    if (seen.has(rule.youtubePlaylistId)) {
+      continue;
+    }
+
+    seen.add(rule.youtubePlaylistId);
+    seenByConnectionId.set(connectionId, seen);
+    optionsByConnectionId.set(connectionId, [
+      ...(optionsByConnectionId.get(connectionId) || []),
+      {
+        id: rule.youtubePlaylistId,
+        name: rule.youtubePlaylistName
+      }
+    ]);
+  }
+
+  return optionsByConnectionId;
+}
+
+function uniquePlaylistOptions(rules: QueueItemWithPipeline["pipeline"]["rules"]): RoutingOption[] {
+  const seen = new Set<string>();
+  return rules.flatMap((rule) => {
+    if (seen.has(rule.youtubePlaylistId)) {
+      return [];
+    }
+
+    seen.add(rule.youtubePlaylistId);
+    return [
+      {
+        id: rule.youtubePlaylistId,
+        name: rule.youtubePlaylistName
+      }
+    ];
+  });
 }
 
 function mapConnection(connection: ConnectionWithPipelines): ConnectionSummary {

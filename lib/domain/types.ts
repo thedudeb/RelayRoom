@@ -163,9 +163,12 @@ export interface QueueItem {
   driveCreatedTime: string;
   detectedAt: string;
   status: QueueStatus;
+  intendedPlaylistId?: string;
   matchedRuleName?: string;
   intendedPlaylistName?: string;
+  routingOptions?: Playlist[];
   youtubeVideoId?: string;
+  youtubePlaylistId?: string;
   youtubeUrl?: string;
   failureReason?: FailureReason;
   lastError?: string;

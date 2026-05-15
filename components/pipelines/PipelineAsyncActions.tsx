@@ -13,6 +13,7 @@ type ActionState =
 
 interface ActionResponse {
   error?: string;
+  excludedByWatermark?: number;
   ignored?: number;
   message?: string;
   created?: number;
@@ -32,7 +33,7 @@ export function PipelineAsyncActions({ pipelineId }: { pipelineId: string }) {
       const payload = await postAction(`/api/pipelines/${pipelineId}/detect`);
       setState({
         tone: "success",
-        message: `Detection finished. Created ${payload.created || 0} queue item${payload.created === 1 ? "" : "s"}, skipped ${payload.skippedExisting || 0} already-seen file${payload.skippedExisting === 1 ? "" : "s"}, ignored ${payload.ignored || 0} unsupported file${payload.ignored === 1 ? "" : "s"}.`
+        message: formatDetectionMessage(payload)
       });
       router.refresh();
     } catch (error) {
@@ -153,7 +154,7 @@ export function PipelineStatusControls({
       const payload = await postAction(`/api/pipelines/${pipelineId}/detect`);
       setState({
         tone: "success",
-        message: `Detection finished. Created ${payload.created || 0} queue item${payload.created === 1 ? "" : "s"}, skipped ${payload.skippedExisting || 0} already-seen file${payload.skippedExisting === 1 ? "" : "s"}, ignored ${payload.ignored || 0} unsupported file${payload.ignored === 1 ? "" : "s"}.`
+        message: formatDetectionMessage(payload)
       });
       router.refresh();
     } catch (error) {
@@ -265,4 +266,13 @@ function pipelineErrorMessage(error?: string) {
   };
 
   return messages[error || ""] || `Pipeline action failed: ${error || "Unknown error"}`;
+}
+
+function formatDetectionMessage(payload: ActionResponse) {
+  const created = payload.created || 0;
+  const skippedExisting = payload.skippedExisting || 0;
+  const ignored = payload.ignored || 0;
+  const excludedByWatermark = payload.excludedByWatermark || 0;
+
+  return `Detection finished. Created ${created} queue item${created === 1 ? "" : "s"}, skipped ${skippedExisting} already-queued file${skippedExisting === 1 ? "" : "s"}, excluded ${excludedByWatermark} pre-watermark video file${excludedByWatermark === 1 ? "" : "s"}, ignored ${ignored} unsupported file${ignored === 1 ? "" : "s"}.`;
 }

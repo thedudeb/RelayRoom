@@ -10,11 +10,25 @@ import {
   Route,
   SkipForward
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { QueueItem, QueueStatus } from "@/lib/domain/types";
 
 type QueueTab = "all" | QueueStatus;
 type SortMode = "detected_desc" | "filename_asc" | "status_asc" | "last_action_desc";
+type QueueAction = "skip" | "restore" | "mark_externally_handled" | "route" | "upload";
+type QueueActionPayload = {
+  playlistId?: string;
+  playlistName?: string;
+  youtubeUrl?: string;
+};
+type ActionState =
+  | {
+      message: string;
+      tone: "danger" | "success";
+    }
+  | undefined;
+
 const demoNow = new Date("2026-05-13T16:00:00.000Z").getTime();
 
 const tabs: { label: string; status?: QueueStatus }[] = [
@@ -28,9 +42,14 @@ const tabs: { label: string; status?: QueueStatus }[] = [
 ];
 
 export function QueueDashboard({ items }: { items: QueueItem[] }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
   const [pipelineFilter, setPipelineFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("detected_desc");
+  const [state, setState] = useState<ActionState>();
+  const [busyAction, setBusyAction] = useState<{ itemId: string; action: QueueAction } | null>(
+    null
+  );
 
   const pipelineNames = useMemo(
     () => Array.from(new Set(items.map((item) => item.pipelineName))).sort(),
@@ -52,13 +71,60 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
     uploaded: count(items, "uploaded")
   };
 
+  async function runQueueAction(
+    item: QueueItem,
+    action: QueueAction,
+    actionPayload: QueueActionPayload = {}
+  ) {
+    const youtubeUrl =
+      action === "mark_externally_handled"
+        ? window.prompt("Optional: paste the existing YouTube URL, or leave blank.")
+        : actionPayload.youtubeUrl;
+
+    if (youtubeUrl === null) {
+      return;
+    }
+
+    setBusyAction({ itemId: item.id, action });
+    setState(undefined);
+
+    try {
+      const response = await fetch(`/api/queue/${encodeURIComponent(item.id)}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...actionPayload, action, youtubeUrl })
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(queueActionErrorMessage(payload.error));
+      }
+
+      setState({
+        tone: "success",
+        message: payload.message || "Queue item updated."
+      });
+      router.refresh();
+    } catch (error) {
+      setState({
+        tone: "danger",
+        message: error instanceof Error ? error.message : "Queue action failed."
+      });
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <>
       <section className="metric-grid" aria-label="Queue summary">
-        <Metric label="Needs approval" value={activeCounts.approval} />
-        <Metric label="Needs routing" value={activeCounts.routing} />
-        <Metric label="Failed" value={activeCounts.failed} />
-        <Metric label="Uploaded" value={activeCounts.uploaded} />
+        <Metric label="Needs approval" tone="approval" value={activeCounts.approval} />
+        <Metric label="Needs routing" tone="routing" value={activeCounts.routing} />
+        <Metric label="Failed" tone="failed" value={activeCounts.failed} />
+        <Metric label="Uploaded" tone="uploaded" value={activeCounts.uploaded} />
       </section>
 
       <section className="toolbar">
@@ -109,6 +175,12 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
         </div>
       </section>
 
+      {state ? (
+        <div className={`notice ${state.tone}`} role={state.tone === "danger" ? "alert" : "status"}>
+          {state.message}
+        </div>
+      ) : null}
+
       <div className="table-wrap">
         <table>
           <thead>
@@ -125,7 +197,12 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
           </thead>
           <tbody>
             {visibleItems.map((item) => (
-              <QueueRow item={item} key={item.id} />
+              <QueueRow
+                busyAction={busyAction}
+                item={item}
+                key={item.id}
+                onAction={runQueueAction}
+              />
             ))}
           </tbody>
         </table>
@@ -144,7 +221,15 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
   );
 }
 
-function QueueRow({ item }: { item: QueueItem }) {
+function QueueRow({
+  busyAction,
+  item,
+  onAction
+}: {
+  busyAction: { itemId: string; action: QueueAction } | null;
+  item: QueueItem;
+  onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
+}) {
   return (
     <tr>
       <td>
@@ -157,20 +242,61 @@ function QueueRow({ item }: { item: QueueItem }) {
       </td>
       <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, demoNow)}</td>
       <td>
-        <StatusBadge status={item.status} />
+        <StatusBadge busyAction={busyAction} itemId={item.id} status={item.status} />
         {item.failureReason ? <div className="muted">{item.failureReason}</div> : null}
       </td>
-      <td>{item.intendedPlaylistName || <span className="muted">Unassigned</span>}</td>
+      <td>
+        <PlaylistCell item={item} />
+      </td>
       <td>{item.matchedRuleName || <span className="muted">No match</span>}</td>
       <td title={formatAbsolute(item.lastActionAt)}>{relativeAge(item.lastActionAt, demoNow)}</td>
       <td>
-        <QueueActions item={item} />
+        <QueueActions busyAction={busyAction} item={item} onAction={onAction} />
       </td>
     </tr>
   );
 }
 
-function StatusBadge({ status }: { status: QueueStatus }) {
+function PlaylistCell({ item }: { item: QueueItem }) {
+  const playlistId = item.youtubePlaylistId || item.intendedPlaylistId;
+
+  if (!item.intendedPlaylistName) {
+    return <span className="muted">Unassigned</span>;
+  }
+
+  if (!playlistId) {
+    return <>{item.intendedPlaylistName}</>;
+  }
+
+  return (
+    <a
+      className="playlist-link"
+      href={`https://www.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`}
+      rel="noreferrer"
+      target="_blank"
+      title="Open YouTube playlist"
+    >
+      {item.intendedPlaylistName}
+      <ExternalLink aria-hidden="true" size={13} />
+    </a>
+  );
+}
+
+function StatusBadge({
+  busyAction,
+  itemId,
+  status
+}: {
+  busyAction: { itemId: string; action: QueueAction } | null;
+  itemId: string;
+  status: QueueStatus;
+}) {
+  const busyLabel =
+    busyAction?.itemId === itemId && busyAction.action === "upload"
+      ? status === "failed"
+        ? "retrying upload"
+        : "approving"
+      : undefined;
   const icon = {
     detected: CircleDashed,
     needs_routing: Route,
@@ -181,20 +307,37 @@ function StatusBadge({ status }: { status: QueueStatus }) {
     skipped: SkipForward,
     externally_handled: ExternalLink
   }[status];
-  const Icon = icon;
+  const Icon = busyLabel ? CircleDashed : icon;
 
   return (
-    <span className={`badge ${status}`}>
+    <span className={`badge ${busyLabel ? "uploading" : status}`}>
       <Icon aria-hidden="true" size={14} />
-      {status.replaceAll("_", " ")}
+      {busyLabel || status.replaceAll("_", " ")}
     </span>
   );
 }
 
-function QueueActions({ item }: { item: QueueItem }) {
+function QueueActions({
+  busyAction,
+  item,
+  onAction
+}: {
+  busyAction: { itemId: string; action: QueueAction } | null;
+  item: QueueItem;
+  onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
+}) {
+  const isBusy = busyAction?.itemId === item.id;
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState(item.routingOptions?.[0]?.id || "");
+
   if (item.status === "uploaded") {
     return (
-      <button className="icon-button" title="Open on YouTube" type="button">
+      <button
+        className="icon-button"
+        disabled={!item.youtubeUrl}
+        onClick={() => item.youtubeUrl && window.open(item.youtubeUrl, "_blank", "noopener,noreferrer")}
+        title={item.youtubeUrl ? "Open on YouTube" : "No YouTube URL recorded"}
+        type="button"
+      >
         <ExternalLink aria-hidden="true" size={16} />
       </button>
     );
@@ -203,13 +346,31 @@ function QueueActions({ item }: { item: QueueItem }) {
   if (item.status === "failed") {
     return (
       <div className="actions">
-        <button className="icon-button" title="Retry upload" type="button">
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "upload")}
+          title="Retry upload"
+          type="button"
+        >
           <RotateCcw aria-hidden="true" size={16} />
         </button>
-        <button className="icon-button" title="Mark as already uploaded" type="button">
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "mark_externally_handled")}
+          title="Mark as already uploaded"
+          type="button"
+        >
           <ExternalLink aria-hidden="true" size={16} />
         </button>
-        <button className="icon-button" title="Skip item" type="button">
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "skip")}
+          title="Skip item"
+          type="button"
+        >
           <SkipForward aria-hidden="true" size={16} />
         </button>
       </div>
@@ -219,23 +380,95 @@ function QueueActions({ item }: { item: QueueItem }) {
   if (item.status === "needs_approval") {
     return (
       <div className="actions">
-        <button className="icon-button" title="Approve upload" type="button">
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "upload")}
+          title="Approve upload"
+          type="button"
+        >
           <Play aria-hidden="true" size={16} />
         </button>
-        <button className="icon-button" title="Edit and route" type="button">
+        <button className="icon-button" disabled title="Edit and route is coming next" type="button">
           <Route aria-hidden="true" size={16} />
+        </button>
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "mark_externally_handled")}
+          title="Mark as already uploaded"
+          type="button"
+        >
+          <ExternalLink aria-hidden="true" size={16} />
+        </button>
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "skip")}
+          title="Skip item"
+          type="button"
+        >
+          <SkipForward aria-hidden="true" size={16} />
         </button>
       </div>
     );
   }
 
   if (item.status === "needs_routing") {
+    const selectedPlaylist = item.routingOptions?.find(
+      (playlist) => playlist.id === selectedPlaylistId
+    );
+
     return (
       <div className="actions">
-        <button className="icon-button" title="Route now" type="button">
+        <select
+          aria-label={`Route ${item.filename} to playlist`}
+          className="select route-select"
+          disabled={isBusy || !item.routingOptions?.length}
+          onChange={(event) => setSelectedPlaylistId(event.target.value)}
+          value={selectedPlaylistId}
+        >
+          {item.routingOptions?.length ? (
+            item.routingOptions.map((playlist) => (
+              <option key={playlist.id} value={playlist.id}>
+                {playlist.name}
+              </option>
+            ))
+          ) : (
+            <option value="">No playlists</option>
+          )}
+        </select>
+        <button
+          className="icon-button"
+          disabled={isBusy || !selectedPlaylist}
+          onClick={() =>
+            selectedPlaylist &&
+            onAction(item, "route", {
+              playlistId: selectedPlaylist.id,
+              playlistName: selectedPlaylist.name
+            })
+          }
+          title={selectedPlaylist ? "Route to selected playlist" : "No playlist options"}
+          type="button"
+        >
           <Route aria-hidden="true" size={16} />
         </button>
-        <button className="icon-button" title="Skip item" type="button">
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "mark_externally_handled")}
+          title="Mark as already uploaded"
+          type="button"
+        >
+          <ExternalLink aria-hidden="true" size={16} />
+        </button>
+        <button
+          className="icon-button"
+          disabled={isBusy}
+          onClick={() => onAction(item, "skip")}
+          title="Skip item"
+          type="button"
+        >
           <SkipForward aria-hidden="true" size={16} />
         </button>
       </div>
@@ -244,7 +477,27 @@ function QueueActions({ item }: { item: QueueItem }) {
 
   if (item.status === "skipped") {
     return (
-      <button className="icon-button" title="Restore to queue" type="button">
+      <button
+        className="icon-button"
+        disabled={isBusy}
+        onClick={() => onAction(item, "restore")}
+        title="Restore to queue"
+        type="button"
+      >
+        <RotateCcw aria-hidden="true" size={16} />
+      </button>
+    );
+  }
+
+  if (item.status === "externally_handled") {
+    return (
+      <button
+        className="icon-button"
+        disabled={isBusy}
+        onClick={() => onAction(item, "restore")}
+        title="Restore to queue"
+        type="button"
+      >
         <RotateCcw aria-hidden="true" size={16} />
       </button>
     );
@@ -253,10 +506,21 @@ function QueueActions({ item }: { item: QueueItem }) {
   return <span className="muted">None</span>;
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({
+  label,
+  tone,
+  value
+}: {
+  label: string;
+  tone: "approval" | "failed" | "routing" | "uploaded";
+  value: number;
+}) {
   return (
-    <div className="metric">
-      <span>{label}</span>
+    <div className="metric" data-tone={tone}>
+      <span>
+        <i aria-hidden="true" />
+        {label}
+      </span>
       <strong>{value}</strong>
     </div>
   );
@@ -317,4 +581,15 @@ function formatAbsolute(isoDate: string): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(isoDate));
+}
+
+function queueActionErrorMessage(error?: string) {
+  const messages: Record<string, string> = {
+    MissingActiveDriveConnection: "Reconnect Google Drive before uploading.",
+    MissingActiveYouTubeConnection: "Reconnect YouTube before uploading.",
+    MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing.",
+    TokenRefreshFailed: "Google could not refresh one of the OAuth tokens. Reconnect Drive and YouTube, then try again."
+  };
+
+  return messages[error || ""] || error || "Queue action failed.";
 }

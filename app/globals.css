@@ -424,25 +424,70 @@ textarea {
 }
 
 .metric {
+  --metric-accent: var(--blue);
+  --metric-soft: var(--blue-soft);
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--surface) 96%, transparent),
-      color-mix(in srgb, var(--surface-muted) 72%, transparent)
+      color-mix(in srgb, var(--metric-soft) 32%, var(--surface)),
+      color-mix(in srgb, var(--surface-muted) 78%, var(--surface))
     ),
     var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--metric-accent) 28%, var(--line));
   border-radius: 8px;
   box-shadow: var(--shadow-tight);
+  overflow: hidden;
   padding: 15px;
+  position: relative;
+}
+
+.metric::before {
+  background: var(--metric-accent);
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 4px;
+}
+
+.metric[data-tone="approval"] {
+  --metric-accent: var(--violet);
+  --metric-soft: var(--violet-soft);
+}
+
+.metric[data-tone="routing"] {
+  --metric-accent: var(--amber);
+  --metric-soft: var(--amber-soft);
+}
+
+.metric[data-tone="failed"] {
+  --metric-accent: var(--red);
+  --metric-soft: var(--red-soft);
+}
+
+.metric[data-tone="uploaded"] {
+  --metric-accent: var(--green);
+  --metric-soft: var(--green-soft);
 }
 
 .metric span {
+  align-items: center;
   color: var(--muted);
+  display: inline-flex;
   font-size: 12px;
+  gap: 7px;
+}
+
+.metric span i {
+  background: var(--metric-accent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--metric-accent) 14%, transparent);
+  display: inline-block;
+  height: 7px;
+  width: 7px;
 }
 
 .metric strong {
+  color: color-mix(in srgb, var(--metric-accent) 70%, var(--ink));
   display: block;
   font-size: 30px;
   font-weight: 520;
@@ -667,6 +712,18 @@ td strong {
   font-weight: 580;
 }
 
+.playlist-link {
+  align-items: center;
+  color: var(--blue-ink);
+  display: inline-flex;
+  font-weight: 560;
+  gap: 6px;
+}
+
+.playlist-link:hover {
+  color: var(--blue);
+}
+
 .badge {
   align-items: center;
   border: 1px solid transparent;
@@ -793,6 +850,12 @@ td strong {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.route-select {
+  max-width: 210px;
+  min-height: 38px;
+  width: clamp(150px, 18vw, 210px);
 }
 
 .landing {

@@ -36,6 +36,7 @@ interface GoogleRefreshResponse {
 
 export interface DetectionResult {
   created: number;
+  excludedByWatermark: number;
   ignored: number;
   skippedExisting: number;
 }
@@ -92,10 +93,22 @@ export async function runDriveDetectionForPipeline({
     throw new Error("TokenRefreshFailed");
   }
 
+  const watermark = pipeline.processedFromTime || pipeline.createdAt;
+  const folderSnapshot = await listDriveFolderFiles({
+    accessToken,
+    folderId: pipeline.sourceFolderId
+  });
+  const excludedByWatermark = folderSnapshot.filter((file) => {
+    if (!file.createdTime || !file.mimeType?.startsWith("video/")) {
+      return false;
+    }
+
+    return new Date(file.createdTime) <= watermark;
+  }).length;
   const files = await listDriveFolderFiles({
     accessToken,
     folderId: pipeline.sourceFolderId,
-    newerThan: pipeline.processedFromTime || pipeline.createdAt
+    newerThan: watermark
   });
   const driveFileIds = files.flatMap((file) => (file.id ? [file.id] : []));
   const existingItems = driveFileIds.length
@@ -178,7 +191,7 @@ export async function runDriveDetectionForPipeline({
     data: { lastDetectionAt: new Date() }
   });
 
-  return { created, ignored, skippedExisting };
+  return { created, excludedByWatermark, ignored, skippedExisting };
 }
 
 export async function probeDriveFolderForPipeline({

@@ -174,8 +174,10 @@ export const demoQueueItems: QueueItem[] = [
     detectedAt: "2026-05-13T12:17:00.000Z",
     status: "uploaded",
     matchedRuleName: "Engineering Standup",
+    intendedPlaylistId: "seed-engineering-standups",
     intendedPlaylistName: "Engineering Standups",
     youtubeVideoId: "yt-001",
+    youtubePlaylistId: "seed-engineering-standups",
     youtubeUrl: "https://youtube.com/watch?v=yt-001",
     lastActionAt: "2026-05-13T12:31:00.000Z",
     isSeedData: true
@@ -193,6 +195,7 @@ export const demoQueueItems: QueueItem[] = [
     detectedAt: "2026-05-13T11:12:00.000Z",
     status: "needs_approval",
     matchedRuleName: "Acme Client Calls",
+    intendedPlaylistId: "seed-acme-client-project",
     intendedPlaylistName: "Acme - Client Project",
     lastActionAt: "2026-05-13T11:13:00.000Z",
     isSeedData: true
@@ -225,6 +228,7 @@ export const demoQueueItems: QueueItem[] = [
     detectedAt: "2026-05-08T19:09:00.000Z",
     status: "failed",
     matchedRuleName: "Friday Demos",
+    intendedPlaylistId: "seed-friday-demos",
     intendedPlaylistName: "Friday Demos",
     failureReason: "quota_exceeded",
     lastError:
@@ -262,6 +266,7 @@ export const demoQueueItems: QueueItem[] = [
     detectedAt: "2026-05-10T16:22:00.000Z",
     status: "externally_handled",
     matchedRuleName: "Acme Client Calls",
+    intendedPlaylistId: "seed-acme-client-project",
     intendedPlaylistName: "Acme - Client Project",
     youtubeUrl: "https://youtube.com/watch?v=manual-acme",
     previousStatus: "needs_approval",
