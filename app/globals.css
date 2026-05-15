@@ -103,6 +103,8 @@ textarea {
   background: color-mix(in srgb, var(--surface) 78%, transparent);
   border-right: 1px solid var(--line);
   color: var(--ink);
+  display: flex;
+  flex-direction: column;
   padding: 24px 18px;
   position: sticky;
   top: 0;
@@ -235,6 +237,19 @@ textarea {
 
 .nav a[data-active="true"] svg {
   color: var(--blue);
+}
+
+.sidebar-utilities {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.sidebar-utilities .button {
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .main {
@@ -399,6 +414,35 @@ textarea {
   background: var(--surface-muted);
 }
 
+html[data-privacy="on"] [data-private] {
+  color: transparent !important;
+  position: relative;
+  text-shadow: none !important;
+}
+
+html[data-privacy="on"] [data-private]::after {
+  color: var(--ink);
+  content: "••••••";
+  inset: 0 auto auto 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+html[data-privacy="on"] img[data-private] {
+  filter: blur(9px) saturate(0.2);
+}
+
+html[data-privacy="on"] img[data-private]::after,
+html[data-privacy="on"] input[data-private]::after,
+html[data-privacy="on"] select[data-private]::after {
+  content: none;
+}
+
+html[data-privacy="on"] input[data-private] {
+  -webkit-text-security: disc;
+  color: var(--ink) !important;
+}
+
 .topbar h1 {
   font-size: 20px;
   font-weight: 560;
@@ -426,6 +470,7 @@ textarea {
 .metric {
   --metric-accent: var(--blue);
   --metric-soft: var(--blue-soft);
+  animation: metricGlow 2.8s ease-in-out infinite;
   background:
     linear-gradient(
       180deg,
@@ -442,11 +487,26 @@ textarea {
 }
 
 .metric::before {
+  animation: metricRailPulse 2.8s ease-in-out infinite;
   background: var(--metric-accent);
   content: "";
   inset: 0 auto 0 0;
   position: absolute;
   width: 4px;
+}
+
+.metric::after {
+  animation: metricWash 2.8s ease-in-out infinite;
+  background: radial-gradient(
+    circle at 18% 22%,
+    color-mix(in srgb, var(--metric-accent) 18%, transparent),
+    transparent 42%
+  );
+  content: "";
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
 }
 
 .metric[data-tone="approval"] {
@@ -457,16 +517,34 @@ textarea {
 .metric[data-tone="routing"] {
   --metric-accent: var(--amber);
   --metric-soft: var(--amber-soft);
+  animation-delay: 0.35s;
 }
 
 .metric[data-tone="failed"] {
   --metric-accent: var(--red);
   --metric-soft: var(--red-soft);
+  animation-delay: 0.7s;
 }
 
 .metric[data-tone="uploaded"] {
   --metric-accent: var(--green);
   --metric-soft: var(--green-soft);
+  animation-delay: 1.05s;
+}
+
+.metric[data-tone="routing"]::before,
+.metric[data-tone="routing"]::after {
+  animation-delay: 0.35s;
+}
+
+.metric[data-tone="failed"]::before,
+.metric[data-tone="failed"]::after {
+  animation-delay: 0.7s;
+}
+
+.metric[data-tone="uploaded"]::before,
+.metric[data-tone="uploaded"]::after {
+  animation-delay: 1.05s;
 }
 
 .metric span {
@@ -478,12 +556,25 @@ textarea {
 }
 
 .metric span i {
+  animation: metricDotPulse 2.8s ease-in-out infinite;
   background: var(--metric-accent);
   border-radius: 999px;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--metric-accent) 14%, transparent);
   display: inline-block;
   height: 7px;
   width: 7px;
+}
+
+.metric[data-tone="routing"] span i {
+  animation-delay: 0.35s;
+}
+
+.metric[data-tone="failed"] span i {
+  animation-delay: 0.7s;
+}
+
+.metric[data-tone="uploaded"] span i {
+  animation-delay: 1.05s;
 }
 
 .metric strong {
@@ -566,10 +657,51 @@ textarea {
   color: #ffffff;
 }
 
+.button.danger.subtle {
+  background: var(--red-soft);
+  border-color: color-mix(in srgb, var(--red) 32%, var(--line));
+  color: var(--red);
+  margin-top: 10px;
+}
+
 .icon-button {
   justify-content: center;
   padding: 8px;
+  position: relative;
   width: 38px;
+}
+
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  background: #27272a;
+  border-radius: 4px;
+  bottom: calc(100% + 8px);
+  box-shadow: var(--shadow-tight);
+  color: #ffffff;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 650;
+  left: 50%;
+  line-height: 1.2;
+  opacity: 0;
+  padding: 6px 8px;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, 2px);
+  transition:
+    opacity 60ms ease,
+    transform 60ms ease;
+  white-space: nowrap;
+  z-index: 80;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .select,
@@ -590,6 +722,10 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.form-grid.compact {
+  gap: 10px;
+}
+
 .form-grid label {
   display: grid;
   gap: 6px;
@@ -608,6 +744,30 @@ textarea {
 
 .field-hint.error {
   color: var(--red);
+}
+
+.cadence-custom-input {
+  max-width: 160px;
+}
+
+.checkbox-field {
+  align-items: center;
+  align-self: end;
+  display: flex !important;
+  flex-direction: row;
+  gap: 8px !important;
+  min-height: 38px;
+}
+
+.checkbox-field input {
+  height: 16px;
+  width: 16px;
+}
+
+.checkbox-field span {
+  color: var(--ink) !important;
+  font-size: 13px !important;
+  font-weight: 520 !important;
 }
 
 .pipeline-next-step {
@@ -875,6 +1035,35 @@ td strong {
   padding: 4px 8px;
 }
 
+.rule-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.rule-card {
+  background: color-mix(in srgb, var(--surface-muted) 70%, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.rule-card.add-rule {
+  border-style: dashed;
+}
+
+.rule-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.rule-card-header h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
 .actions {
   align-items: center;
   display: flex;
@@ -1067,6 +1256,54 @@ td strong {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes metricGlow {
+  0%,
+  100% {
+    border-color: color-mix(in srgb, var(--metric-accent) 28%, var(--line));
+    box-shadow: var(--shadow-tight);
+  }
+
+  50% {
+    border-color: color-mix(in srgb, var(--metric-accent) 58%, var(--line));
+    box-shadow:
+      var(--shadow-tight),
+      0 0 0 3px color-mix(in srgb, var(--metric-accent) 12%, transparent);
+  }
+}
+
+@keyframes metricRailPulse {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes metricWash {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes metricDotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--metric-accent) 14%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--metric-accent) 4%, transparent);
   }
 }
 
@@ -1577,6 +1814,10 @@ td strong {
 
 @media (prefers-reduced-motion: reduce) {
   .route-line::after,
+  .metric,
+  .metric::before,
+  .metric::after,
+  .metric span i,
   .status-chip i,
   .spin-icon,
   .upload-progress span {

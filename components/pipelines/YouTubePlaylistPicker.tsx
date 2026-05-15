@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 interface ConnectionOption {
   id: string;
@@ -41,54 +41,45 @@ export function YouTubePlaylistPicker({
     [connectionId, youtubeConnections]
   );
 
-  useEffect(() => {
+  async function loadPlaylists() {
     if (!connectionId || disabled) {
       return;
     }
 
-    let isCurrent = true;
     setIsLoading(true);
     setStatus(null);
 
-    fetch(`/api/oauth/youtube/playlists?connectionId=${encodeURIComponent(connectionId)}`, {
-      cache: "no-store"
-    })
-      .then(async (response) => {
+    try {
+      const response = await fetch(
+        `/api/oauth/youtube/playlists?connectionId=${encodeURIComponent(connectionId)}`,
+        { cache: "no-store" }
+      );
         const payload = (await response.json()) as PlaylistResponse;
         if (!response.ok || payload.error) {
           throw new Error(playlistErrorMessage(payload.error));
         }
-        return payload.playlists || [];
-      })
-      .then((items) => {
-        if (!isCurrent) return;
-        setPlaylists(items);
-        const firstPlaylist = items[0];
-        setPlaylistId(firstPlaylist?.id || "");
-        setPlaylistName(firstPlaylist?.title || "");
-        setStatusTone("info");
-        setStatus(
-          firstPlaylist
-            ? `Loaded ${items.length} playlist${items.length === 1 ? "" : "s"}.`
-            : "No playlists found. Create one for this pipeline."
-        );
-      })
-      .catch((error) => {
-        if (!isCurrent) return;
-        setPlaylists([]);
-        setPlaylistId("");
-        setPlaylistName("");
-        setStatusTone("error");
-        setStatus(error instanceof Error ? error.message : "Unable to load playlists.");
-      })
-      .finally(() => {
-        if (isCurrent) setIsLoading(false);
-      });
 
-    return () => {
-      isCurrent = false;
-    };
-  }, [connectionId, disabled]);
+      const items = payload.playlists || [];
+      setPlaylists(items);
+      const firstPlaylist = items[0];
+      setPlaylistId(firstPlaylist?.id || "");
+      setPlaylistName(firstPlaylist?.title || "");
+      setStatusTone("info");
+      setStatus(
+        firstPlaylist
+          ? `Loaded ${items.length} playlist${items.length === 1 ? "" : "s"}.`
+          : "No playlists found. Create one for this pipeline."
+      );
+    } catch (error) {
+      setPlaylists([]);
+      setPlaylistId("");
+      setPlaylistName("");
+      setStatusTone("error");
+      setStatus(error instanceof Error ? error.message : "Unable to load playlists.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   async function createPlaylist() {
     const title = newPlaylistName.trim();
@@ -146,9 +137,16 @@ export function YouTubePlaylistPicker({
         <span>YouTube connection</span>
         <select
           className="select"
+          data-private
           disabled={disabled}
           name="youtubeConnectionId"
-          onChange={(event) => setConnectionId(event.target.value)}
+          onChange={(event) => {
+            setConnectionId(event.target.value);
+            setPlaylists([]);
+            setPlaylistId("");
+            setPlaylistName("");
+            setStatus(null);
+          }}
           required
           value={connectionId}
         >
@@ -159,27 +157,42 @@ export function YouTubePlaylistPicker({
           ))}
         </select>
         {selectedConnection ? (
-          <small className="field-hint">Using {selectedConnection.detail}.</small>
+          <small className="field-hint">Using <span data-private>{selectedConnection.detail}</span>.</small>
         ) : null}
       </label>
       <label>
         <span>YouTube playlist</span>
-        <select
-          className="select"
-          disabled={disabled || isLoading || playlists.length === 0}
-          onChange={(event) => {
-            const selected = playlists.find((playlist) => playlist.id === event.target.value);
-            setPlaylistId(selected?.id || "");
-            setPlaylistName(selected?.title || "");
-          }}
-          value={playlistId}
-        >
-          {playlists.map((playlist) => (
-            <option key={playlist.id} value={playlist.id}>
-              {playlist.title}
-            </option>
-          ))}
-        </select>
+        <div className="picker-row">
+          <select
+            className="select"
+            data-private={playlistId ? true : undefined}
+            disabled={disabled || isLoading || playlists.length === 0}
+            onChange={(event) => {
+              const selected = playlists.find((playlist) => playlist.id === event.target.value);
+              setPlaylistId(selected?.id || "");
+              setPlaylistName(selected?.title || "");
+            }}
+            value={playlistId}
+          >
+            {playlists.length ? (
+              playlists.map((playlist) => (
+                <option key={playlist.id} value={playlist.id}>
+                  {playlist.title}
+                </option>
+              ))
+            ) : (
+              <option value="">Load playlists</option>
+            )}
+          </select>
+          <button
+            className="button"
+            disabled={disabled || isLoading || !connectionId}
+            onClick={loadPlaylists}
+            type="button"
+          >
+            {isLoading ? "Loading..." : "Load"}
+          </button>
+        </div>
         <input name="youtubePlaylistId" type="hidden" value={playlistId} />
         <input name="youtubePlaylistName" type="hidden" value={playlistName} />
         {status ? <small className={`field-hint ${statusTone}`}>{status}</small> : null}
@@ -189,6 +202,7 @@ export function YouTubePlaylistPicker({
         <div className="picker-row">
           <input
             className="input"
+            data-private
             disabled={disabled || isCreating}
             onChange={(event) => setNewPlaylistName(event.target.value)}
             value={newPlaylistName}

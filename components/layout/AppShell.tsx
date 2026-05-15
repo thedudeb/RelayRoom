@@ -11,6 +11,7 @@ import {
   Settings
 } from "lucide-react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
+import { PrivacyToggle } from "@/components/privacy/PrivacyToggle";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signOutFromApp } from "@/lib/auth/actions";
 
@@ -65,6 +66,10 @@ export function AppShell({
             );
           })}
         </nav>
+        <div className="sidebar-utilities" aria-label="Workspace utilities">
+          <PrivacyToggle />
+          <ThemeToggle />
+        </div>
       </aside>
       <main className="main">
         <header className="topbar">
@@ -73,7 +78,6 @@ export function AppShell({
             <p>{subtitle}</p>
           </div>
           <div className="topbar-actions">
-            <ThemeToggle />
             <AccountBadge account={account} />
           </div>
         </header>
@@ -98,20 +102,20 @@ function AccountBadge({ account }: { account?: AccountSummary | null }) {
       <summary className="account-badge" title={supportingText}>
         {account?.image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={account.image} alt="" referrerPolicy="no-referrer" />
+          <img data-private src={account.image} alt="" referrerPolicy="no-referrer" />
         ) : (
-          <span aria-hidden="true">{initials}</span>
+          <span aria-hidden="true" data-private>{initials}</span>
         )}
         <div>
-          <strong>{displayName}</strong>
-          <small>{supportingText}</small>
+          <strong data-private>{displayName}</strong>
+          <small data-private>{supportingText}</small>
         </div>
         <ChevronDown aria-hidden="true" size={15} />
       </summary>
       <div className="account-menu-panel">
         <div className="account-menu-identity">
-          <strong>{displayName}</strong>
-          <span>{supportingText}</span>
+          <strong data-private>{displayName}</strong>
+          <span data-private>{supportingText}</span>
         </div>
         {account ? (
           <form action={signOutFromApp}>

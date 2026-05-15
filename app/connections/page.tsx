@@ -75,7 +75,7 @@ export default async function ConnectionsPage({
                   <strong>{connection.label}</strong>
                   <div className="muted">{connection.kind}</div>
                 </td>
-                <td>{connection.accountEmail}</td>
+                <td><span data-private>{connection.accountEmail}</span></td>
                 <td>
                   <span
                     className={`badge ${
@@ -88,7 +88,7 @@ export default async function ConnectionsPage({
                 <td>{connection.scopes.join(", ")}</td>
                 <td>
                   {connection.usedByPipelines.length > 0
-                    ? connection.usedByPipelines.join(", ")
+                    ? <span data-private>{connection.usedByPipelines.join(", ")}</span>
                     : "No pipelines"}
                 </td>
                 <td>

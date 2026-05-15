@@ -140,6 +140,7 @@ export function DriveFolderPicker({
         <div className="picker-row">
           <input
             className="input"
+            data-private
             disabled={disabled}
             name="sourceFolderName"
             onChange={(event) => setFolderName(event.target.value)}
@@ -163,6 +164,7 @@ export function DriveFolderPicker({
         <span>Drive folder ID</span>
         <input
           className="input"
+          data-private
           disabled={disabled}
           name="sourceFolderId"
           onChange={(event) => setFolderId(event.target.value)}

@@ -115,9 +115,12 @@ Initial path: polling.
 - Polling lists files in the selected folder newer than the watermark.
 - Every detected Drive file fans out per pipeline.
 - Idempotency is enforced with a unique `(pipeline_id, drive_file_id)` mapping.
-- Duplicate detections will verify the stored YouTube video still exists before no-oping.
+- Duplicate detections no-op through the unique queue mapping.
+- Vercel Cron invokes `GET /api/cron/detect` every five minutes. The endpoint only runs pipelines whose `pollingIntervalMinutes` cadence is due.
 
 Drive push notifications can be added later once the core queue and upload state machine are stable.
+
+For production, set `CRON_SECRET` in Vercel. Vercel automatically sends it as a bearer token when invoking cron jobs. For local/manual calls, `DETECTION_WEBHOOK_SECRET` can use the same value.
 
 ## YouTube Quota Note
 

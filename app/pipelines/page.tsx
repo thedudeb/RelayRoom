@@ -5,9 +5,10 @@ import {
   PipelineStatus,
   PrivacyStatus
 } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { AppShell } from "@/components/layout/AppShell";
 import { PipelineStatusControls } from "@/components/pipelines/PipelineAsyncActions";
-import { RulePreview } from "@/components/pipelines/RulePreview";
 import { requireAppAccess } from "@/lib/auth/account";
 import {
   getPipelinesForDemo,
@@ -16,8 +17,15 @@ import {
   getQueueItemsForUser
 } from "@/lib/data/repository";
 import { prisma } from "@/lib/db/prisma";
-import type { Pipeline, QueueItem } from "@/lib/domain/types";
+import type {
+  ConditionField,
+  ConditionLeaf,
+  ConditionOperator,
+  Pipeline,
+  QueueItem
+} from "@/lib/domain/types";
 import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
+import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField";
 import { YouTubePlaylistPicker } from "@/components/pipelines/YouTubePlaylistPicker";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -38,6 +46,9 @@ export default async function PipelinesPage({
     error?: string;
     ignored?: string;
     probe?: string;
+    ruleCreated?: string;
+    ruleDeleted?: string;
+    ruleUpdated?: string;
     skipped?: string;
     updated?: string;
   }>;
@@ -72,6 +83,21 @@ export default async function PipelinesPage({
           Pipeline updated.
         </div>
       ) : null}
+      {params?.ruleCreated ? (
+        <div className="notice success" role="status">
+          Routing rule created.
+        </div>
+      ) : null}
+      {params?.ruleUpdated ? (
+        <div className="notice success" role="status">
+          Routing rule updated.
+        </div>
+      ) : null}
+      {params?.ruleDeleted ? (
+        <div className="notice success" role="status">
+          Routing rule deleted.
+        </div>
+      ) : null}
       {params?.detected ? (
         <div className="notice success" role="status">
           Detection finished. Created {params.detected} queue item{params.detected === "1" ? "" : "s"}
@@ -102,7 +128,8 @@ export default async function PipelinesPage({
                 <div>
                   <h2>{pipeline.name}</h2>
                   <p className="muted">
-                    {pipeline.sourceFolderName} → {pipeline.destinationChannelName}
+                    <span data-private>{pipeline.sourceFolderName}</span> →{" "}
+                    <span data-private>{pipeline.destinationChannelName}</span>
                   </p>
                 </div>
                 <span className={`badge ${pipelineStatusBadgeClass(pipeline.status)}`}>
@@ -139,6 +166,12 @@ export default async function PipelinesPage({
               ) : null}
               {!access.isDemo ? <EditPipelinePanel pipeline={pipeline} /> : null}
               {!access.isDemo ? (
+                <RuleManager
+                  pipeline={pipeline}
+                  playlistOptions={playlistOptionsForConnection(pipelines, pipeline.youtubeConnectionId)}
+                />
+              ) : null}
+              {!access.isDemo ? (
                 <PipelineStatusControls
                   initialStatus={pipeline.status}
                   pipelineId={pipeline.id}
@@ -155,13 +188,12 @@ export default async function PipelinesPage({
         </section>
         <aside className="stack">
           <div className="panel">
-            <h2>Rule Builder Preview</h2>
+            <h2>Routing rules</h2>
             <p className="muted">
-              This is the first visual pass over the condition tree. The next step is turning
-              these blocks into inline editable controls with validation and drag ordering.
+              Rules run from lowest priority number to highest. The first matching rule assigns
+              the playlist, title, and upload path for each detected file.
             </p>
           </div>
-          {pipelines[0] ? <RulePreview pipeline={pipelines[0]} /> : null}
         </aside>
       </div>
     </AppShell>
@@ -200,7 +232,7 @@ function CreatePipelinePanel({
         </label>
         <label>
           <span>Drive connection</span>
-          <select className="select" disabled={!canCreate} name="driveConnectionId" required>
+          <select className="select" data-private disabled={!canCreate} name="driveConnectionId" required>
             {driveConnections.map((connection) => (
               <option key={connection.id} value={connection.id}>
                 {connection.label} - {connection.detail}
@@ -224,25 +256,7 @@ function CreatePipelinePanel({
             <option value={PipelineMode.AUTO}>Auto upload</option>
           </select>
         </label>
-        <label>
-          <span>Polling cadence</span>
-          <select
-            className="select"
-            defaultValue="15"
-            disabled={!canCreate}
-            name="pollingIntervalMinutes"
-            required
-          >
-            <option value="15">Every 15 minutes</option>
-            <option value="30">Every 30 minutes</option>
-            <option value="60">Every hour</option>
-            <option value="360">Every 6 hours</option>
-            <option value="1440">Every day</option>
-            <option value="2880">Every 2 days</option>
-            <option value="10080">Every 7 days</option>
-          </select>
-          <small className="field-hint">Saved as minutes internally.</small>
-        </label>
+        <PollingCadenceField disabled={!canCreate} hint="Saved as minutes internally." />
         <div className="form-actions">
           <button className="button primary" disabled={!canCreate} type="submit">
             Create pipeline
@@ -305,24 +319,10 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
             <option value={PipelineMode.AUTO}>Auto upload</option>
           </select>
         </label>
-        <label>
-          <span>Polling cadence</span>
-          <select
-            className="select"
-            defaultValue={String(pipeline.pollingIntervalMinutes)}
-            name="pollingIntervalMinutes"
-            required
-          >
-            <option value="15">Every 15 minutes</option>
-            <option value="30">Every 30 minutes</option>
-            <option value="60">Every hour</option>
-            <option value="360">Every 6 hours</option>
-            <option value="1440">Every day</option>
-            <option value="2880">Every 2 days</option>
-            <option value="10080">Every 7 days</option>
-          </select>
-          <small className="field-hint">Changing cadence affects future scheduled runs.</small>
-        </label>
+        <PollingCadenceField
+          hint="Changing cadence affects future scheduled runs."
+          initialMinutes={pipeline.pollingIntervalMinutes}
+        />
         <div className="form-actions">
           <button className="button primary" type="submit">
             Save changes
@@ -330,6 +330,185 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
         </div>
       </form>
     </details>
+  );
+}
+
+function RuleManager({
+  pipeline,
+  playlistOptions
+}: {
+  pipeline: Pipeline;
+  playlistOptions: { id: string; name: string }[];
+}) {
+  const defaultPlaylist = playlistOptions[0];
+
+  return (
+    <details className="edit-panel">
+      <summary>Routing rules</summary>
+      <div className="rule-editor">
+        {pipeline.rules.map((rule) => {
+          const condition = firstCondition(rule.conditions);
+          const playlistValue = playlistOptionValue(rule.playlist.id, rule.playlist.name);
+
+          return (
+            <div className="rule-card" key={rule.id}>
+              <div className="rule-card-header">
+                <div>
+                  <h3>{rule.priority}. {rule.name}</h3>
+                  <p className="muted">
+                    Routes to {rule.playlist.name}. {conditionSummary(condition)}
+                  </p>
+                </div>
+                <span className="rule-pill">first match wins</span>
+              </div>
+              <form action={updateRuleAction} className="form-grid compact">
+                <input name="ruleId" type="hidden" value={rule.id} />
+                <RuleFields
+                  condition={condition}
+                  defaultName={rule.name}
+                  defaultPlaylistValue={playlistValue}
+                  playlistOptions={playlistOptions}
+                />
+                <div className="form-actions">
+                  <button className="button primary" type="submit">
+                    Save rule
+                  </button>
+                </div>
+              </form>
+              <form action={deleteRuleAction}>
+                <input name="ruleId" type="hidden" value={rule.id} />
+                <button className="button danger subtle" type="submit">
+                  Delete rule
+                </button>
+              </form>
+            </div>
+          );
+        })}
+
+        <div className="rule-card add-rule">
+          <div className="rule-card-header">
+            <div>
+              <h3>Add rule</h3>
+              <p className="muted">Create a simple first-match routing rule for this pipeline.</p>
+            </div>
+          </div>
+          <form action={createRuleAction} className="form-grid compact">
+            <input name="pipelineId" type="hidden" value={pipeline.id} />
+            <RuleFields
+              defaultName="New routing rule"
+              defaultPlaylistValue={
+                defaultPlaylist
+                  ? playlistOptionValue(defaultPlaylist.id, defaultPlaylist.name)
+                  : undefined
+              }
+              playlistOptions={playlistOptions}
+            />
+            <div className="form-actions">
+              <button className="button primary" disabled={playlistOptions.length === 0} type="submit">
+                Add rule
+              </button>
+              {playlistOptions.length === 0 ? (
+                <span className="muted">Create or select a playlist before adding rules.</span>
+              ) : null}
+            </div>
+          </form>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function RuleFields({
+  condition,
+  defaultName,
+  defaultPlaylistValue,
+  playlistOptions
+}: {
+  condition?: ConditionLeaf;
+  defaultName: string;
+  defaultPlaylistValue?: string;
+  playlistOptions: { id: string; name: string }[];
+}) {
+  const field = condition?.field || "filename";
+
+  return (
+    <>
+      <label>
+        <span>Rule name</span>
+        <input className="input" defaultValue={defaultName} name="ruleName" required />
+      </label>
+      <label>
+        <span>Route to playlist</span>
+        <select
+          className="select"
+          defaultValue={defaultPlaylistValue}
+          name="playlist"
+          required
+        >
+          {playlistOptions.map((playlist) => (
+            <option key={playlist.id} value={playlistOptionValue(playlist.id, playlist.name)}>
+              {playlist.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Match field</span>
+        <select className="select" defaultValue={field} name="field">
+          <option value="filename">Filename</option>
+          <option value="file_type">File type</option>
+          <option value="day_of_week">Day of week</option>
+          <option value="time_of_day">Time of day</option>
+        </select>
+      </label>
+      <label>
+        <span>Operator</span>
+        <select className="select" defaultValue={operatorFormValue(condition)} name="operator">
+          <optgroup label="Filename">
+            <option value="contains">contains</option>
+            <option value="starts_with">starts with</option>
+            <option value="ends_with">ends with</option>
+            <option value="equals">equals</option>
+            <option value="matches_wildcard">matches wildcard</option>
+            <option value="matches_regex">matches regex</option>
+          </optgroup>
+          <optgroup label="File type">
+            <option value="file_type_equals">equals</option>
+            <option value="file_type_is_one_of">is one of</option>
+          </optgroup>
+          <optgroup label="Day">
+            <option value="day_is">is</option>
+            <option value="day_is_not">is not</option>
+            <option value="day_is_one_of">is one of</option>
+          </optgroup>
+          <optgroup label="Time">
+            <option value="time_before">before</option>
+            <option value="time_after">after</option>
+          </optgroup>
+        </select>
+      </label>
+      <label>
+        <span>Value</span>
+        <input
+          className="input"
+          defaultValue={condition ? ruleValueToInput(condition.value) : ""}
+          name="value"
+          placeholder="Engineering, mp4, Mon, or 09:30"
+          required
+        />
+        <small className="field-hint">
+          Use commas for “is one of”. Days use Mon, Tue, Wed. Times use HH:mm.
+        </small>
+      </label>
+      <label className="checkbox-field">
+        <input
+          defaultChecked={condition?.caseSensitive || false}
+          name="caseSensitive"
+          type="checkbox"
+        />
+        <span>Case-sensitive filename matching</span>
+      </label>
+    </>
   );
 }
 
@@ -387,7 +566,10 @@ async function createPipelineAction(formData: FormData) {
     PrivacyStatus.PUBLIC,
     PrivacyStatus.UNLISTED
   ]);
-  const pollingIntervalMinutes = Number(formData.get("pollingIntervalMinutes") || 15);
+  const pollingIntervalMinutes = parsePollingIntervalMinutes(formData);
+  if (!pollingIntervalMinutes) {
+    redirect("/pipelines?error=InvalidPollingCadence");
+  }
 
   if (
     !name ||
@@ -424,6 +606,15 @@ async function createPipelineAction(formData: FormData) {
     redirect("/pipelines?error=MissingActiveConnections");
   }
 
+  const enabledFolderPipeline = await findEnabledPipelineForFolder({
+    sourceFolderId,
+    userId: access.userId
+  });
+
+  if (enabledFolderPipeline) {
+    redirect("/pipelines?error=FolderAlreadyWatched");
+  }
+
   await prisma.pipeline.create({
     data: {
       defaultDescriptionTemplate:
@@ -434,9 +625,7 @@ async function createPipelineAction(formData: FormData) {
       driveConnectionId: driveConnection.id,
       mode,
       name,
-      pollingIntervalMinutes: Number.isFinite(pollingIntervalMinutes)
-        ? Math.max(5, pollingIntervalMinutes)
-        : 15,
+      pollingIntervalMinutes,
       privacyStatus,
       processedFromTime: new Date(),
       sourceFolderId,
@@ -492,7 +681,10 @@ async function updatePipelineAction(formData: FormData) {
     PrivacyStatus.PUBLIC,
     PrivacyStatus.UNLISTED
   ]);
-  const pollingIntervalMinutes = Number(formData.get("pollingIntervalMinutes") || 15);
+  const pollingIntervalMinutes = parsePollingIntervalMinutes(formData);
+  if (!pollingIntervalMinutes) {
+    redirect("/pipelines?error=InvalidPollingCadence");
+  }
 
   if (!pipelineId || !name || !sourceFolderId || !sourceFolderName) {
     redirect("/pipelines?error=MissingPipelineFields");
@@ -512,6 +704,16 @@ async function updatePipelineAction(formData: FormData) {
     redirect("/pipelines?error=PipelineNotFound");
   }
 
+  const enabledFolderPipeline = await findEnabledPipelineForFolder({
+    excludePipelineId: pipelineId,
+    sourceFolderId,
+    userId: access.userId
+  });
+
+  if (enabledFolderPipeline) {
+    redirect("/pipelines?error=FolderAlreadyWatched");
+  }
+
   const folderChanged = pipeline.sourceFolderId !== sourceFolderId;
 
   await prisma.pipeline.update({
@@ -520,9 +722,7 @@ async function updatePipelineAction(formData: FormData) {
       errorMessage: null,
       mode,
       name,
-      pollingIntervalMinutes: Number.isFinite(pollingIntervalMinutes)
-        ? Math.max(5, pollingIntervalMinutes)
-        : 15,
+      pollingIntervalMinutes,
       privacyStatus,
       sourceFolderId,
       sourceFolderName,
@@ -534,6 +734,204 @@ async function updatePipelineAction(formData: FormData) {
   redirect("/pipelines?updated=true");
 }
 
+async function createRuleAction(formData: FormData) {
+  "use server";
+
+  const access = await requireAppAccess();
+  if (access.isDemo) {
+    redirect("/pipelines?demo=true&error=DemoReadOnly");
+  }
+
+  const pipelineId = getRequiredFormValue(formData, "pipelineId");
+  const ruleName = getRequiredFormValue(formData, "ruleName");
+  const playlist = parsePlaylistValue(getRequiredFormValue(formData, "playlist"));
+  const conditionTree = buildConditionTree(formData);
+
+  if (!pipelineId || !ruleName || !playlist || !conditionTree) {
+    redirect("/pipelines?error=MissingRuleFields");
+  }
+
+  const pipeline = await prisma.pipeline.findFirst({
+    where: {
+      id: pipelineId,
+      userId: access.userId
+    },
+    select: {
+      youtubeConnectionId: true,
+      rules: {
+        orderBy: { priority: "asc" },
+        select: { priority: true }
+      }
+    }
+  });
+
+  if (!pipeline) {
+    redirect("/pipelines?error=PipelineNotFound");
+  }
+
+  const knownPlaylists = await prisma.rule.findMany({
+    where: {
+      pipeline: {
+        userId: access.userId,
+        youtubeConnectionId: pipeline.youtubeConnectionId
+      }
+    },
+    select: {
+      youtubePlaylistId: true,
+      youtubePlaylistName: true
+    }
+  });
+  const playlistIsKnown = knownPlaylists.some(
+    (rule) => rule.youtubePlaylistId === playlist.id && rule.youtubePlaylistName === playlist.name
+  );
+  if (!playlistIsKnown) {
+    redirect("/pipelines?error=MissingRuleFields");
+  }
+
+  const nextPriority =
+    pipeline.rules.reduce((max, rule) => Math.max(max, rule.priority), 0) + 1;
+
+  await prisma.rule.create({
+    data: {
+      conditionTree: conditionTree as unknown as Prisma.InputJsonValue,
+      name: ruleName,
+      pipelineId,
+      priority: nextPriority,
+      titleTemplateOverride: null,
+      descriptionTemplateOverride: null,
+      youtubePlaylistId: playlist.id,
+      youtubePlaylistName: playlist.name
+    }
+  });
+
+  revalidatePath("/pipelines");
+  redirect("/pipelines?ruleCreated=true");
+}
+
+async function updateRuleAction(formData: FormData) {
+  "use server";
+
+  const access = await requireAppAccess();
+  if (access.isDemo) {
+    redirect("/pipelines?demo=true&error=DemoReadOnly");
+  }
+
+  const ruleId = getRequiredFormValue(formData, "ruleId");
+  const ruleName = getRequiredFormValue(formData, "ruleName");
+  const playlist = parsePlaylistValue(getRequiredFormValue(formData, "playlist"));
+  const conditionTree = buildConditionTree(formData);
+
+  if (!ruleId || !ruleName || !playlist || !conditionTree) {
+    redirect("/pipelines?error=MissingRuleFields");
+  }
+
+  const rule = await prisma.rule.findFirst({
+    where: {
+      id: ruleId,
+      pipeline: { userId: access.userId }
+    },
+    select: {
+      pipelineId: true,
+      pipeline: {
+        select: {
+          youtubeConnectionId: true
+        }
+      }
+    }
+  });
+
+  if (!rule) {
+    redirect("/pipelines?error=RuleNotFound");
+  }
+
+  const knownPlaylists = await prisma.rule.findMany({
+    where: {
+      pipeline: {
+        userId: access.userId,
+        youtubeConnectionId: rule.pipeline.youtubeConnectionId
+      }
+    },
+    select: {
+      youtubePlaylistId: true,
+      youtubePlaylistName: true
+    }
+  });
+  const playlistIsKnown = knownPlaylists.some(
+    (candidate) =>
+      candidate.youtubePlaylistId === playlist.id &&
+      candidate.youtubePlaylistName === playlist.name
+  );
+  if (!playlistIsKnown) {
+    redirect("/pipelines?error=MissingRuleFields");
+  }
+
+  await prisma.rule.update({
+    where: { id: ruleId },
+    data: {
+      conditionTree: conditionTree as unknown as Prisma.InputJsonValue,
+      name: ruleName,
+      youtubePlaylistId: playlist.id,
+      youtubePlaylistName: playlist.name
+    }
+  });
+
+  revalidatePath("/pipelines");
+  redirect("/pipelines?ruleUpdated=true");
+}
+
+async function deleteRuleAction(formData: FormData) {
+  "use server";
+
+  const access = await requireAppAccess();
+  if (access.isDemo) {
+    redirect("/pipelines?demo=true&error=DemoReadOnly");
+  }
+
+  const ruleId = getRequiredFormValue(formData, "ruleId");
+  if (!ruleId) {
+    redirect("/pipelines?error=MissingRuleFields");
+  }
+
+  const rule = await prisma.rule.findFirst({
+    where: {
+      id: ruleId,
+      pipeline: { userId: access.userId }
+    },
+    select: {
+      pipelineId: true
+    }
+  });
+
+  if (!rule) {
+    redirect("/pipelines?error=RuleNotFound");
+  }
+
+  const rules = await prisma.rule.findMany({
+    where: { pipelineId: rule.pipelineId },
+    orderBy: { priority: "asc" },
+    select: { id: true }
+  });
+
+  if (rules.length <= 1) {
+    redirect("/pipelines?error=LastRuleRequired");
+  }
+
+  const remainingRules = rules.filter((candidate) => candidate.id !== ruleId);
+
+  await prisma.$transaction([
+    prisma.rule.delete({ where: { id: ruleId } }),
+    ...remainingRules.map((candidate, index) =>
+      prisma.rule.update({
+        where: { id: candidate.id },
+        data: { priority: index + 1 }
+      })
+    )
+  ]);
+
+  revalidatePath("/pipelines");
+  redirect("/pipelines?ruleDeleted=true");
+}
+
 function getRequiredFormValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
@@ -543,15 +941,200 @@ function getEnumValue<T extends string>(formData: FormData, key: string, values:
   return values.includes(value as T) ? (value as T) : values[0];
 }
 
+function playlistOptionsForConnection(pipelines: Pipeline[], youtubeConnectionId: string) {
+  const seen = new Set<string>();
+  return pipelines
+    .filter((pipeline) => pipeline.youtubeConnectionId === youtubeConnectionId)
+    .flatMap((pipeline) => pipeline.rules.map((rule) => rule.playlist))
+    .filter((playlist) => {
+      if (seen.has(playlist.id)) {
+        return false;
+      }
+
+      seen.add(playlist.id);
+      return true;
+    });
+}
+
+function playlistOptionValue(id: string, name: string) {
+  return `${encodeURIComponent(id)}::${encodeURIComponent(name)}`;
+}
+
+function parsePlaylistValue(value: string) {
+  const [encodedId, encodedName] = value.split("::");
+  if (!encodedId || !encodedName) {
+    return undefined;
+  }
+
+  return {
+    id: decodeURIComponent(encodedId),
+    name: decodeURIComponent(encodedName)
+  };
+}
+
+function firstCondition(node: Pipeline["rules"][number]["conditions"]): ConditionLeaf | undefined {
+  const [child] = node.children;
+  if (!child) {
+    return undefined;
+  }
+  if (child.type === "condition") {
+    return child;
+  }
+  return firstCondition(child);
+}
+
+function conditionSummary(condition?: ConditionLeaf) {
+  if (!condition) {
+    return "No editable condition found.";
+  }
+
+  return `${condition.field.replaceAll("_", " ")} ${condition.operator.replaceAll("_", " ")} ${ruleValueToInput(condition.value)}.`;
+}
+
+function ruleValueToInput(value: ConditionLeaf["value"]) {
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+  if (typeof value === "object") {
+    return `${value.start}-${value.end}`;
+  }
+  return String(value);
+}
+
+function operatorFormValue(condition?: ConditionLeaf) {
+  if (!condition) {
+    return "contains";
+  }
+  if (condition.field === "file_type") {
+    return `file_type_${condition.operator}`;
+  }
+  if (condition.field === "day_of_week") {
+    return `day_${condition.operator}`;
+  }
+  if (condition.field === "time_of_day") {
+    return `time_${condition.operator}`;
+  }
+  return condition.operator;
+}
+
+function buildConditionTree(formData: FormData) {
+  const field = getEnumValue<ConditionField>(formData, "field", [
+    "filename",
+    "file_type",
+    "day_of_week",
+    "time_of_day"
+  ]);
+  const operator = normalizeOperator(field, getRequiredFormValue(formData, "operator"));
+  const rawValue = getRequiredFormValue(formData, "value");
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const condition: ConditionLeaf = {
+    id: `cond-${randomUUID()}`,
+    type: "condition",
+    field,
+    operator,
+    value: conditionValue(operator, rawValue),
+    ...(field === "filename" && formData.get("caseSensitive") === "on"
+      ? { caseSensitive: true }
+      : {})
+  };
+
+  return {
+    id: `group-${randomUUID()}`,
+    type: "group" as const,
+    combinator: "AND" as const,
+    children: [condition]
+  };
+}
+
+function normalizeOperator(field: ConditionField, rawOperator: string): ConditionOperator {
+  const withoutPrefix = rawOperator
+    .replace(/^file_type_/, "")
+    .replace(/^day_/, "")
+    .replace(/^time_/, "");
+
+  const allowed: Record<ConditionField, ConditionOperator[]> = {
+    filename: ["contains", "starts_with", "ends_with", "equals", "matches_wildcard", "matches_regex"],
+    file_type: ["equals", "is_one_of"],
+    day_of_week: ["is", "is_not", "is_one_of"],
+    time_of_day: ["before", "after"]
+  };
+
+  return allowed[field].includes(withoutPrefix as ConditionOperator)
+    ? (withoutPrefix as ConditionOperator)
+    : allowed[field][0];
+}
+
+function conditionValue(operator: ConditionOperator, value: string) {
+  if (operator === "is_one_of") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return value;
+}
+
+function parsePollingIntervalMinutes(formData: FormData) {
+  const preset = String(formData.get("pollingIntervalPreset") || "15");
+  const rawMinutes =
+    preset === "custom" ? parseCustomCadence(formData.get("pollingIntervalCustom")) : Number(preset);
+
+  if (!Number.isFinite(rawMinutes) || rawMinutes < 5 || rawMinutes > 10080) {
+    return null;
+  }
+
+  return Math.floor(rawMinutes);
+}
+
+function parseCustomCadence(value: FormDataEntryValue | null) {
+  const rawValue = String(value || "").trim();
+  const match = rawValue.match(/^([0-9]{1,3}):([0-5][0-9])$/);
+  if (!match) {
+    return Number.NaN;
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function findEnabledPipelineForFolder({
+  excludePipelineId,
+  sourceFolderId,
+  userId
+}: {
+  excludePipelineId?: string;
+  sourceFolderId: string;
+  userId: string;
+}) {
+  return prisma.pipeline.findFirst({
+    where: {
+      ...(excludePipelineId ? { id: { not: excludePipelineId } } : {}),
+      sourceFolderId,
+      status: PipelineStatus.ENABLED,
+      userId
+    },
+    select: { id: true }
+  });
+}
+
 function pipelineErrorMessage(error: string) {
   const messages: Record<string, string> = {
     DemoReadOnly: "Demo mode is read-only. Log in to create your own pipeline.",
+    FolderAlreadyWatched:
+      "Another enabled pipeline is already watching this Drive folder. Disable it before using this folder here.",
+    LastRuleRequired: "Keep at least one routing rule on each pipeline.",
     MissingActiveConnections: "Connect one active Drive account and one active YouTube account first.",
     MissingActiveDriveConnection: "Reconnect Google Drive before running detection.",
+    InvalidPollingCadence: "Use a polling cadence from 00:05 to 168:00.",
     MissingPipelineFields: "Fill out every required pipeline field.",
+    MissingRuleFields: "Fill out every required routing rule field.",
     MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing.",
     PipelineNotEnabled: "Enable the pipeline before running detection.",
     PipelineNotFound: "Pipeline not found.",
+    RuleNotFound: "Routing rule not found.",
     TokenRefreshFailed: "Google could not refresh the Drive token. Reconnect Drive and try again.",
     DriveListFailed: "Google Drive could not list files in this folder."
   };

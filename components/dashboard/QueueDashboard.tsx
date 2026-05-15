@@ -204,6 +204,7 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
         <div className="filter-row">
           <select
             className="select"
+            data-private={pipelineFilter !== "all" ? true : undefined}
             aria-label="Filter by pipeline"
             onChange={(event) => setPipelineFilter(event.target.value)}
             value={pipelineFilter}
@@ -299,13 +300,13 @@ function QueueRow({
     <>
       <tr>
         <td>
-          <strong>{item.filename}</strong>
+          <strong data-private>{item.filename}</strong>
           <div className="muted">{formatBytes(item.sizeBytes)} · {item.mimeType}</div>
           {isUploading ? <UploadProgressBar /> : null}
         </td>
         <td>
-          {item.pipelineName}
-          <div className="muted">{item.sourceFolderName}</div>
+          <span data-private>{item.pipelineName}</span>
+          <div className="muted" data-private>{item.sourceFolderName}</div>
         </td>
         <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, demoNow)}</td>
         <td>
@@ -357,7 +358,7 @@ function PlaylistCell({ item }: { item: QueueItem }) {
   }
 
   if (!playlistId) {
-    return <>{item.intendedPlaylistName}</>;
+    return <span data-private>{item.intendedPlaylistName}</span>;
   }
 
   return (
@@ -368,7 +369,7 @@ function PlaylistCell({ item }: { item: QueueItem }) {
       target="_blank"
       title="Open YouTube playlist"
     >
-      {item.intendedPlaylistName}
+      <span data-private>{item.intendedPlaylistName}</span>
       <ExternalLink aria-hidden="true" size={13} />
     </a>
   );
@@ -426,9 +427,9 @@ function QueueActions({
   const detailsButton = (
     <button
       className="icon-button"
+      data-tooltip="View details"
       disabled={isBusy}
       onClick={() => onDetails(item)}
-      title="View details"
       type="button"
     >
       <Info aria-hidden="true" size={16} />
@@ -441,9 +442,9 @@ function QueueActions({
         {detailsButton}
         <button
           className="icon-button"
+          data-tooltip={item.youtubeUrl ? "Open on YouTube" : "No YouTube URL recorded"}
           disabled={!item.youtubeUrl}
           onClick={() => item.youtubeUrl && window.open(item.youtubeUrl, "_blank", "noopener,noreferrer")}
-          title={item.youtubeUrl ? "Open on YouTube" : "No YouTube URL recorded"}
           type="button"
         >
           <ExternalLink aria-hidden="true" size={16} />
@@ -458,27 +459,27 @@ function QueueActions({
         {detailsButton}
         <button
           className="icon-button"
+          data-tooltip="Retry upload"
           disabled={isBusy}
           onClick={() => onAction(item, "upload")}
-          title="Retry upload"
           type="button"
         >
           <RotateCcw aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
+          data-tooltip="Mark as already uploaded"
           disabled={isBusy}
           onClick={() => onAction(item, "mark_externally_handled")}
-          title="Mark as already uploaded"
           type="button"
         >
           <ExternalLink aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
+          data-tooltip="Skip item"
           disabled={isBusy}
           onClick={() => onAction(item, "skip")}
-          title="Skip item"
           type="button"
         >
           <SkipForward aria-hidden="true" size={16} />
@@ -493,30 +494,30 @@ function QueueActions({
         {detailsButton}
         <button
           className="icon-button"
+          data-tooltip="Approve upload"
           disabled={isBusy}
           onClick={() => onAction(item, "upload")}
-          title="Approve upload"
           type="button"
         >
           <Play aria-hidden="true" size={16} />
         </button>
-        <button className="icon-button" disabled title="Edit and route is coming next" type="button">
+        <button className="icon-button" data-tooltip="Edit and route is coming next" disabled type="button">
           <Route aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
+          data-tooltip="Mark as already uploaded"
           disabled={isBusy}
           onClick={() => onAction(item, "mark_externally_handled")}
-          title="Mark as already uploaded"
           type="button"
         >
           <ExternalLink aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
+          data-tooltip="Skip item"
           disabled={isBusy}
           onClick={() => onAction(item, "skip")}
-          title="Skip item"
           type="button"
         >
           <SkipForward aria-hidden="true" size={16} />
@@ -552,6 +553,7 @@ function QueueActions({
         </select>
         <button
           className="icon-button"
+          data-tooltip={selectedPlaylist ? "Route to selected playlist" : "No playlist options"}
           disabled={isBusy || !selectedPlaylist}
           onClick={() =>
             selectedPlaylist &&
@@ -560,25 +562,24 @@ function QueueActions({
               playlistName: selectedPlaylist.name
             })
           }
-          title={selectedPlaylist ? "Route to selected playlist" : "No playlist options"}
           type="button"
         >
           <Route aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
+          data-tooltip="Mark as already uploaded"
           disabled={isBusy}
           onClick={() => onAction(item, "mark_externally_handled")}
-          title="Mark as already uploaded"
           type="button"
         >
           <ExternalLink aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
+          data-tooltip="Skip item"
           disabled={isBusy}
           onClick={() => onAction(item, "skip")}
-          title="Skip item"
           type="button"
         >
           <SkipForward aria-hidden="true" size={16} />
@@ -593,9 +594,9 @@ function QueueActions({
         {detailsButton}
         <button
           className="icon-button"
+          data-tooltip="Restore to queue"
           disabled={isBusy}
           onClick={() => onAction(item, "restore")}
-          title="Restore to queue"
           type="button"
         >
           <RotateCcw aria-hidden="true" size={16} />
@@ -610,9 +611,9 @@ function QueueActions({
         {detailsButton}
         <button
           className="icon-button"
+          data-tooltip="Restore to queue"
           disabled={isBusy}
           onClick={() => onAction(item, "restore")}
-          title="Restore to queue"
           type="button"
         >
           <RotateCcw aria-hidden="true" size={16} />
@@ -650,7 +651,7 @@ function QueueDetailsPanel({
       <div className="queue-detail-header">
         <div>
           <span className="eyebrow">Queue details</span>
-          <h2>{item.filename}</h2>
+          <h2 data-private>{item.filename}</h2>
         </div>
         <button className="icon-button" onClick={onClose} type="button">
           <X aria-hidden="true" size={16} />
@@ -661,9 +662,9 @@ function QueueDetailsPanel({
 
       <div className="detail-grid">
         <Detail label="Status" value={item.status.replaceAll("_", " ")} />
-        <Detail label="Pipeline" value={item.pipelineName} />
-        <Detail label="Drive file" value={item.driveFileId} />
-        <Detail label="Playlist" value={item.intendedPlaylistName || "Unassigned"} />
+        <Detail isPrivate label="Pipeline" value={item.pipelineName} />
+        <Detail isPrivate label="Drive file" value={item.driveFileId} />
+        <Detail isPrivate label="Playlist" value={item.intendedPlaylistName || "Unassigned"} />
         <Detail label="Rule" value={item.matchedRuleName || "No match"} />
         <Detail label="Last action" value={formatAbsolute(item.lastActionAt)} />
       </div>
@@ -717,11 +718,19 @@ function QueueDetailsPanel({
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({
+  isPrivate = false,
+  label,
+  value
+}: {
+  isPrivate?: boolean;
+  label: string;
+  value: string;
+}) {
   return (
     <div className="detail-item">
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong data-private={isPrivate ? true : undefined}>{value}</strong>
     </div>
   );
 }

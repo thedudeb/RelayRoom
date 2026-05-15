@@ -159,31 +159,41 @@ export async function runDriveDetectionForPipeline({
         : QueueStatus.DETECTED
       : QueueStatus.NEEDS_ROUTING;
 
-    await prisma.queueItem.create({
-      data: {
-        detectedAt: new Date(),
-        driveCreatedTime: new Date(file.createdTime),
-        driveFileId: file.id,
-        failureReason: evaluation.playlist ? null : FailureReason.VALIDATION_ERROR,
-        filename: file.name,
-        intendedPlaylistId: evaluation.playlist?.id,
-        intendedPlaylistName: evaluation.playlist?.name,
-        lastActionAt: new Date(),
-        lastError: evaluation.playlist ? null : "No routing rule matched this file.",
-        matchedRuleId: evaluation.matchedRule?.id,
-        matchedRuleName: evaluation.matchedRule?.name,
-        mimeType: file.mimeType,
-        pipelineId: pipeline.id,
-        renderedDescription: evaluation.description,
-        renderedTitle: evaluation.title,
-        ruleEvaluationTrace: stripUndefined(evaluation.ruleTraces),
-        sizeBytes: file.size ? BigInt(file.size) : undefined,
-        status,
-        userId
+    try {
+      await prisma.queueItem.create({
+        data: {
+          detectedAt: new Date(),
+          driveCreatedTime: new Date(file.createdTime),
+          driveFileId: file.id,
+          failureReason: evaluation.playlist ? null : FailureReason.VALIDATION_ERROR,
+          filename: file.name,
+          intendedPlaylistId: evaluation.playlist?.id,
+          intendedPlaylistName: evaluation.playlist?.name,
+          lastActionAt: new Date(),
+          lastError: evaluation.playlist ? null : "No routing rule matched this file.",
+          matchedRuleId: evaluation.matchedRule?.id,
+          matchedRuleName: evaluation.matchedRule?.name,
+          mimeType: file.mimeType,
+          pipelineId: pipeline.id,
+          renderedDescription: evaluation.description,
+          renderedTitle: evaluation.title,
+          ruleEvaluationTrace: stripUndefined(evaluation.ruleTraces),
+          sizeBytes: file.size ? BigInt(file.size) : undefined,
+          status,
+          userId
+        }
+      });
+      existingIds.add(file.id);
+      created += 1;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        existingIds.add(file.id);
+        skippedExisting += 1;
+        continue;
       }
-    });
-    existingIds.add(file.id);
-    created += 1;
+
+      throw error;
+    }
   }
 
   await prisma.pipeline.update({

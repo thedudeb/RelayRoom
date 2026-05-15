@@ -25,6 +25,8 @@ export default function RootLayout({
               var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
               var theme = storedTheme || (prefersDark ? 'dark' : 'light');
               document.documentElement.dataset.theme = theme;
+              document.documentElement.dataset.privacy =
+                localStorage.getItem('privacyMode') === 'on' ? 'on' : 'off';
             } catch (error) {}
           `}
         </Script>
