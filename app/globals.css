@@ -655,11 +655,30 @@ html[data-privacy="on"] input[data-private] {
   gap: 10px;
 }
 
+.view-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.view-toolbar .actions,
+.view-toolbar .compact-filter {
+  margin-bottom: 0;
+}
+
 .compact-filter {
   align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 10px;
   display: inline-flex;
   gap: 8px;
   margin-bottom: 14px;
+  max-width: 100%;
+  padding: 6px;
+  width: fit-content;
 }
 
 .compact-filter-actions {
@@ -670,9 +689,23 @@ html[data-privacy="on"] input[data-private] {
 }
 
 .compact-filter span {
-  color: var(--muted);
+  color: var(--ink);
   font-size: 13px;
   font-weight: 650;
+  padding: 0 4px;
+}
+
+.compact-filter .button {
+  box-shadow: none;
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+.compact-filter .select {
+  box-shadow: none;
+  min-height: 36px;
+  min-width: 180px;
+  width: clamp(180px, 20vw, 260px);
 }
 
 .tabs {
@@ -2450,6 +2483,11 @@ td strong {
   .section-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .view-toolbar {
+    align-items: stretch;
+    display: grid;
   }
 
   .filter-row,

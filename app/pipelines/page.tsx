@@ -158,24 +158,26 @@ export default async function PipelinesPage({
           {pipelineErrorMessage(params.error)}
         </div>
       ) : null}
-      <div className="actions" aria-label="Pipeline views">
-        <Link className={showingArchived ? "button" : "button primary"} href={activePipelinesHref}>
-          Active pipelines
-        </Link>
-        <Link
-          className={showingArchived ? "button primary" : "button"}
-          href={archivedPipelinesHref}
-        >
-          Archived pipelines
-        </Link>
+      <div className="view-toolbar">
+        <div className="actions" aria-label="Pipeline views">
+          <Link className={showingArchived ? "button" : "button primary"} href={activePipelinesHref}>
+            Active pipelines
+          </Link>
+          <Link
+            className={showingArchived ? "button primary" : "button"}
+            href={archivedPipelinesHref}
+          >
+            Archived pipelines
+          </Link>
+        </div>
+        <WorkspaceUserFilter
+          currentUserId={access.isDemo ? undefined : access.userId}
+          selectedUserId={selectedUserId}
+          selfLabel="My pipelines"
+          title="Owner"
+          users={workspaceUsers}
+        />
       </div>
-      <WorkspaceUserFilter
-        currentUserId={access.isDemo ? undefined : access.userId}
-        selectedUserId={selectedUserId}
-        selfLabel="My pipelines"
-        title="Pipeline owner"
-        users={workspaceUsers}
-      />
       <div className="split">
         <section className="stack">
           {showingArchived ? (
