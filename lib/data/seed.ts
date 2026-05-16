@@ -2,12 +2,19 @@ import type { ConnectionSummary, Pipeline, QueueItem } from "@/lib/domain/types"
 
 export const demoTimezone = "America/Halifax";
 
+const demoOwner = {
+  id: "user-demo-relayroom",
+  email: "demo@relayroom.local",
+  name: "Demo Operator"
+};
+
 export const demoConnections: ConnectionSummary[] = [
   {
     id: "drive-work",
     kind: "drive",
     label: "Work Drive",
     accountEmail: "alex@acme.example",
+    owner: demoOwner,
     status: "active",
     connectedAt: "2026-05-10T14:00:00.000Z",
     scopes: ["drive.readonly"],
@@ -18,6 +25,7 @@ export const demoConnections: ConnectionSummary[] = [
     kind: "drive",
     label: "Personal Drive",
     accountEmail: "alex.personal@example.com",
+    owner: demoOwner,
     status: "expired",
     connectedAt: "2026-04-28T10:30:00.000Z",
     scopes: ["drive.readonly"],
@@ -28,6 +36,7 @@ export const demoConnections: ConnectionSummary[] = [
     kind: "youtube",
     label: "Acme Knowledge Library",
     accountEmail: "youtube-admin@acme.example",
+    owner: demoOwner,
     status: "active",
     connectedAt: "2026-05-10T14:12:00.000Z",
     scopes: ["youtube.upload", "youtube"],
@@ -45,6 +54,7 @@ export const demoPipelines: Pipeline[] = [
     youtubeConnectionId: "youtube-main",
     destinationChannelName: "Acme Knowledge Library",
     mode: "auto",
+    owner: demoOwner,
     status: "enabled",
     privacyStatus: "unlisted",
     pollingIntervalMinutes: 15,
@@ -120,6 +130,7 @@ export const demoPipelines: Pipeline[] = [
     youtubeConnectionId: "youtube-main",
     destinationChannelName: "Acme Knowledge Library",
     mode: "manual_approval",
+    owner: demoOwner,
     status: "enabled",
     privacyStatus: "unlisted",
     pollingIntervalMinutes: 30,
@@ -180,6 +191,7 @@ export const demoQueueItems: QueueItem[] = [
     youtubePlaylistId: "seed-engineering-standups",
     youtubeUrl: "https://youtube.com/watch?v=yt-001",
     lastActionAt: "2026-05-13T12:31:00.000Z",
+    owner: demoOwner,
     isSeedData: true
   },
   {
@@ -198,6 +210,7 @@ export const demoQueueItems: QueueItem[] = [
     intendedPlaylistId: "seed-acme-client-project",
     intendedPlaylistName: "Acme - Client Project",
     lastActionAt: "2026-05-13T11:13:00.000Z",
+    owner: demoOwner,
     isSeedData: true
   },
   {
@@ -213,6 +226,7 @@ export const demoQueueItems: QueueItem[] = [
     detectedAt: "2026-05-12T18:29:00.000Z",
     status: "needs_routing",
     lastActionAt: "2026-05-12T18:30:00.000Z",
+    owner: demoOwner,
     isSeedData: true
   },
   {
@@ -234,6 +248,7 @@ export const demoQueueItems: QueueItem[] = [
     lastError:
       "YouTube quotaExceeded: uploads cost 1,600 units and the project has exhausted its daily quota.",
     lastActionAt: "2026-05-08T19:11:00.000Z",
+    owner: demoOwner,
     isSeedData: true
   },
   {
@@ -251,6 +266,7 @@ export const demoQueueItems: QueueItem[] = [
     failureReason: "not_video",
     lastError: "Non-video file detected in a watched folder.",
     lastActionAt: "2026-05-11T15:55:00.000Z",
+    owner: demoOwner,
     isSeedData: true
   },
   {
@@ -271,6 +287,7 @@ export const demoQueueItems: QueueItem[] = [
     youtubeUrl: "https://youtube.com/watch?v=manual-acme",
     previousStatus: "needs_approval",
     lastActionAt: "2026-05-10T16:47:00.000Z",
+    owner: demoOwner,
     isSeedData: true
   }
 ];

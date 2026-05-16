@@ -1,13 +1,13 @@
 import { PipelineStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { selectDuePipelines } from "@/lib/cron/scheduler";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
 
 export const dynamic = "force-dynamic";
 
 const DEFAULT_PIPELINE_LIMIT = 20;
 const MAX_PIPELINE_LIMIT = 50;
-const SEED_TOKEN_PLACEHOLDER = "seed-token-placeholder";
 
 export async function GET(request: NextRequest) {
   const auth = authorizeCronRequest(request);
@@ -30,11 +30,8 @@ export async function GET(request: NextRequest) {
     },
     where: { archivedAt: null, status: PipelineStatus.ENABLED }
   });
-  const runnablePipelines = pipelines.filter((pipeline) => !usesSeedTokenPlaceholder(pipeline));
-
-  const duePipelines = runnablePipelines
-    .filter((pipeline) => isPipelineDue(pipeline, now))
-    .slice(0, limit);
+  const { duePipelines, runnablePipelines, skippedNotDue, skippedSeedData } =
+    selectDuePipelines(pipelines, now, limit);
   const results = [];
 
   for (const pipeline of duePipelines) {
@@ -75,8 +72,8 @@ export async function GET(request: NextRequest) {
     enabledPipelines: runnablePipelines.length,
     limit,
     results,
-    skippedNotDue: runnablePipelines.length - duePipelines.length,
-    skippedSeedData: pipelines.length - runnablePipelines.length
+    skippedNotDue,
+    skippedSeedData
   });
 }
 
@@ -108,29 +105,4 @@ function pipelineLimit(request: NextRequest) {
   }
 
   return Math.min(Math.max(Math.floor(limit), 1), MAX_PIPELINE_LIMIT);
-}
-
-function usesSeedTokenPlaceholder(pipeline: {
-  driveConnection: { encryptedRefreshToken: string };
-  youtubeConnection: { encryptedRefreshToken: string };
-}) {
-  return (
-    pipeline.driveConnection.encryptedRefreshToken === SEED_TOKEN_PLACEHOLDER ||
-    pipeline.youtubeConnection.encryptedRefreshToken === SEED_TOKEN_PLACEHOLDER
-  );
-}
-
-function isPipelineDue(
-  pipeline: {
-    lastDetectionAt: Date | null;
-    pollingIntervalMinutes: number;
-  },
-  now: Date
-) {
-  if (!pipeline.lastDetectionAt) {
-    return true;
-  }
-
-  const intervalMs = Math.max(pipeline.pollingIntervalMinutes, 5) * 60_000;
-  return now.getTime() - pipeline.lastDetectionAt.getTime() >= intervalMs;
 }

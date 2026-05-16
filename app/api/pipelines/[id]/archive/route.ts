@@ -26,8 +26,7 @@ export async function POST(
     },
     where: {
       archivedAt: null,
-      id,
-      userId: access.userId
+      id
     }
   });
 
@@ -39,4 +38,40 @@ export async function POST(
   revalidatePath("/pipelines");
   revalidatePath("/connections");
   return NextResponse.json({ archived: true });
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const access = await getApiAccess(request.nextUrl.searchParams);
+  if (!access || access.isDemo) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  if (!id) {
+    return NextResponse.json({ error: "MissingPipelineFields" }, { status: 400 });
+  }
+
+  const result = await prisma.pipeline.updateMany({
+    data: {
+      archivedAt: null,
+      errorMessage: null,
+      status: PipelineStatus.DISABLED
+    },
+    where: {
+      archivedAt: { not: null },
+      id
+    }
+  });
+
+  if (result.count === 0) {
+    return NextResponse.json({ error: "PipelineNotFound" }, { status: 404 });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/pipelines");
+  revalidatePath("/connections");
+  return NextResponse.json({ restored: true });
 }

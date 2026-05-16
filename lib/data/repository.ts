@@ -1,14 +1,14 @@
 import type { Prisma } from "@prisma/client";
-import type { ConnectionSummary, Pipeline, QueueItem, RoutingRule } from "@/lib/domain/types";
+import type { ConnectionSummary, Pipeline, QueueItem, RoutingRule, UserSummary } from "@/lib/domain/types";
 import { demoConnections, demoPipelines, demoQueueItems } from "@/lib/data/seed";
 import { hasDatabaseUrl, prisma } from "@/lib/db/prisma";
 
 type PipelineWithRules = Prisma.PipelineGetPayload<{
-  include: { rules: { orderBy: { priority: "asc" } } };
+  include: { rules: { orderBy: { priority: "asc" } }; user: true };
 }>;
 
 type QueueItemWithPipeline = Prisma.QueueItemGetPayload<{
-  include: { pipeline: { include: { rules: { orderBy: { priority: "asc" } } } } };
+  include: { pipeline: { include: { rules: { orderBy: { priority: "asc" } } } }; user: true };
 }>;
 
 type RoutingOption = NonNullable<QueueItem["routingOptions"]>[number];
@@ -16,9 +16,12 @@ type RoutingOption = NonNullable<QueueItem["routingOptions"]>[number];
 type ConnectionWithPipelines = Prisma.OAuthConnectionGetPayload<{
   include: {
     drivePipelines: { where: { archivedAt: null } };
+    user: true;
     youtubePipelines: { where: { archivedAt: null } };
   };
 }>;
+
+type WorkspaceFilter = { userId?: string };
 
 export async function getQueueItemsForDemo(): Promise<QueueItem[]> {
   if (!hasDatabaseUrl()) {
@@ -28,7 +31,10 @@ export async function getQueueItemsForDemo(): Promise<QueueItem[]> {
   try {
     const items = await prisma.queueItem.findMany({
       where: { isSeedData: true },
-      include: { pipeline: { include: { rules: { orderBy: { priority: "asc" } } } } },
+      include: {
+        pipeline: { include: { rules: { orderBy: { priority: "asc" } } } },
+        user: true
+      },
       orderBy: { detectedAt: "desc" }
     });
 
@@ -39,18 +45,24 @@ export async function getQueueItemsForDemo(): Promise<QueueItem[]> {
   }
 }
 
-export async function getQueueItemsForUser(userId: string): Promise<QueueItem[]> {
+export async function getQueueItemsForUser(
+  _viewerUserId: string,
+  options: WorkspaceFilter = {}
+): Promise<QueueItem[]> {
   if (!hasDatabaseUrl()) {
     return [];
   }
 
   try {
     const items = await prisma.queueItem.findMany({
-      where: { userId },
-      include: { pipeline: { include: { rules: { orderBy: { priority: "asc" } } } } },
+      where: options.userId ? { userId: options.userId } : {},
+      include: {
+        pipeline: { include: { rules: { orderBy: { priority: "asc" } } } },
+        user: true
+      },
       orderBy: { detectedAt: "desc" }
     });
-    const fallbackOptions = await getRoutingOptionsByYouTubeConnection(userId);
+    const fallbackOptions = await getRoutingOptionsByYouTubeConnection(options.userId);
 
     return items.map((item) => mapQueueItem(item, fallbackOptions));
   } catch (error) {
@@ -69,6 +81,7 @@ export async function getConnectionsForDemo(): Promise<ConnectionSummary[]> {
       where: { user: { email: "demo@relayroom.local" } },
       include: {
         drivePipelines: { where: { archivedAt: null } },
+        user: true,
         youtubePipelines: { where: { archivedAt: null } }
       },
       orderBy: { connectedAt: "asc" }
@@ -81,16 +94,20 @@ export async function getConnectionsForDemo(): Promise<ConnectionSummary[]> {
   }
 }
 
-export async function getConnectionsForUser(userId: string): Promise<ConnectionSummary[]> {
+export async function getConnectionsForUser(
+  _viewerUserId: string,
+  options: WorkspaceFilter = {}
+): Promise<ConnectionSummary[]> {
   if (!hasDatabaseUrl()) {
     return [];
   }
 
   try {
     const connections = await prisma.oAuthConnection.findMany({
-      where: { userId },
+      where: options.userId ? { userId: options.userId } : {},
       include: {
         drivePipelines: { where: { archivedAt: null } },
+        user: true,
         youtubePipelines: { where: { archivedAt: null } }
       },
       orderBy: { connectedAt: "asc" }
@@ -115,7 +132,7 @@ export async function getPipelinesForDemo(options: { archived?: boolean } = {}):
   try {
     const pipelines = await prisma.pipeline.findMany({
       where: { archivedAt: null, user: { email: "demo@relayroom.local" } },
-      include: { rules: { orderBy: { priority: "asc" } } },
+      include: { rules: { orderBy: { priority: "asc" } }, user: true },
       orderBy: { createdAt: "asc" }
     });
 
@@ -127,8 +144,8 @@ export async function getPipelinesForDemo(options: { archived?: boolean } = {}):
 }
 
 export async function getPipelinesForUser(
-  userId: string,
-  options: { archived?: boolean } = {}
+  _viewerUserId: string,
+  options: { archived?: boolean; userId?: string } = {}
 ): Promise<Pipeline[]> {
   if (!hasDatabaseUrl()) {
     return [];
@@ -136,14 +153,36 @@ export async function getPipelinesForUser(
 
   try {
     const pipelines = await prisma.pipeline.findMany({
-      where: { archivedAt: options.archived ? { not: null } : null, userId },
-      include: { rules: { orderBy: { priority: "asc" } } },
+      where: {
+        archivedAt: options.archived ? { not: null } : null,
+        ...(options.userId ? { userId: options.userId } : {})
+      },
+      include: { rules: { orderBy: { priority: "asc" } }, user: true },
       orderBy: { updatedAt: "desc" }
     });
 
     return pipelines.map(mapPipeline);
   } catch (error) {
     console.warn("Unable to load user pipeline data.", error);
+    return [];
+  }
+}
+
+export async function getWorkspaceUsers(): Promise<UserSummary[]> {
+  if (!hasDatabaseUrl()) {
+    return [];
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      where: { disabledAt: null },
+      orderBy: [{ name: "asc" }, { email: "asc" }],
+      select: { email: true, id: true, name: true }
+    });
+
+    return users.map(mapUser);
+  } catch (error) {
+    console.warn("Unable to load workspace users.", error);
     return [];
   }
 }
@@ -178,13 +217,19 @@ function mapQueueItem(
     failureReason: item.failureReason?.toLowerCase() as QueueItem["failureReason"],
     lastError: item.lastError || undefined,
     lastActionAt: item.lastActionAt.toISOString(),
-    isSeedData: item.isSeedData
+    isSeedData: item.isSeedData,
+    owner: mapUser(item.user)
   };
 }
 
-async function getRoutingOptionsByYouTubeConnection(userId: string) {
+async function getRoutingOptionsByYouTubeConnection(userId?: string) {
   const rules = await prisma.rule.findMany({
-    where: { pipeline: { archivedAt: null, userId } },
+    where: {
+      pipeline: {
+        archivedAt: null,
+        ...(userId ? { userId } : {})
+      }
+    },
     orderBy: [{ pipelineId: "asc" }, { priority: "asc" }],
     select: {
       youtubePlaylistId: true,
@@ -251,7 +296,8 @@ function mapConnection(connection: ConnectionWithPipelines): ConnectionSummary {
     status: connection.status.toLowerCase() as ConnectionSummary["status"],
     connectedAt: connection.connectedAt.toISOString(),
     scopes: connection.scopes,
-    usedByPipelines
+    usedByPipelines,
+    owner: mapUser(connection.user)
   };
 }
 
@@ -273,7 +319,16 @@ function mapPipeline(pipeline: PipelineWithRules): Pipeline {
     processedFromTime: pipeline.processedFromTime?.toISOString() || "",
     lastDetectionAt: pipeline.lastDetectionAt?.toISOString(),
     archivedAt: pipeline.archivedAt?.toISOString(),
+    owner: mapUser(pipeline.user),
     rules: pipeline.rules.map(mapRule)
+  };
+}
+
+function mapUser(user: { email: string; id: string; name: string | null }): UserSummary {
+  return {
+    email: user.email,
+    id: user.id,
+    name: user.name || undefined
   };
 }
 

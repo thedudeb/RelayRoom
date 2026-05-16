@@ -8,17 +8,19 @@ import {
 } from "@/lib/data/repository";
 
 export async function GET(request: NextRequest) {
-  const access = await getApiAccess(request.nextUrl.searchParams);
+  const { searchParams } = request.nextUrl;
+  const access = await getApiAccess(searchParams);
 
   if (!access) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
+  const userId = searchParams.get("userId") || undefined;
   const [pipelineData, queueItems] = access.isDemo
     ? await Promise.all([getPipelinesForDemo(), getQueueItemsForDemo()])
     : await Promise.all([
-        getPipelinesForUser(access.userId),
-        getQueueItemsForUser(access.userId)
+        getPipelinesForUser(access.userId, { userId }),
+        getQueueItemsForUser(access.userId, { userId })
       ]);
 
   const pipelines = pipelineData.map((pipeline) => {

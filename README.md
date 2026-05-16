@@ -2,7 +2,7 @@
 
 RelayRoom is an authenticated operations platform for routing Google Drive recordings into YouTube playlists with visual rules, queue visibility, and recovery flows.
 
-This repository is being built from `SPEC.md`. The current implementation slice includes the Next.js app shell, typed domain model, Prisma schema, Auth.js Google sign-in routes, a pure rule engine, Prisma-backed demo queries with in-memory fallback, and read-only demo API routes.
+This repository is being built from `SPEC.md`. The current implementation includes the Next.js app shell, typed domain model, Prisma schema, Auth.js Google sign-in, Drive and YouTube OAuth connections, encrypted token storage, polling detection, YouTube uploads, workspace-wide operations views, and a read-only demo mode.
 
 ## Architecture
 
@@ -17,11 +17,13 @@ This repository is being built from `SPEC.md`. The current implementation slice 
 
 Implemented now:
 
-- Dashboard UI with seeded queue items across `uploaded`, `failed`, `needs_approval`, `needs_routing`, `skipped`, and `externally_handled`.
+- Dashboard UI with real and seeded queue items across `uploaded`, `failed`, `needs_approval`, `needs_routing`, `skipped`, and `externally_handled`.
 - Connections surface showing separate Drive and YouTube grants.
-- Pipeline list with cold-start watermark, mode, privacy, and waiting counts.
-- Rule preview for nested condition trees.
-- Read-only demo endpoints:
+- Pipeline creation, editing, archiving, restore, enable/disable, manual detection, and Drive folder probes.
+- Routing rule creation and editing for first-match playlist assignment.
+- YouTube upload approval, retry, manual routing, skip, restore, and externally-handled flows.
+- Workspace-wide visibility for allowed users, with user filters on queue, pipelines, and connections.
+- Read-only demo endpoints and demo UI:
   - `GET /api/health`
   - `GET /api/queue`
   - `GET /api/queue?status=failed`
@@ -32,7 +34,7 @@ Implemented now:
 - Database seed script for the RelayRoom demo user, connections, pipelines, rules, queue rows, and activity log entries.
 - AES-256-GCM token vault helper for encrypting OAuth refresh tokens at rest.
 - Queue state transition helper for allowed operator/system actions.
-- Unit tests for first-match-wins routing, regex validation, token encryption, and queue transitions.
+- Unit tests for first-match-wins routing, regex validation, token encryption, queue transitions, and workspace user filters.
 
 ## Local Development
 
@@ -122,6 +124,8 @@ Drive push notifications can be added later once the core queue and upload state
 
 For production, set `CRON_SECRET` in Vercel. Vercel automatically sends it as a bearer token when invoking cron jobs. For local/manual calls, `DETECTION_WEBHOOK_SECRET` can use the same value.
 
+See `docs/DEPLOYMENT.md` for the production deployment checklist covering Vercel environment variables, Google OAuth, Neon, cron, and smoke testing.
+
 ## YouTube Quota Note
 
 The YouTube Data API default daily quota is 10,000 units. A video upload costs 1,600 units, so a fresh project can usually upload about six videos per day. The app will classify quota errors distinctly as `quota_exceeded` and surface them in the dashboard.
@@ -156,9 +160,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ## Next Implementation Steps
 
-1. Implement Drive and YouTube connection callback routes with encrypted refresh-token storage.
-2. Add editable rule builder controls and the rule tester.
-3. Implement polling worker and queue item creation.
-4. Implement upload worker with YouTube resumable uploads and playlist-add recovery.
-5. Add user-scoped dashboard queries for real signed-in accounts.
-6. Add end-to-end tests for login, demo navigation, routing, and queue actions.
+1. Test with a second allowed Google account and verify shared workspace visibility plus user filters.
+2. Add automated browser coverage for login, demo navigation, routing, and queue actions.
+3. Improve production telemetry around cron runs, upload attempts, and quota failures.
+4. Add richer rule-builder validation, rule preview fixtures, and drag ordering.
+5. Prepare Privacy Policy / Terms links and production OAuth verification notes.

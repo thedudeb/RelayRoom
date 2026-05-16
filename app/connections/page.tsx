@@ -1,19 +1,33 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { ConnectionActions } from "@/components/connections/ConnectionActions";
+import { WorkspaceUserFilter } from "@/components/workspace/WorkspaceUserFilter";
 import { requireAppAccess } from "@/lib/auth/account";
-import { getConnectionsForDemo, getConnectionsForUser } from "@/lib/data/repository";
+import {
+  getConnectionsForDemo,
+  getConnectionsForUser,
+  getWorkspaceUsers
+} from "@/lib/data/repository";
+import { displayWorkspaceUser, selectedWorkspaceUserId } from "@/lib/workspace/users";
 
 export default async function ConnectionsPage({
   searchParams
 }: {
-  searchParams?: Promise<{ connected?: string; demo?: string; disconnected?: string; error?: string }>;
+  searchParams?: Promise<{
+    connected?: string;
+    demo?: string;
+    disconnected?: string;
+    error?: string;
+    userId?: string;
+  }>;
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
+  const workspaceUsers = access.isDemo ? [] : await getWorkspaceUsers();
+  const selectedUserId = selectedWorkspaceUserId(params?.userId, workspaceUsers);
   const connections = access.isDemo
     ? await getConnectionsForDemo()
-    : await getConnectionsForUser(access.userId);
+    : await getConnectionsForUser(access.userId, { userId: selectedUserId });
 
   return (
     <AppShell
@@ -56,12 +70,14 @@ export default async function ConnectionsPage({
           {connectionErrorMessage(params.error)}
         </div>
       ) : null}
+      <WorkspaceUserFilter selectedUserId={selectedUserId} users={workspaceUsers} />
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Connection</th>
               <th>Account</th>
+              <th>Connected by</th>
               <th>Status</th>
               <th>Scopes</th>
               <th>Used by</th>
@@ -72,10 +88,14 @@ export default async function ConnectionsPage({
             {connections.map((connection) => (
               <tr key={connection.id}>
                 <td>
-                  <strong>{connection.label}</strong>
+                  <strong data-private>{connection.label}</strong>
                   <div className="muted">{connection.kind}</div>
                 </td>
                 <td><span data-private>{connection.accountEmail}</span></td>
+                <td>
+                  <span data-private>{displayWorkspaceUser(connection.owner)}</span>
+                  <div className="muted" data-private>{connection.owner.email}</div>
+                </td>
                 <td>
                   <span
                     className={`badge ${

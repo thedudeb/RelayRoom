@@ -381,6 +381,10 @@ function mapPipelineForEvaluation(
     lastDetectionAt: pipeline.lastDetectionAt?.toISOString(),
     mode: pipeline.mode.toLowerCase() as Pipeline["mode"],
     name: pipeline.name,
+    owner: {
+      email: "",
+      id: pipeline.userId
+    },
     pollingIntervalMinutes: pipeline.pollingIntervalMinutes,
     privacyStatus: pipeline.privacyStatus.toLowerCase() as Pipeline["privacyStatus"],
     processedFromTime: pipeline.processedFromTime?.toISOString() || "",

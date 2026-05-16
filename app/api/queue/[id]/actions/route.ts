@@ -61,8 +61,7 @@ export async function POST(
 
   const item = await prisma.queueItem.findFirst({
     where: {
-      id,
-      userId: access.userId
+      id
     },
     include: {
       pipeline: {
@@ -91,7 +90,6 @@ export async function POST(
     body.action === "route"
       ? await getManualRouteRules({
           playlistId: body.playlistId,
-          userId: access.userId,
           youtubeConnectionId: item.pipeline.youtubeConnectionId
         })
       : item.pipeline.rules;
@@ -158,11 +156,9 @@ export async function POST(
 
 async function getManualRouteRules({
   playlistId,
-  userId,
   youtubeConnectionId
 }: {
   playlistId?: string;
-  userId: string;
   youtubeConnectionId: string;
 }) {
   if (!playlistId) {
@@ -173,7 +169,7 @@ async function getManualRouteRules({
     where: {
       youtubePlaylistId: playlistId,
       pipeline: {
-        userId,
+        archivedAt: null,
         youtubeConnectionId
       }
     },

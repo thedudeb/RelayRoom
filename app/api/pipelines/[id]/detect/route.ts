@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getApiAccess } from "@/lib/auth/account";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
+import { prisma } from "@/lib/db/prisma";
 
 export async function POST(
   request: NextRequest,
@@ -18,9 +19,17 @@ export async function POST(
   }
 
   try {
+    const pipeline = await prisma.pipeline.findFirst({
+      where: { archivedAt: null, id },
+      select: { userId: true }
+    });
+    if (!pipeline) {
+      return NextResponse.json({ error: "PipelineNotFound" }, { status: 404 });
+    }
+
     const result = await runDriveDetectionForPipeline({
       pipelineId: id,
-      userId: access.userId
+      userId: pipeline.userId
     });
 
     revalidatePath("/dashboard");

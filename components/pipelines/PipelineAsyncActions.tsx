@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CircleStop, Play, Search } from "lucide-react";
+import { Archive, CircleStop, Play, RotateCcw, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -276,11 +276,69 @@ export function PipelineStatusControls({
   );
 }
 
-async function postAction(url: string, body?: Record<string, string>): Promise<ActionResponse> {
+export function ArchivedPipelineControls({ pipelineId }: { pipelineId: string }) {
+  const router = useRouter();
+  const [state, setState] = useState<ActionState>();
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  async function restorePipeline() {
+    if (
+      !window.confirm(
+        "Restore this pipeline? RelayRoom will bring it back disabled so you can review it before enabling detection."
+      )
+    ) {
+      return;
+    }
+
+    setIsRestoring(true);
+    setState(undefined);
+
+    try {
+      await postAction(`/api/pipelines/${pipelineId}/archive`, undefined, "DELETE");
+      setState({
+        tone: "success",
+        message: "Pipeline restored as disabled. Review it before enabling detection."
+      });
+      router.push("/pipelines?restored=true");
+    } catch (error) {
+      setState({
+        tone: "danger",
+        message: error instanceof Error ? error.message : "Pipeline restore failed."
+      });
+    } finally {
+      setIsRestoring(false);
+    }
+  }
+
+  return (
+    <div className="actions">
+      <button
+        className="button primary"
+        disabled={isRestoring}
+        onClick={restorePipeline}
+        type="button"
+      >
+        <RotateCcw aria-hidden="true" size={16} />
+        {isRestoring ? "Restoring..." : "Restore pipeline"}
+      </button>
+      {state ? (
+        <div className={`notice inline ${state.tone}`} role={state.tone === "danger" ? "alert" : "status"}>
+          {state.message}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+async function postAction(
+  url: string,
+  body?: Record<string, string>,
+  method = "POST"
+): Promise<ActionResponse> {
   const response = await fetch(url, {
     body: body ? JSON.stringify(body) : undefined,
     headers: body ? { "Content-Type": "application/json" } : undefined,
-    method: "POST"
+    method
   });
   const payload = (await response.json().catch(() => ({}))) as ActionResponse;
 

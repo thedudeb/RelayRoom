@@ -47,9 +47,7 @@ export async function GET(
         demoTimezone
     )
     : undefined;
-  const details = access.isDemo
-    ? getDemoQueueDetails(item)
-    : await getQueueDetails(id, access.userId);
+  const details = access.isDemo ? getDemoQueueDetails(item) : await getQueueDetails(id);
 
   return NextResponse.json({
     item,
@@ -58,12 +56,11 @@ export async function GET(
   });
 }
 
-async function getQueueDetails(queueItemId: string, userId: string) {
+async function getQueueDetails(queueItemId: string) {
   const [activityLog, attempts] = await Promise.all([
     prisma.activityLogEntry.findMany({
       where: {
-        queueItemId,
-        queueItem: { userId }
+        queueItemId
       },
       orderBy: { createdAt: "desc" },
       take: 12,
@@ -76,8 +73,7 @@ async function getQueueDetails(queueItemId: string, userId: string) {
     }),
     prisma.uploadAttempt.findMany({
       where: {
-        queueItemId,
-        queueItem: { userId }
+        queueItemId
       },
       orderBy: { attemptNumber: "desc" },
       take: 8,

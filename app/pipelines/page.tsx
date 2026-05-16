@@ -8,13 +8,18 @@ import {
 import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { AppShell } from "@/components/layout/AppShell";
-import { PipelineStatusControls } from "@/components/pipelines/PipelineAsyncActions";
+import { WorkspaceUserFilter } from "@/components/workspace/WorkspaceUserFilter";
+import {
+  ArchivedPipelineControls,
+  PipelineStatusControls
+} from "@/components/pipelines/PipelineAsyncActions";
 import { requireAppAccess } from "@/lib/auth/account";
 import {
   getPipelinesForDemo,
   getPipelinesForUser,
   getQueueItemsForDemo,
-  getQueueItemsForUser
+  getQueueItemsForUser,
+  getWorkspaceUsers
 } from "@/lib/data/repository";
 import { prisma } from "@/lib/db/prisma";
 import type {
@@ -24,10 +29,12 @@ import type {
   Pipeline,
   QueueItem
 } from "@/lib/domain/types";
+import { displayWorkspaceUser, selectedWorkspaceUserId } from "@/lib/workspace/users";
 import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
 import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField";
 import { YouTubePlaylistPicker } from "@/components/pipelines/YouTubePlaylistPicker";
 import Link from "next/link";
+import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -51,26 +58,39 @@ export default async function PipelinesPage({
     ruleCreated?: string;
     ruleDeleted?: string;
     ruleUpdated?: string;
+    restored?: string;
     skipped?: string;
     updated?: string;
+    userId?: string;
     view?: string;
   }>;
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
   const showingArchived = params?.view === "archived";
+  const workspaceUsers = access.isDemo ? [] : await getWorkspaceUsers();
+  const selectedUserId = selectedWorkspaceUserId(params?.userId, workspaceUsers);
   const [pipelines, queueItems] = access.isDemo
     ? await Promise.all([
         getPipelinesForDemo({ archived: showingArchived }),
         getQueueItemsForDemo()
       ])
     : await Promise.all([
-        getPipelinesForUser(access.userId, { archived: showingArchived }),
-        getQueueItemsForUser(access.userId)
+        getPipelinesForUser(access.userId, {
+          archived: showingArchived,
+          userId: selectedUserId
+        }),
+        getQueueItemsForUser(access.userId, { userId: selectedUserId })
       ]);
   const connectionOptions = access.isDemo
     ? { driveConnections: [], youtubeConnections: [] }
-    : await getPipelineConnectionOptions(access.userId);
+    : await getPipelineConnectionOptions();
+  const activePipelinesHref = pipelinesViewHref({ isDemo: access.isDemo, selectedUserId });
+  const archivedPipelinesHref = pipelinesViewHref({
+    isDemo: access.isDemo,
+    selectedUserId,
+    view: "archived"
+  });
 
   return (
     <AppShell
@@ -93,6 +113,11 @@ export default async function PipelinesPage({
       {params?.archived ? (
         <div className="notice success" role="status">
           Pipeline archived. Existing queue history remains visible.
+        </div>
+      ) : null}
+      {params?.restored ? (
+        <div className="notice success" role="status">
+          Pipeline restored as disabled. Review it before enabling detection.
         </div>
       ) : null}
       {params?.ruleCreated ? (
@@ -128,16 +153,17 @@ export default async function PipelinesPage({
         </div>
       ) : null}
       <div className="actions" aria-label="Pipeline views">
-        <Link className={showingArchived ? "button" : "button primary"} href="/pipelines">
+        <Link className={showingArchived ? "button" : "button primary"} href={activePipelinesHref}>
           Active pipelines
         </Link>
         <Link
           className={showingArchived ? "button primary" : "button"}
-          href="/pipelines?view=archived"
+          href={archivedPipelinesHref}
         >
           Archived pipelines
         </Link>
       </div>
+      <WorkspaceUserFilter selectedUserId={selectedUserId} users={workspaceUsers} />
       <div className="split">
         <section className="stack">
           {showingArchived ? (
@@ -160,6 +186,9 @@ export default async function PipelinesPage({
                   <p className="muted">
                     <span data-private>{pipeline.sourceFolderName}</span> →{" "}
                     <span data-private>{pipeline.destinationChannelName}</span>
+                  </p>
+                  <p className="muted">
+                    Created by <span data-private>{displayWorkspaceUser(pipeline.owner)}</span>
                   </p>
                 </div>
                 <span className={`badge ${pipelineStatusBadgeClass(pipeline.status)}`}>
@@ -209,6 +238,9 @@ export default async function PipelinesPage({
                   pipelineId={pipeline.id}
                 />
               ) : null}
+              {showingArchived && !access.isDemo ? (
+                <ArchivedPipelineControls pipelineId={pipeline.id} />
+              ) : null}
             </div>
           ))}
           {pipelines.length === 0 ? (
@@ -234,6 +266,23 @@ export default async function PipelinesPage({
       </div>
     </AppShell>
   );
+}
+
+function pipelinesViewHref({
+  isDemo,
+  selectedUserId,
+  view
+}: {
+  isDemo: boolean;
+  selectedUserId?: string;
+  view?: "archived";
+}) {
+  const params = new URLSearchParams();
+  if (isDemo) params.set("demo", "true");
+  if (selectedUserId) params.set("userId", selectedUserId);
+  if (view) params.set("view", view);
+  const query = params.toString();
+  return (query ? `/pipelines?${query}` : "/pipelines") as Route;
 }
 
 function CreatePipelinePanel({
@@ -548,11 +597,10 @@ function RuleFields({
   );
 }
 
-async function getPipelineConnectionOptions(userId: string) {
+async function getPipelineConnectionOptions() {
   const connections = await prisma.oAuthConnection.findMany({
     where: {
-      status: ConnectionStatus.ACTIVE,
-      userId
+      status: ConnectionStatus.ACTIVE
     },
     orderBy: { connectedAt: "asc" },
     select: {
@@ -624,16 +672,14 @@ async function createPipelineAction(formData: FormData) {
       where: {
         id: driveConnectionId,
         kind: ConnectionKind.DRIVE,
-        status: ConnectionStatus.ACTIVE,
-        userId: access.userId
+        status: ConnectionStatus.ACTIVE
       }
     }),
     prisma.oAuthConnection.findFirst({
       where: {
         id: youtubeConnectionId,
         kind: ConnectionKind.YOUTUBE,
-        status: ConnectionStatus.ACTIVE,
-        userId: access.userId
+        status: ConnectionStatus.ACTIVE
       }
     })
   ]);
@@ -643,8 +689,7 @@ async function createPipelineAction(formData: FormData) {
   }
 
   const enabledFolderPipeline = await findEnabledPipelineForFolder({
-    sourceFolderId,
-    userId: access.userId
+    sourceFolderId
   });
 
   if (enabledFolderPipeline) {
@@ -729,8 +774,7 @@ async function updatePipelineAction(formData: FormData) {
   const pipeline = await prisma.pipeline.findFirst({
     where: {
       archivedAt: null,
-      id: pipelineId,
-      userId: access.userId
+      id: pipelineId
     },
     select: {
       sourceFolderId: true
@@ -743,8 +787,7 @@ async function updatePipelineAction(formData: FormData) {
 
   const enabledFolderPipeline = await findEnabledPipelineForFolder({
     excludePipelineId: pipelineId,
-    sourceFolderId,
-    userId: access.userId
+    sourceFolderId
   });
 
   if (enabledFolderPipeline) {
@@ -791,8 +834,7 @@ async function createRuleAction(formData: FormData) {
   const pipeline = await prisma.pipeline.findFirst({
     where: {
       archivedAt: null,
-      id: pipelineId,
-      userId: access.userId
+      id: pipelineId
     },
     select: {
       youtubeConnectionId: true,
@@ -811,7 +853,6 @@ async function createRuleAction(formData: FormData) {
     where: {
       pipeline: {
         archivedAt: null,
-        userId: access.userId,
         youtubeConnectionId: pipeline.youtubeConnectionId
       }
     },
@@ -867,7 +908,7 @@ async function updateRuleAction(formData: FormData) {
   const rule = await prisma.rule.findFirst({
     where: {
       id: ruleId,
-      pipeline: { archivedAt: null, userId: access.userId }
+      pipeline: { archivedAt: null }
     },
     select: {
       pipelineId: true,
@@ -887,7 +928,6 @@ async function updateRuleAction(formData: FormData) {
     where: {
       pipeline: {
         archivedAt: null,
-        userId: access.userId,
         youtubeConnectionId: rule.pipeline.youtubeConnectionId
       }
     },
@@ -935,7 +975,7 @@ async function deleteRuleAction(formData: FormData) {
   const rule = await prisma.rule.findFirst({
     where: {
       id: ruleId,
-      pipeline: { archivedAt: null, userId: access.userId }
+      pipeline: { archivedAt: null }
     },
     select: {
       pipelineId: true
@@ -1142,20 +1182,17 @@ function parseCustomCadence(value: FormDataEntryValue | null) {
 
 function findEnabledPipelineForFolder({
   excludePipelineId,
-  sourceFolderId,
-  userId
+  sourceFolderId
 }: {
   excludePipelineId?: string;
   sourceFolderId: string;
-  userId: string;
 }) {
   return prisma.pipeline.findFirst({
     where: {
       ...(excludePipelineId ? { id: { not: excludePipelineId } } : {}),
       archivedAt: null,
       sourceFolderId,
-      status: PipelineStatus.ENABLED,
-      userId
+      status: PipelineStatus.ENABLED
     },
     select: { id: true }
   });

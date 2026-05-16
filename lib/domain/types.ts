@@ -75,6 +75,12 @@ export interface Playlist {
   name: string;
 }
 
+export interface UserSummary {
+  id: string;
+  email: string;
+  name?: string;
+}
+
 export interface RoutingRule {
   id: string;
   name: string;
@@ -102,6 +108,7 @@ export interface Pipeline {
   processedFromTime: string;
   lastDetectionAt?: string;
   archivedAt?: string;
+  owner: UserSummary;
   rules: RoutingRule[];
 }
 
@@ -176,6 +183,7 @@ export interface QueueItem {
   lastActionAt: string;
   previousStatus?: QueueStatus;
   isSeedData?: boolean;
+  owner: UserSummary;
 }
 
 export interface ConnectionSummary {
@@ -187,4 +195,5 @@ export interface ConnectionSummary {
   connectedAt: string;
   scopes: string[];
   usedByPipelines: string[];
+  owner: UserSummary;
 }

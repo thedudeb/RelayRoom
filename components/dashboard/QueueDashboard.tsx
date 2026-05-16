@@ -15,6 +15,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { QueueItem, QueueStatus } from "@/lib/domain/types";
+import { displayWorkspaceUser } from "@/lib/workspace/users";
 
 type QueueTab = "all" | QueueStatus;
 type SortMode = "detected_desc" | "filename_asc" | "status_asc" | "last_action_desc";
@@ -242,6 +243,7 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
             <tr>
               <th>File</th>
               <th>Pipeline</th>
+              <th>User</th>
               <th>Detected</th>
               <th>Status</th>
               <th>Playlist</th>
@@ -308,6 +310,10 @@ function QueueRow({
           <span data-private>{item.pipelineName}</span>
           <div className="muted" data-private>{item.sourceFolderName}</div>
         </td>
+        <td>
+          <span data-private>{displayWorkspaceUser(item.owner)}</span>
+          <div className="muted" data-private>{item.owner.email}</div>
+        </td>
         <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, demoNow)}</td>
         <td>
           <button
@@ -337,7 +343,7 @@ function QueueRow({
       </tr>
       {details ? (
         <tr className="queue-detail-row">
-          <td colSpan={8}>
+          <td colSpan={9}>
             <QueueDetailsPanel
               details={details}
               isLoading={isDetailsLoading}
@@ -663,6 +669,7 @@ function QueueDetailsPanel({
       <div className="detail-grid">
         <Detail label="Status" value={item.status.replaceAll("_", " ")} />
         <Detail isPrivate label="Pipeline" value={item.pipelineName} />
+        <Detail isPrivate label="User" value={displayWorkspaceUser(item.owner)} />
         <Detail isPrivate label="Drive file" value={item.driveFileId} />
         <Detail isPrivate label="Playlist" value={item.intendedPlaylistName || "Unassigned"} />
         <Detail label="Rule" value={item.matchedRuleName || "No match"} />
