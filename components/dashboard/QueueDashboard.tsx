@@ -71,6 +71,8 @@ export function QueueDashboard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const isDemo = searchParams.get("demo") === "true";
+  const [nowMs] = useState(() => Date.now());
+  const relativeNowMs = isDemo ? demoNow : nowMs;
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
   const [pipelineFilter, setPipelineFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("detected_desc");
@@ -267,6 +269,7 @@ export function QueueDashboard({
                 item={item}
                 key={item.id}
                 canManage={!currentUserId || item.owner.id === currentUserId}
+                nowMs={relativeNowMs}
                 onAction={runQueueAction}
                 onDetails={openDetails}
               />
@@ -294,6 +297,7 @@ function QueueRow({
   details,
   isDetailsLoading,
   item,
+  nowMs,
   onAction,
   onDetails
 }: {
@@ -302,6 +306,7 @@ function QueueRow({
   details?: QueueDetails;
   isDetailsLoading: boolean;
   item: QueueItem;
+  nowMs: number;
   onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
   onDetails: (item: QueueItem) => void;
 }) {
@@ -323,7 +328,7 @@ function QueueRow({
           <span data-private>{displayWorkspaceUser(item.owner)}</span>
           <div className="muted" data-private>{item.owner.email}</div>
         </td>
-        <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, demoNow)}</td>
+        <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, nowMs)}</td>
         <td>
           <button
             aria-expanded={Boolean(details)}
@@ -340,7 +345,7 @@ function QueueRow({
           <PlaylistCell item={item} />
         </td>
         <td>{item.matchedRuleName || <span className="muted">No match</span>}</td>
-        <td title={formatAbsolute(item.lastActionAt)}>{relativeAge(item.lastActionAt, demoNow)}</td>
+        <td title={formatAbsolute(item.lastActionAt)}>{relativeAge(item.lastActionAt, nowMs)}</td>
         <td>
           <QueueActions
             busyAction={busyAction}
