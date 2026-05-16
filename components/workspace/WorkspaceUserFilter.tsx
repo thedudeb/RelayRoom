@@ -31,36 +31,60 @@ export function WorkspaceUserFilter({
     ? users.filter((user) => user.id !== currentUser.id)
     : users;
 
-  return (
-    <label className="compact-filter">
-      <span>{title}</span>
-      <select
-        aria-label="Filter by workspace user"
-        className="select"
-        data-private={selectedUserId ? true : undefined}
-        onChange={(event) => {
-          const nextParams = new URLSearchParams(searchParams.toString());
-          if (event.target.value === "all") {
-            nextParams.delete("userId");
-          } else {
-            nextParams.set("userId", event.target.value);
-          }
+  function navigateToUser(userId?: string) {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (userId) {
+      nextParams.set("userId", userId);
+    } else {
+      nextParams.delete("userId");
+    }
 
-          const query = nextParams.toString();
-          router.push((query ? `${pathname}?${query}` : pathname) as Route);
-        }}
-        value={selectedUserId || "all"}
-      >
-        <option value="all">All users</option>
+    const query = nextParams.toString();
+    router.push((query ? `${pathname}?${query}` : pathname) as Route);
+  }
+
+  const selectedOtherUserId =
+    selectedUserId && selectedUserId !== currentUser?.id ? selectedUserId : "";
+
+  return (
+    <div className="compact-filter" aria-label={title}>
+      <span>{title}</span>
+      <div className="compact-filter-actions">
+        <button
+          className={!selectedUserId ? "button primary" : "button"}
+          onClick={() => navigateToUser()}
+          type="button"
+        >
+          All users
+        </button>
         {currentUser ? (
-          <option value={currentUser.id}>{selfLabel}</option>
+          <button
+            className={selectedUserId === currentUser.id ? "button primary" : "button"}
+            onClick={() => navigateToUser(currentUser.id)}
+            type="button"
+          >
+            {selfLabel}
+          </button>
         ) : null}
-        {otherUsers.map((user) => (
-          <option key={user.id} value={user.id}>
-            {workspaceUserOptionLabel(user)}
-          </option>
-        ))}
-      </select>
-    </label>
+        <select
+          aria-label="Filter by another workspace user"
+          className="select"
+          data-private={selectedOtherUserId ? true : undefined}
+          onChange={(event) => {
+            if (event.target.value) {
+              navigateToUser(event.target.value);
+            }
+          }}
+          value={selectedOtherUserId}
+        >
+          <option value="">Other users...</option>
+          {otherUsers.map((user) => (
+            <option key={user.id} value={user.id}>
+              {workspaceUserOptionLabel(user)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }

@@ -662,6 +662,13 @@ html[data-privacy="on"] input[data-private] {
   margin-bottom: 14px;
 }
 
+.compact-filter-actions {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .compact-filter span {
   color: var(--muted);
   font-size: 13px;
@@ -2447,6 +2454,8 @@ td strong {
 
   .filter-row,
   .compact-filter,
+  .compact-filter-actions,
+  .compact-filter-actions .button,
   .compact-filter .select {
     width: 100%;
   }
@@ -2455,6 +2464,11 @@ td strong {
     align-items: stretch;
     display: grid;
     gap: 6px;
+  }
+
+  .compact-filter-actions {
+    align-items: stretch;
+    display: grid;
   }
 
   .actions {
