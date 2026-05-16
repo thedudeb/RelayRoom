@@ -114,6 +114,7 @@ export default async function ConnectionsPage({
                 <td>
                   <div className="actions">
                     <ConnectionActions
+                      canManage={!access.isDemo && connection.owner.id === access.userId}
                       connectionId={connection.id}
                       kind={connection.kind}
                       label={connection.label}

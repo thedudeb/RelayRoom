@@ -20,7 +20,7 @@ export async function POST(
 
   try {
     const pipeline = await prisma.pipeline.findFirst({
-      where: { archivedAt: null, id },
+      where: { archivedAt: null, id, userId: access.userId },
       select: { userId: true }
     });
     if (!pipeline) {

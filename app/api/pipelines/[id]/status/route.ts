@@ -29,7 +29,8 @@ export async function POST(
   const pipeline = await prisma.pipeline.findFirst({
     where: {
       archivedAt: null,
-      id
+      id,
+      userId: access.userId
     },
     select: {
       sourceFolderId: true
@@ -65,7 +66,8 @@ export async function POST(
   const result = await prisma.pipeline.updateMany({
     where: {
       archivedAt: null,
-      id
+      id,
+      userId: access.userId
     },
     data: {
       status: nextStatus,

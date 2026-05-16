@@ -17,7 +17,8 @@ export async function POST(
   const { id } = await params;
   const connection = await prisma.oAuthConnection.findFirst({
     where: {
-      id
+      id,
+      userId: access.userId
     },
     select: {
       encryptedAccessToken: true,
@@ -44,8 +45,8 @@ export async function POST(
 
   const pipelineWhere =
     connection.kind === ConnectionKind.DRIVE
-      ? { archivedAt: null, driveConnectionId: connection.id }
-      : { archivedAt: null, youtubeConnectionId: connection.id };
+      ? { archivedAt: null, driveConnectionId: connection.id, userId: access.userId }
+      : { archivedAt: null, youtubeConnectionId: connection.id, userId: access.userId };
 
   await prisma.$transaction([
     prisma.oAuthConnection.update({

@@ -47,7 +47,8 @@ export async function uploadQueueItemToYouTube({
 }) {
   const item = await prisma.queueItem.findFirst({
     where: {
-      id: queueItemId
+      id: queueItemId,
+      userId
     },
     include: {
       attempts: { select: { attemptNumber: true } },

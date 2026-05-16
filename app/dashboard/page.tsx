@@ -30,7 +30,7 @@ export default async function DashboardPage({
       isDemo={access.isDemo}
     >
       <WorkspaceUserFilter selectedUserId={selectedUserId} users={workspaceUsers} />
-      <QueueDashboard items={queueItems} />
+      <QueueDashboard currentUserId={access.isDemo ? undefined : access.userId} items={queueItems} />
     </AppShell>
   );
 }

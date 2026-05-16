@@ -113,7 +113,8 @@ async function getYouTubeConnectionContext(request: NextRequest) {
     where: {
       id: connectionId || undefined,
       kind: ConnectionKind.YOUTUBE,
-      status: ConnectionStatus.ACTIVE
+      status: ConnectionStatus.ACTIVE,
+      userId: user.id
     },
     orderBy: { connectedAt: "desc" }
   });

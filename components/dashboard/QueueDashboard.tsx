@@ -61,7 +61,13 @@ const tabs: { label: string; status?: QueueStatus }[] = [
   { label: "Externally Handled", status: "externally_handled" }
 ];
 
-export function QueueDashboard({ items }: { items: QueueItem[] }) {
+export function QueueDashboard({
+  currentUserId,
+  items
+}: {
+  currentUserId?: string;
+  items: QueueItem[];
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isDemo = searchParams.get("demo") === "true";
@@ -260,6 +266,7 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
                 isDetailsLoading={details?.item.id === item.id && detailsState === "loading"}
                 item={item}
                 key={item.id}
+                canManage={!currentUserId || item.owner.id === currentUserId}
                 onAction={runQueueAction}
                 onDetails={openDetails}
               />
@@ -283,6 +290,7 @@ export function QueueDashboard({ items }: { items: QueueItem[] }) {
 
 function QueueRow({
   busyAction,
+  canManage,
   details,
   isDetailsLoading,
   item,
@@ -290,6 +298,7 @@ function QueueRow({
   onDetails
 }: {
   busyAction: { itemId: string; action: QueueAction } | null;
+  canManage: boolean;
   details?: QueueDetails;
   isDetailsLoading: boolean;
   item: QueueItem;
@@ -335,6 +344,7 @@ function QueueRow({
         <td>
           <QueueActions
             busyAction={busyAction}
+            canManage={canManage}
             item={item}
             onAction={onAction}
             onDetails={onDetails}
@@ -418,11 +428,13 @@ function StatusBadge({
 
 function QueueActions({
   busyAction,
+  canManage,
   item,
   onAction,
   onDetails
 }: {
   busyAction: { itemId: string; action: QueueAction } | null;
+  canManage: boolean;
   item: QueueItem;
   onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
   onDetails: (item: QueueItem) => void;
@@ -441,6 +453,29 @@ function QueueActions({
       <Info aria-hidden="true" size={16} />
     </button>
   );
+
+  if (!canManage) {
+    return (
+      <div className="actions">
+        {detailsButton}
+        {item.status === "uploaded" ? (
+          <button
+            className="icon-button"
+            data-tooltip={item.youtubeUrl ? "Open on YouTube" : "No YouTube URL recorded"}
+            disabled={!item.youtubeUrl}
+            onClick={() =>
+              item.youtubeUrl && window.open(item.youtubeUrl, "_blank", "noopener,noreferrer")
+            }
+            type="button"
+          >
+            <ExternalLink aria-hidden="true" size={16} />
+          </button>
+        ) : (
+          <span className="muted">View only</span>
+        )}
+      </div>
+    );
+  }
 
   if (item.status === "uploaded") {
     return (

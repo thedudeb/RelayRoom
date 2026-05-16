@@ -26,7 +26,8 @@ export async function POST(
     },
     where: {
       archivedAt: null,
-      id
+      id,
+      userId: access.userId
     }
   });
 
@@ -62,7 +63,8 @@ export async function DELETE(
     },
     where: {
       archivedAt: { not: null },
-      id
+      id,
+      userId: access.userId
     }
   });
 

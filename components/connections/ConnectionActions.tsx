@@ -10,10 +10,12 @@ interface DisconnectResponse {
 }
 
 export function ConnectionActions({
+  canManage,
   connectionId,
   kind,
   label
 }: {
+  canManage: boolean;
   connectionId: string;
   kind: ConnectionKind;
   label: string;
@@ -58,20 +60,26 @@ export function ConnectionActions({
 
   return (
     <>
-      <Link
-        className="button"
-        href={kind === "drive" ? "/api/oauth/drive/start" : "/api/oauth/youtube/start"}
-      >
-        Reconnect
-      </Link>
-      <button
-        className="button danger"
-        disabled={isDisconnecting}
-        onClick={disconnect}
-        type="button"
-      >
-        {isDisconnecting ? "Disconnecting..." : "Disconnect"}
-      </button>
+      {canManage ? (
+        <>
+          <Link
+            className="button"
+            href={kind === "drive" ? "/api/oauth/drive/start" : "/api/oauth/youtube/start"}
+          >
+            Reconnect
+          </Link>
+          <button
+            className="button danger"
+            disabled={isDisconnecting}
+            onClick={disconnect}
+            type="button"
+          >
+            {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+          </button>
+        </>
+      ) : (
+        <span className="muted">View only</span>
+      )}
       {message ? (
         <div className={`notice inline ${tone}`} role={tone === "danger" ? "alert" : "status"}>
           {message}
