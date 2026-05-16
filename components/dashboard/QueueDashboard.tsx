@@ -13,7 +13,7 @@ import {
   X
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { QueueItem, QueueStatus } from "@/lib/domain/types";
 import { displayWorkspaceUser } from "@/lib/workspace/users";
 
@@ -71,7 +71,7 @@ export function QueueDashboard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const isDemo = searchParams.get("demo") === "true";
-  const [nowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const relativeNowMs = isDemo ? demoNow : nowMs;
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
   const [pipelineFilter, setPipelineFilter] = useState("all");
@@ -102,6 +102,16 @@ export function QueueDashboard({
     failed: count(items, "failed"),
     uploaded: count(items, "uploaded")
   };
+
+  useEffect(() => {
+    if (isDemo) {
+      return;
+    }
+
+    setNowMs(Date.now());
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [isDemo, items]);
 
   async function runQueueAction(
     item: QueueItem,
