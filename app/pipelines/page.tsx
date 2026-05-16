@@ -705,14 +705,6 @@ async function createPipelineAction(formData: FormData) {
     redirect("/pipelines?error=MissingActiveConnections");
   }
 
-  const enabledFolderPipeline = await findEnabledPipelineForFolder({
-    sourceFolderId
-  });
-
-  if (enabledFolderPipeline) {
-    redirect("/pipelines?error=FolderAlreadyWatched");
-  }
-
   await prisma.pipeline.create({
     data: {
       defaultDescriptionTemplate:
@@ -801,15 +793,6 @@ async function updatePipelineAction(formData: FormData) {
 
   if (!pipeline) {
     redirect("/pipelines?error=PipelineNotFound");
-  }
-
-  const enabledFolderPipeline = await findEnabledPipelineForFolder({
-    excludePipelineId: pipelineId,
-    sourceFolderId
-  });
-
-  if (enabledFolderPipeline) {
-    redirect("/pipelines?error=FolderAlreadyWatched");
   }
 
   const folderChanged = pipeline.sourceFolderId !== sourceFolderId;
@@ -1199,24 +1182,6 @@ function parseCustomCadence(value: FormDataEntryValue | null) {
   }
 
   return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function findEnabledPipelineForFolder({
-  excludePipelineId,
-  sourceFolderId
-}: {
-  excludePipelineId?: string;
-  sourceFolderId: string;
-}) {
-  return prisma.pipeline.findFirst({
-    where: {
-      ...(excludePipelineId ? { id: { not: excludePipelineId } } : {}),
-      archivedAt: null,
-      sourceFolderId,
-      status: PipelineStatus.ENABLED
-    },
-    select: { id: true }
-  });
 }
 
 function pipelineErrorMessage(error: string) {

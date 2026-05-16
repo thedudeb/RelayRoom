@@ -1,7 +1,4 @@
 import {
-  randomUUID
-} from "node:crypto";
-import {
   ConnectionKind,
   ConnectionStatus,
   FailureReason,
@@ -11,6 +8,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
+import { getVideoContentValidationError } from "./video-file-validation";
 
 interface GoogleRefreshResponse {
   access_token?: string;
@@ -36,7 +34,11 @@ interface YouTubePlaylistInsertResponse extends GoogleApiError {
 }
 
 const maxMvpUploadBytes = 256 * 1024 * 1024;
-const uploadableStatuses = new Set<QueueStatus>([QueueStatus.NEEDS_APPROVAL, QueueStatus.FAILED]);
+const uploadableStatuses = new Set<QueueStatus>([
+  QueueStatus.DETECTED,
+  QueueStatus.NEEDS_APPROVAL,
+  QueueStatus.FAILED
+]);
 
 export async function uploadQueueItemToYouTube({
   queueItemId,
@@ -105,8 +107,11 @@ export async function uploadQueueItemToYouTube({
 
     await tx.activityLogEntry.create({
       data: {
-        actorType: "user",
-        message: "Approved item for YouTube upload.",
+        actorType: item.status === QueueStatus.DETECTED ? "system" : "user",
+        message:
+          item.status === QueueStatus.DETECTED
+            ? "Auto-upload started."
+            : "Approved item for YouTube upload.",
         metadata: { fromStatus: item.status },
         queueItemId: item.id,
         userId
@@ -138,6 +143,21 @@ export async function uploadQueueItemToYouTube({
       throw new ClassifiedUploadError("TokenRefreshFailed", FailureReason.AUTH_REVOKED);
     }
 
+    if (item.youtubeVideoId && !item.youtubePlaylistId) {
+      await addVideoToPlaylist({
+        accessToken: youtubeAccessToken,
+        playlistId: item.intendedPlaylistId,
+        videoId: item.youtubeVideoId
+      });
+
+      return markUploadComplete({
+        itemId: item.id,
+        playlistId: item.intendedPlaylistId,
+        userId,
+        videoId: item.youtubeVideoId
+      });
+    }
+
     const file = await downloadDriveFile({
       accessToken: driveAccessToken,
       driveFileId: item.driveFileId,
@@ -145,6 +165,10 @@ export async function uploadQueueItemToYouTube({
       mimeType: item.mimeType,
       sizeBytes: item.sizeBytes ? Number(item.sizeBytes) : undefined
     });
+    const validationError = getVideoContentValidationError(file);
+    if (validationError) {
+      throw new ClassifiedUploadError(validationError, FailureReason.NOT_VIDEO);
+    }
 
     const videoId = await insertYouTubeVideo({
       accessToken: youtubeAccessToken,
@@ -160,57 +184,23 @@ export async function uploadQueueItemToYouTube({
       videoId
     });
 
-    const uploadedAt = new Date();
-    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-    await prisma.$transaction([
-      prisma.uploadAttempt.update({
-        where: { id: attempt.id },
-        data: {
-          finishedAt: uploadedAt,
-          success: true,
-          youtubeVideoId: videoId
-        }
-      }),
-      prisma.queueItem.update({
-        where: { id: item.id },
-        data: {
-          failureReason: null,
-          lastActionAt: uploadedAt,
-          lastError: null,
-          previousStatus: null,
-          status: QueueStatus.UPLOADED,
-          uploadedAt,
-          youtubePlaylistId: item.intendedPlaylistId,
-          youtubeUrl,
-          youtubeVideoId: videoId
-        }
-      }),
-      prisma.activityLogEntry.create({
-        data: {
-          actorType: "system",
-          message: "Uploaded item to YouTube.",
-          metadata: {
-            playlistId: item.intendedPlaylistId,
-            videoId,
-            youtubeUrl
-          },
-          queueItemId: item.id,
-          userId
-        }
-      })
-    ]);
-
-    return {
-      message: "Uploaded item to YouTube.",
-      videoId,
-      youtubeUrl
-    };
+    return markUploadComplete({
+      attemptId: attempt.id,
+      itemId: item.id,
+      playlistId: item.intendedPlaylistId,
+      userId,
+      videoId
+    });
   } catch (error) {
     const failureReason =
       error instanceof ClassifiedUploadError ? error.reason : FailureReason.UNKNOWN;
     const lastError = error instanceof Error ? error.message : "Upload failed.";
     const finishedAt = new Date();
+    const partialVideoId =
+      error instanceof PlaylistInsertAfterUploadError ? error.videoId : undefined;
+    const youtubeUrl = partialVideoId
+      ? `https://www.youtube.com/watch?v=${partialVideoId}`
+      : undefined;
 
     await prisma.$transaction([
       prisma.uploadAttempt.update({
@@ -219,7 +209,8 @@ export async function uploadQueueItemToYouTube({
           failureReason,
           finishedAt,
           rawError: lastError,
-          success: false
+          success: false,
+          youtubeVideoId: partialVideoId
         }
       }),
       prisma.queueItem.update({
@@ -228,14 +219,22 @@ export async function uploadQueueItemToYouTube({
           failureReason,
           lastActionAt: finishedAt,
           lastError,
-          status: QueueStatus.FAILED
+          status: QueueStatus.FAILED,
+          ...(partialVideoId
+            ? {
+                youtubeUrl,
+                youtubeVideoId: partialVideoId
+              }
+            : {})
         }
       }),
       prisma.activityLogEntry.create({
         data: {
           actorType: "system",
-          message: "YouTube upload failed.",
-          metadata: { failureReason, lastError },
+          message: partialVideoId
+            ? "YouTube upload succeeded, but playlist assignment failed."
+            : "YouTube upload failed.",
+          metadata: { failureReason, lastError, videoId: partialVideoId, youtubeUrl },
           queueItemId: item.id,
           userId
         }
@@ -358,7 +357,7 @@ async function downloadDriveFile({
     );
   }
 
-  const response = await fetch(
+  const response = await fetchWithTransientRetries(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFileId)}?alt=media`,
     {
       headers: { Authorization: `Bearer ${accessToken}` }
@@ -385,6 +384,71 @@ async function downloadDriveFile({
   };
 }
 
+async function markUploadComplete({
+  attemptId,
+  itemId,
+  playlistId,
+  userId,
+  videoId
+}: {
+  attemptId?: string;
+  itemId: string;
+  playlistId: string;
+  userId: string;
+  videoId: string;
+}) {
+  const uploadedAt = new Date();
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  await prisma.$transaction([
+    ...(attemptId
+      ? [
+          prisma.uploadAttempt.update({
+            where: { id: attemptId },
+            data: {
+              finishedAt: uploadedAt,
+              success: true,
+              youtubeVideoId: videoId
+            }
+          })
+        ]
+      : []),
+    prisma.queueItem.update({
+      where: { id: itemId },
+      data: {
+        failureReason: null,
+        lastActionAt: uploadedAt,
+        lastError: null,
+        previousStatus: null,
+        status: QueueStatus.UPLOADED,
+        uploadedAt,
+        youtubePlaylistId: playlistId,
+        youtubeUrl,
+        youtubeVideoId: videoId
+      }
+    }),
+    prisma.activityLogEntry.create({
+      data: {
+        actorType: "system",
+        message: "Uploaded item to YouTube.",
+        metadata: {
+          playlistId,
+          videoId,
+          youtubeUrl
+        },
+        queueItemId: itemId,
+        userId
+      }
+    })
+  ]);
+
+  return {
+    message: "Uploaded item to YouTube.",
+    videoId,
+    youtubeUrl
+  };
+}
+
 async function insertYouTubeVideo({
   accessToken,
   description,
@@ -398,7 +462,6 @@ async function insertYouTubeVideo({
   privacyStatus: PrivacyStatus;
   title: string;
 }) {
-  const boundary = `relayroom_${randomUUID()}`;
   const metadata = {
     snippet: {
       description,
@@ -408,33 +471,37 @@ async function insertYouTubeVideo({
       privacyStatus: privacyStatus.toLowerCase()
     }
   };
-  const metadataPart = Buffer.from(
-    [
-      `--${boundary}`,
-      "Content-Type: application/json; charset=UTF-8",
-      "",
-      JSON.stringify(metadata),
-      `--${boundary}`,
-      `Content-Type: ${file.mimeType}`,
-      "",
-      ""
-    ].join("\r\n")
-  );
-  const closingBoundary = Buffer.from(`\r\n--${boundary}--\r\n`);
-  const body = Buffer.concat([metadataPart, Buffer.from(file.bytes), closingBoundary]);
 
-  const response = await fetch(
-    "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status",
+  const createSessionResponse = await fetchWithTransientRetries(
+    "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
     {
-      body,
+      body: JSON.stringify(metadata),
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        "Content-Length": String(body.byteLength),
-        "Content-Type": `multipart/related; boundary=${boundary}`
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Length": String(file.bytes.byteLength),
+        "X-Upload-Content-Type": file.mimeType
       },
       method: "POST"
     }
   );
+  const uploadUrl = createSessionResponse.headers.get("location");
+  if (!createSessionResponse.ok || !uploadUrl) {
+    const payload = await readGoogleJson<YouTubeVideoInsertResponse>(
+      createSessionResponse,
+      "YouTube resumable upload session failed."
+    );
+    throw classifyGoogleError(payload, "YouTube resumable upload session failed.");
+  }
+
+  const response = await fetchWithTransientRetries(uploadUrl, {
+    body: Buffer.from(file.bytes),
+    headers: {
+      "Content-Length": String(file.bytes.byteLength),
+      "Content-Type": file.mimeType
+    },
+    method: "PUT"
+  });
   const payload = await readGoogleJson<YouTubeVideoInsertResponse>(
     response,
     "YouTube upload failed."
@@ -456,32 +523,50 @@ async function addVideoToPlaylist({
   playlistId: string;
   videoId: string;
 }) {
-  const response = await fetch(
-    "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet",
-    {
-      body: JSON.stringify({
-        snippet: {
-          playlistId,
-          resourceId: {
-            kind: "youtube#video",
-            videoId
+  try {
+    const response = await fetchWithTransientRetries(
+      "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet",
+      {
+        body: JSON.stringify({
+          snippet: {
+            playlistId,
+            resourceId: {
+              kind: "youtube#video",
+              videoId
+            }
           }
-        }
-      }),
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json"
-      },
-      method: "POST"
-    }
-  );
-  const payload = await readGoogleJson<YouTubePlaylistInsertResponse>(
-    response,
-    "YouTube playlist insert failed."
-  );
+        }),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        method: "POST"
+      }
+    );
+    const payload = await readGoogleJson<YouTubePlaylistInsertResponse>(
+      response,
+      "YouTube playlist insert failed."
+    );
 
-  if (!response.ok || payload.error || !payload.id) {
-    throw classifyGoogleError(payload, "YouTube playlist insert failed.");
+    if (!response.ok || payload.error || !payload.id) {
+      throw classifyGoogleError(payload, "YouTube playlist insert failed.");
+    }
+  } catch (error) {
+    if (error instanceof PlaylistInsertAfterUploadError) {
+      throw error;
+    }
+
+    if (error instanceof ClassifiedUploadError) {
+      throw new PlaylistInsertAfterUploadError(error, videoId);
+    }
+
+    throw new PlaylistInsertAfterUploadError(
+      new ClassifiedUploadError(
+        error instanceof Error ? error.message : "YouTube playlist insert failed.",
+        FailureReason.UNKNOWN
+      ),
+      videoId
+    );
   }
 }
 
@@ -493,8 +578,16 @@ function classifyGoogleError(payload: GoogleApiError, fallbackMessage: string) {
     return new ClassifiedUploadError(message, FailureReason.QUOTA_EXCEEDED);
   }
 
-  if (reason === "rateLimitExceeded" || reason === "userRateLimitExceeded") {
+  if (
+    payload.error?.code === 429 ||
+    reason === "rateLimitExceeded" ||
+    reason === "userRateLimitExceeded"
+  ) {
     return new ClassifiedUploadError(message, FailureReason.RATE_LIMITED);
+  }
+
+  if (payload.error?.code && payload.error.code >= 500) {
+    return new ClassifiedUploadError(message, FailureReason.NETWORK_TIMEOUT);
   }
 
   if (payload.error?.code === 401 || payload.error?.code === 403) {
@@ -524,6 +617,39 @@ async function readGoogleJson<T>(response: Response, fallbackMessage: string): P
   }
 }
 
+async function fetchWithTransientRetries(input: string | URL, init: RequestInit) {
+  const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
+  let lastNetworkError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(input, init);
+      if (!retryableStatuses.has(response.status) || attempt === 2) {
+        return response;
+      }
+    } catch (error) {
+      lastNetworkError = error;
+      if (attempt === 2) {
+        throw new ClassifiedUploadError(
+          error instanceof Error ? error.message : "Network request failed.",
+          FailureReason.NETWORK_TIMEOUT
+        );
+      }
+    }
+
+    await sleep(500 * 2 ** attempt);
+  }
+
+  throw new ClassifiedUploadError(
+    lastNetworkError instanceof Error ? lastNetworkError.message : "Network request failed.",
+    FailureReason.NETWORK_TIMEOUT
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function truncate(value: string) {
   const compactValue = value.replace(/\s+/g, " ").trim();
   return compactValue.length > 180 ? `${compactValue.slice(0, 180)}...` : compactValue;
@@ -540,5 +666,15 @@ class ClassifiedUploadError extends Error {
   ) {
     super(message);
     this.name = "ClassifiedUploadError";
+  }
+}
+
+class PlaylistInsertAfterUploadError extends ClassifiedUploadError {
+  constructor(
+    error: ClassifiedUploadError,
+    readonly videoId: string
+  ) {
+    super(error.message, error.reason);
+    this.name = "PlaylistInsertAfterUploadError";
   }
 }

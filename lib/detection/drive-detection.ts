@@ -11,6 +11,8 @@ import { prisma } from "@/lib/db/prisma";
 import type { DriveFileMetadata, Pipeline } from "@/lib/domain/types";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
+import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
+import { isYouTubeSupportedVideoFile } from "./youtube-supported-formats";
 
 interface DriveFile {
   createdTime?: string;
@@ -32,6 +34,10 @@ interface GoogleRefreshResponse {
   access_token?: string;
   error?: string;
   expires_in?: number;
+}
+
+interface YouTubeVideosListResponse {
+  items?: Array<{ id?: string }>;
 }
 
 export interface DetectionResult {
@@ -65,7 +71,8 @@ export async function runDriveDetectionForPipeline({
     include: {
       driveConnection: true,
       rules: { orderBy: { priority: "asc" } },
-      user: { select: { timezone: true } }
+      user: { select: { timezone: true } },
+      youtubeConnection: true
     }
   });
 
@@ -100,7 +107,10 @@ export async function runDriveDetectionForPipeline({
     folderId: pipeline.sourceFolderId
   });
   const excludedByWatermark = folderSnapshot.filter((file) => {
-    if (!file.createdTime || !file.mimeType?.startsWith("video/")) {
+    if (
+      !file.createdTime ||
+      !isYouTubeSupportedVideoFile({ filename: file.name, mimeType: file.mimeType })
+    ) {
       return false;
     }
 
@@ -118,10 +128,15 @@ export async function runDriveDetectionForPipeline({
           driveFileId: { in: driveFileIds },
           pipelineId: pipeline.id
         },
-        select: { driveFileId: true }
+        select: {
+          driveFileId: true,
+          id: true,
+          status: true,
+          youtubeVideoId: true
+        }
       })
     : [];
-  const existingIds = new Set(existingItems.map((item) => item.driveFileId));
+  const existingByDriveFileId = new Map(existingItems.map((item) => [item.driveFileId, item]));
 
   let created = 0;
   let ignored = 0;
@@ -135,12 +150,25 @@ export async function runDriveDetectionForPipeline({
       continue;
     }
 
-    if (existingIds.has(file.id)) {
-      skippedExisting += 1;
+    const existingItem = existingByDriveFileId.get(file.id);
+    if (existingItem) {
+      const reprocessed = await maybeReprocessExistingUpload({
+        domainPipeline,
+        existingItem,
+        file,
+        pipeline,
+        tokenKey,
+        timezone,
+        userId
+      });
+      if (!reprocessed) {
+        skippedExisting += 1;
+      }
+      existingByDriveFileId.set(file.id, existingItem);
       continue;
     }
 
-    if (!file.mimeType.startsWith("video/")) {
+    if (!isYouTubeSupportedVideoFile({ filename: file.name, mimeType: file.mimeType })) {
       ignored += 1;
       continue;
     }
@@ -161,7 +189,7 @@ export async function runDriveDetectionForPipeline({
       : QueueStatus.NEEDS_ROUTING;
 
     try {
-      await prisma.queueItem.create({
+      const queueItem = await prisma.queueItem.create({
         data: {
           detectedAt: new Date(),
           driveCreatedTime: new Date(file.createdTime),
@@ -182,13 +210,28 @@ export async function runDriveDetectionForPipeline({
           sizeBytes: file.size ? BigInt(file.size) : undefined,
           status,
           userId
-        }
+        },
+        select: { id: true }
       });
-      existingIds.add(file.id);
+      existingByDriveFileId.set(file.id, {
+        driveFileId: file.id,
+        id: queueItem.id,
+        status,
+        youtubeVideoId: null
+      });
       created += 1;
+
+      if (status === QueueStatus.DETECTED) {
+        await uploadAutoQueueItem(queueItem.id, userId);
+      }
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        existingIds.add(file.id);
+        existingByDriveFileId.set(file.id, {
+          driveFileId: file.id,
+          id: "",
+          status,
+          youtubeVideoId: null
+        });
         skippedExisting += 1;
         continue;
       }
@@ -203,6 +246,129 @@ export async function runDriveDetectionForPipeline({
   });
 
   return { created, excludedByWatermark, ignored, skippedExisting };
+}
+
+async function maybeReprocessExistingUpload({
+  domainPipeline,
+  existingItem,
+  file,
+  pipeline,
+  tokenKey,
+  timezone,
+  userId
+}: {
+  domainPipeline: Pipeline;
+  existingItem: {
+    driveFileId: string;
+    id: string;
+    status: QueueStatus;
+    youtubeVideoId: string | null;
+  };
+  file: DriveFile;
+  pipeline: Prisma.PipelineGetPayload<{
+    include: {
+      driveConnection: true;
+      rules: { orderBy: { priority: "asc" } };
+      user: { select: { timezone: true } };
+      youtubeConnection: true;
+    };
+  }>;
+  tokenKey: string;
+  timezone: string;
+  userId: string;
+}) {
+  if (existingItem.status !== QueueStatus.UPLOADED || !existingItem.youtubeVideoId) {
+    return false;
+  }
+
+  const youtubeAccessToken = await getUsableYouTubeAccessToken(pipeline.youtubeConnection, tokenKey);
+  if (!youtubeAccessToken) {
+    throw new Error("TokenRefreshFailed");
+  }
+
+  const videoExists = await verifyYouTubeVideoExists({
+    accessToken: youtubeAccessToken,
+    videoId: existingItem.youtubeVideoId
+  });
+  if (videoExists) {
+    await prisma.activityLogEntry.create({
+      data: {
+        actorType: "system",
+        message: "Verified duplicate detection against YouTube; existing upload is still present.",
+        metadata: { youtubeVideoId: existingItem.youtubeVideoId },
+        queueItemId: existingItem.id,
+        userId
+      }
+    });
+    return false;
+  }
+
+  if (!file.id || !file.name || !file.mimeType || !file.createdTime) {
+    return false;
+  }
+
+  const fileMetadata: DriveFileMetadata = {
+    createdTime: file.createdTime,
+    filename: file.name,
+    id: file.id,
+    mimeType: file.mimeType,
+    sizeBytes: file.size ? Number(file.size) : undefined,
+    sourceFolderId: pipeline.sourceFolderId
+  };
+  const evaluation = evaluatePipelineRules(domainPipeline, fileMetadata, timezone);
+  const status = evaluation.playlist
+    ? pipeline.mode === PipelineMode.MANUAL_APPROVAL
+      ? QueueStatus.NEEDS_APPROVAL
+      : QueueStatus.DETECTED
+    : QueueStatus.NEEDS_ROUTING;
+
+  await prisma.$transaction([
+    prisma.queueItem.update({
+      where: { id: existingItem.id },
+      data: {
+        detectedAt: new Date(),
+        failureReason: evaluation.playlist ? null : FailureReason.VALIDATION_ERROR,
+        intendedPlaylistId: evaluation.playlist?.id,
+        intendedPlaylistName: evaluation.playlist?.name,
+        lastActionAt: new Date(),
+        lastError: evaluation.playlist ? null : "No routing rule matched this file.",
+        matchedRuleId: evaluation.matchedRule?.id,
+        matchedRuleName: evaluation.matchedRule?.name,
+        previousStatus: existingItem.status,
+        renderedDescription: evaluation.description,
+        renderedTitle: evaluation.title,
+        ruleEvaluationTrace: stripUndefined(evaluation.ruleTraces),
+        status,
+        uploadedAt: null,
+        youtubePlaylistId: null,
+        youtubeUrl: null,
+        youtubeVideoId: null
+      }
+    }),
+    prisma.activityLogEntry.create({
+      data: {
+        actorType: "system",
+        message: "Stored YouTube upload was missing; reprocessed this Drive file in place.",
+        metadata: { previousYoutubeVideoId: existingItem.youtubeVideoId },
+        queueItemId: existingItem.id,
+        userId
+      }
+    })
+  ]);
+
+  if (status === QueueStatus.DETECTED) {
+    await uploadAutoQueueItem(existingItem.id, userId);
+  }
+
+  return true;
+}
+
+async function uploadAutoQueueItem(queueItemId: string, userId: string) {
+  try {
+    await uploadQueueItemToYouTube({ queueItemId, userId });
+  } catch {
+    // uploadQueueItemToYouTube persists the failed state and attempt history.
+  }
 }
 
 export async function probeDriveFolderForPipeline({
@@ -365,6 +531,92 @@ async function getUsableDriveAccessToken(
   });
 
   return payload.access_token;
+}
+
+async function getUsableYouTubeAccessToken(
+  connection: {
+    encryptedAccessToken: string | null;
+    encryptedRefreshToken: string;
+    expiresAt: Date | null;
+    id: string;
+    kind: ConnectionKind;
+    status: ConnectionStatus;
+  },
+  tokenKey: string
+) {
+  if (connection.kind !== ConnectionKind.YOUTUBE || connection.status !== ConnectionStatus.ACTIVE) {
+    return null;
+  }
+
+  if (
+    connection.encryptedAccessToken &&
+    connection.expiresAt &&
+    connection.expiresAt.getTime() > Date.now() + 60_000
+  ) {
+    return decryptToken(connection.encryptedAccessToken, tokenKey);
+  }
+
+  const clientId = process.env.GOOGLE_YOUTUBE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_YOUTUBE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+
+  const refreshToken = decryptToken(connection.encryptedRefreshToken, tokenKey);
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    method: "POST"
+  });
+  const payload = (await response.json()) as GoogleRefreshResponse;
+
+  if (!response.ok || !payload.access_token || payload.error) {
+    console.error("YouTube token refresh failed.", payload);
+    return null;
+  }
+
+  await prisma.oAuthConnection.update({
+    where: { id: connection.id },
+    data: {
+      encryptedAccessToken: encryptToken(payload.access_token, tokenKey),
+      expiresAt: payload.expires_in
+        ? new Date(Date.now() + payload.expires_in * 1000)
+        : connection.expiresAt
+    }
+  });
+
+  return payload.access_token;
+}
+
+async function verifyYouTubeVideoExists({
+  accessToken,
+  videoId
+}: {
+  accessToken: string;
+  videoId: string;
+}) {
+  const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+  url.searchParams.set("id", videoId);
+  url.searchParams.set("part", "id");
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const payload = (await response.json()) as YouTubeVideosListResponse;
+
+  if (!response.ok) {
+    console.error("YouTube duplicate verification failed.", payload);
+    throw new Error("YouTubeVerificationFailed");
+  }
+
+  return Boolean(payload.items?.some((item) => item.id === videoId));
 }
 
 function mapPipelineForEvaluation(
