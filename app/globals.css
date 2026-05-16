@@ -2212,6 +2212,104 @@ td strong {
     grid-template-columns: 1fr;
   }
 
+  .responsive-table-wrap {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .responsive-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .responsive-table thead {
+    display: none;
+  }
+
+  .responsive-table tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .responsive-table tbody tr {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: var(--shadow-tight);
+    overflow: hidden;
+  }
+
+  .responsive-table tbody tr:hover {
+    background: var(--surface);
+  }
+
+  .responsive-table td {
+    align-items: start;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    gap: 6px;
+    grid-template-columns: minmax(96px, 0.35fr) minmax(0, 1fr);
+    padding: 11px 12px;
+  }
+
+  .responsive-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .responsive-table td[data-label]::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 680;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .responsive-table td[data-label="File"],
+  .responsive-table td[data-label="Connection"] {
+    grid-template-columns: 1fr;
+  }
+
+  .responsive-table td[data-label="File"]::before,
+  .responsive-table td[data-label="Connection"]::before {
+    margin-bottom: -2px;
+  }
+
+  .responsive-table td[data-label="Actions"] .actions,
+  .responsive-table td[data-label="Actions"] > .actions {
+    justify-content: flex-start;
+  }
+
+  .responsive-table .queue-detail-row {
+    border-radius: 8px;
+  }
+
+  .responsive-table .queue-detail-row > td {
+    border-bottom: 0;
+    display: block;
+    padding: 0;
+  }
+
+  .responsive-table .queue-detail-row > td::before {
+    content: none;
+  }
+
+  .queue-detail-panel {
+    border-top: 0;
+    padding: 14px;
+  }
+
   .form-grid {
     grid-template-columns: 1fr;
   }
@@ -2268,13 +2366,77 @@ td strong {
 }
 
 @media (max-width: 700px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .sidebar {
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .brand {
+    margin-bottom: 0;
+  }
+
+  .brand span {
+    font-size: 13px;
+  }
+
   .content,
   .topbar {
     padding: 18px;
   }
 
+  .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 14px;
+    position: static;
+  }
+
+  .topbar > div:first-child {
+    min-width: 0;
+  }
+
+  .topbar h1 {
+    font-size: 23px;
+  }
+
+  .topbar p {
+    font-size: 14px;
+    max-width: 28ch;
+  }
+
+  .topbar-actions {
+    margin-left: auto;
+  }
+
+  .account-badge {
+    max-width: 190px;
+  }
+
+  .account-badge div {
+    max-width: 116px;
+  }
+
   .nav {
     grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .nav a {
+    min-height: 44px;
+  }
+
+  .sidebar-utilities {
+    grid-template-columns: 1fr 1fr;
+    margin-top: 0;
+  }
+
+  .sidebar-utilities .button {
+    justify-content: center;
+    min-height: 44px;
   }
 
   .toolbar,
@@ -2283,8 +2445,32 @@ td strong {
     flex-direction: column;
   }
 
-  .table-wrap {
-    overflow-x: auto;
+  .filter-row,
+  .compact-filter,
+  .compact-filter .select {
+    width: 100%;
+  }
+
+  .compact-filter {
+    align-items: stretch;
+    display: grid;
+    gap: 6px;
+  }
+
+  .actions {
+    align-items: stretch;
+  }
+
+  .actions .button {
+    justify-content: center;
+  }
+
+  .queue-detail-header {
+    gap: 10px;
+  }
+
+  .queue-detail-header h2 {
+    font-size: 17px;
   }
 
   .metric-grid {
@@ -2393,8 +2579,36 @@ td strong {
     margin-left: 18px;
   }
 
-  th,
-  td {
+  table:not(.responsive-table) th,
+  table:not(.responsive-table) td {
     min-width: 130px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar-actions {
+    width: 100%;
+  }
+
+  .account-menu,
+  .account-badge {
+    width: 100%;
+  }
+
+  .account-badge {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+
+  .account-badge div {
+    max-width: none;
+  }
+
+  .responsive-table td {
+    grid-template-columns: 1fr;
+  }
+
+  .responsive-table td[data-label]::before {
+    margin-bottom: -2px;
   }
 }

@@ -71,8 +71,8 @@ export default async function ConnectionsPage({
         </div>
       ) : null}
       <WorkspaceUserFilter selectedUserId={selectedUserId} users={workspaceUsers} />
-      <div className="table-wrap">
-        <table>
+      <div className="table-wrap responsive-table-wrap">
+        <table className="responsive-table">
           <thead>
             <tr>
               <th>Connection</th>
@@ -87,16 +87,16 @@ export default async function ConnectionsPage({
           <tbody>
             {connections.map((connection) => (
               <tr key={connection.id}>
-                <td>
+                <td data-label="Connection">
                   <strong data-private>{connection.label}</strong>
                   <div className="muted">{connection.kind}</div>
                 </td>
-                <td><span data-private>{connection.accountEmail}</span></td>
-                <td>
+                <td data-label="Account"><span data-private>{connection.accountEmail}</span></td>
+                <td data-label="Connected by">
                   <span data-private>{displayWorkspaceUser(connection.owner)}</span>
                   <div className="muted" data-private>{connection.owner.email}</div>
                 </td>
-                <td>
+                <td data-label="Status">
                   <span
                     className={`badge ${
                       connection.status === "active" ? "uploaded" : "failed"
@@ -105,13 +105,13 @@ export default async function ConnectionsPage({
                     {connection.status}
                   </span>
                 </td>
-                <td>{connection.scopes.join(", ")}</td>
-                <td>
+                <td data-label="Scopes">{connection.scopes.join(", ")}</td>
+                <td data-label="Used by">
                   {connection.usedByPipelines.length > 0
                     ? <span data-private>{connection.usedByPipelines.join(", ")}</span>
                     : "No pipelines"}
                 </td>
-                <td>
+                <td data-label="Actions">
                   <div className="actions">
                     <ConnectionActions
                       canManage={!access.isDemo && connection.owner.id === access.userId}

@@ -255,8 +255,8 @@ export function QueueDashboard({
         </div>
       ) : null}
 
-      <div className="table-wrap">
-        <table>
+      <div className="table-wrap responsive-table-wrap">
+        <table className="responsive-table">
           <thead>
             <tr>
               <th>File</th>
@@ -325,21 +325,23 @@ function QueueRow({
   return (
     <>
       <tr>
-        <td>
+        <td data-label="File">
           <strong data-private>{item.filename}</strong>
           <div className="muted">{formatBytes(item.sizeBytes)} · {item.mimeType}</div>
           {isUploading ? <UploadProgressBar /> : null}
         </td>
-        <td>
+        <td data-label="Pipeline">
           <span data-private>{item.pipelineName}</span>
           <div className="muted" data-private>{item.sourceFolderName}</div>
         </td>
-        <td>
+        <td data-label="User">
           <span data-private>{displayWorkspaceUser(item.owner)}</span>
           <div className="muted" data-private>{item.owner.email}</div>
         </td>
-        <td title={formatAbsolute(item.detectedAt)}>{relativeAge(item.detectedAt, nowMs)}</td>
-        <td>
+        <td data-label="Detected" title={formatAbsolute(item.detectedAt)}>
+          {relativeAge(item.detectedAt, nowMs)}
+        </td>
+        <td data-label="Status">
           <button
             aria-expanded={Boolean(details)}
             className="status-trigger"
@@ -351,12 +353,14 @@ function QueueRow({
           </button>
           {item.failureReason ? <div className="muted">{item.failureReason}</div> : null}
         </td>
-        <td>
+        <td data-label="Playlist">
           <PlaylistCell item={item} />
         </td>
-        <td>{item.matchedRuleName || <span className="muted">No match</span>}</td>
-        <td title={formatAbsolute(item.lastActionAt)}>{relativeAge(item.lastActionAt, nowMs)}</td>
-        <td>
+        <td data-label="Rule">{item.matchedRuleName || <span className="muted">No match</span>}</td>
+        <td data-label="Last action" title={formatAbsolute(item.lastActionAt)}>
+          {relativeAge(item.lastActionAt, nowMs)}
+        </td>
+        <td data-label="Actions">
           <QueueActions
             busyAction={busyAction}
             canManage={canManage}
