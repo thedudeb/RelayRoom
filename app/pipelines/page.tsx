@@ -498,34 +498,37 @@ function RuleManager({
           );
         })}
 
-        <div className="rule-card add-rule">
-          <div className="rule-card-header">
-            <div>
-              <h3>Add rule</h3>
-              <p className="muted">Create a simple first-match routing rule for this pipeline.</p>
+        <details className="add-rule-panel">
+          <summary className="button primary">Add rule</summary>
+          <div className="rule-card add-rule">
+            <div className="rule-card-header">
+              <div>
+                <h3>Add rule</h3>
+                <p className="muted">Create a simple first-match routing rule for this pipeline.</p>
+              </div>
             </div>
+            <form action={createRuleAction} className="form-grid compact">
+              <input name="pipelineId" type="hidden" value={pipeline.id} />
+              <RuleFields
+                defaultName="New routing rule"
+                defaultPlaylistValue={
+                  defaultPlaylist
+                    ? playlistOptionValue(defaultPlaylist.id, defaultPlaylist.name)
+                    : undefined
+                }
+                playlistOptions={playlistOptions}
+              />
+              <div className="form-actions">
+                <button className="button primary" disabled={playlistOptions.length === 0} type="submit">
+                  Add rule
+                </button>
+                {playlistOptions.length === 0 ? (
+                  <span className="muted">Create or select a playlist before adding rules.</span>
+                ) : null}
+              </div>
+            </form>
           </div>
-          <form action={createRuleAction} className="form-grid compact">
-            <input name="pipelineId" type="hidden" value={pipeline.id} />
-            <RuleFields
-              defaultName="New routing rule"
-              defaultPlaylistValue={
-                defaultPlaylist
-                  ? playlistOptionValue(defaultPlaylist.id, defaultPlaylist.name)
-                  : undefined
-              }
-              playlistOptions={playlistOptions}
-            />
-            <div className="form-actions">
-              <button className="button primary" disabled={playlistOptions.length === 0} type="submit">
-                Add rule
-              </button>
-              {playlistOptions.length === 0 ? (
-                <span className="muted">Create or select a playlist before adding rules.</span>
-              ) : null}
-            </div>
-          </form>
-        </div>
+        </details>
       </div>
     </details>
   );

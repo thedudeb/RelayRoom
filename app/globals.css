@@ -1157,6 +1157,24 @@ td strong {
   border-style: dashed;
 }
 
+.add-rule-panel {
+  display: grid;
+  justify-items: start;
+}
+
+.add-rule-panel summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.add-rule-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.add-rule-panel[open] {
+  gap: 12px;
+}
+
 .rule-card-header {
   align-items: flex-start;
   display: flex;
