@@ -169,7 +169,13 @@ export default async function PipelinesPage({
           Archived pipelines
         </Link>
       </div>
-      <WorkspaceUserFilter selectedUserId={selectedUserId} users={workspaceUsers} />
+      <WorkspaceUserFilter
+        currentUserId={access.isDemo ? undefined : access.userId}
+        selectedUserId={selectedUserId}
+        selfLabel="My pipelines"
+        title="Pipeline owner"
+        users={workspaceUsers}
+      />
       <div className="split">
         <section className="stack">
           {showingArchived ? (

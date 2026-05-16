@@ -70,7 +70,13 @@ export default async function ConnectionsPage({
           {connectionErrorMessage(params.error)}
         </div>
       ) : null}
-      <WorkspaceUserFilter selectedUserId={selectedUserId} users={workspaceUsers} />
+      <WorkspaceUserFilter
+        currentUserId={access.isDemo ? undefined : access.userId}
+        selectedUserId={selectedUserId}
+        selfLabel="My connections"
+        title="Connection owner"
+        users={workspaceUsers}
+      />
       <div className="table-wrap responsive-table-wrap">
         <table className="responsive-table">
           <thead>
