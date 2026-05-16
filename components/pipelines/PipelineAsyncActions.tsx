@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CircleStop, Play, RotateCcw, Search } from "lucide-react";
+import { Archive, CircleStop, Copy, Play, RotateCcw, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -105,7 +105,7 @@ export function PipelineStatusControls({
   const [status, setStatus] = useState(initialStatus);
   const [state, setState] = useState<ActionState>();
   const [busyAction, setBusyAction] = useState<
-    "archive" | "detect" | "disable" | "enable" | "probe" | null
+    "archive" | "detect" | "disable" | "duplicate" | "enable" | "probe" | null
   >(null);
   const isEnabled = status === "enabled";
 
@@ -216,6 +216,27 @@ export function PipelineStatusControls({
     }
   }
 
+  async function duplicatePipeline() {
+    setBusyAction("duplicate");
+    setState(undefined);
+
+    try {
+      await postAction(`/api/pipelines/${pipelineId}/duplicate`);
+      setState({
+        tone: "success",
+        message: "Pipeline duplicated as disabled. Review the copy before enabling detection."
+      });
+      router.push("/pipelines?duplicated=true");
+    } catch (error) {
+      setState({
+        tone: "danger",
+        message: error instanceof Error ? error.message : "Pipeline duplicate failed."
+      });
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <div className="actions">
       <button
@@ -258,6 +279,15 @@ export function PipelineStatusControls({
           </button>
         </>
       ) : null}
+      <button
+        className="button"
+        disabled={busyAction !== null}
+        onClick={duplicatePipeline}
+        type="button"
+      >
+        <Copy aria-hidden="true" size={16} />
+        {busyAction === "duplicate" ? "Duplicating..." : "Duplicate pipeline"}
+      </button>
       <button
         className="button"
         disabled={busyAction !== null}

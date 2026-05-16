@@ -52,6 +52,7 @@ export default async function PipelinesPage({
     created?: string;
     demo?: string;
     detected?: string;
+    duplicated?: string;
     error?: string;
     ignored?: string;
     probe?: string;
@@ -103,6 +104,11 @@ export default async function PipelinesPage({
         <div className="notice success" role="status">
           Pipeline created in review mode. Check the folder and playlist, then click Enable pipeline
           to start watching for new recordings.
+        </div>
+      ) : null}
+      {params?.duplicated ? (
+        <div className="notice success" role="status">
+          Pipeline duplicated as disabled. Review the copy before enabling detection.
         </div>
       ) : null}
       {params?.updated ? (
