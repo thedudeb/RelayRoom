@@ -1159,12 +1159,12 @@ td strong {
 
 .add-rule-panel {
   display: grid;
-  justify-items: start;
 }
 
 .add-rule-panel summary {
   cursor: pointer;
   list-style: none;
+  justify-self: start;
 }
 
 .add-rule-panel summary::-webkit-details-marker {
