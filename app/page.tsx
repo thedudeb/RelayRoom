@@ -7,13 +7,13 @@ import {
   FileVideo,
   Gauge,
   KeyRound,
-  LockKeyhole,
   Play,
   RefreshCcw,
   Route,
   ShieldCheck,
   Youtube
 } from "lucide-react";
+import { AccessModal } from "@/components/auth/AccessModal";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signIn } from "@/auth";
@@ -185,29 +185,7 @@ export default async function Home({
       </section>
 
       {authDialog ? (
-        <div className="access-modal-backdrop" role="presentation">
-          <section
-            aria-labelledby="access-denied-title"
-            aria-modal="true"
-            className="access-modal"
-            role="dialog"
-          >
-            <div className="access-modal-icon">
-              <LockKeyhole aria-hidden="true" size={28} />
-            </div>
-            <p className="eyebrow">{authDialog.eyebrow}</p>
-            <h2 id="access-denied-title">{authDialog.title}</h2>
-            <p>{authDialog.body}</p>
-            <div className="access-modal-actions">
-              <Link className="button primary" href="/">
-                Try another account
-              </Link>
-              <Link className="button" href="/dashboard?demo=true">
-                Demo login
-              </Link>
-            </div>
-          </section>
-        </div>
+        <AccessModal eyebrow={authDialog.eyebrow} title={authDialog.title} body={authDialog.body} />
       ) : null}
 
       <section className="landing-workflow" aria-label="Workflow">
