@@ -25,7 +25,9 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import type {
   ConditionField,
+  ConditionGroup,
   ConditionLeaf,
+  ConditionNode,
   ConditionOperator,
   Pipeline,
   QueueItem
@@ -364,6 +366,10 @@ function CreatePipelinePanel({
             <option value={PrivacyStatus.PUBLIC}>Public</option>
           </select>
         </label>
+        <label className="checkbox-field public-privacy-confirmation">
+          <input disabled={!canCreate} name="publicPrivacyConfirmed" type="checkbox" />
+          <span>I understand public uploads can be visible on YouTube.</span>
+        </label>
         <label>
           <span>Mode</span>
           <select className="select" defaultValue={PipelineMode.MANUAL_APPROVAL} disabled={!canCreate} name="mode">
@@ -427,6 +433,10 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
             <option value={PrivacyStatus.PUBLIC}>Public</option>
           </select>
         </label>
+        <label className="checkbox-field public-privacy-confirmation">
+          <input name="publicPrivacyConfirmed" type="checkbox" />
+          <span>I understand public uploads can be visible on YouTube.</span>
+        </label>
         <label>
           <span>Mode</span>
           <select className="select" defaultValue={mode} name="mode">
@@ -462,7 +472,6 @@ function RuleManager({
       <summary>Routing rules</summary>
       <div className="rule-editor">
         {pipeline.rules.map((rule) => {
-          const condition = firstCondition(rule.conditions);
           const playlistValue = playlistOptionValue(rule.playlist.id, rule.playlist.name);
 
           return (
@@ -471,7 +480,7 @@ function RuleManager({
                 <div>
                   <h3>{rule.priority}. {rule.name}</h3>
                   <p className="muted">
-                    Routes to {rule.playlist.name}. {conditionSummary(condition)}
+                    Routes to {rule.playlist.name}. {conditionTreeSummary(rule.conditions)}
                   </p>
                 </div>
                 <span className="rule-pill">first match wins</span>
@@ -479,7 +488,7 @@ function RuleManager({
               <form action={updateRuleAction} className="form-grid compact">
                 <input name="ruleId" type="hidden" value={rule.id} />
                 <RuleFields
-                  condition={condition}
+                  conditions={rule.conditions}
                   defaultName={rule.name}
                   defaultPlaylistValue={playlistValue}
                   playlistOptions={playlistOptions}
@@ -537,17 +546,21 @@ function RuleManager({
 }
 
 function RuleFields({
-  condition,
+  conditions,
   defaultName,
   defaultPlaylistValue,
   playlistOptions
 }: {
-  condition?: ConditionLeaf;
+  conditions?: ConditionGroup;
   defaultName: string;
   defaultPlaylistValue?: string;
   playlistOptions: { id: string; name: string }[];
 }) {
-  const field = condition?.field || "filename";
+  const primaryCondition = conditions ? conditionChildAt(conditions, 0) : undefined;
+  const secondCondition = conditions ? conditionChildAt(conditions, 1) : undefined;
+  const nestedGroup = conditions ? firstNestedGroup(conditions) : undefined;
+  const nestedPrimaryCondition = nestedGroup ? conditionChildAt(nestedGroup, 0) : undefined;
+  const nestedSecondCondition = nestedGroup ? conditionChildAt(nestedGroup, 1) : undefined;
 
   return (
     <>
@@ -570,9 +583,126 @@ function RuleFields({
           ))}
         </select>
       </label>
+      <fieldset className="logic-graph">
+        <legend>Logic graph</legend>
+        <div className="logic-graph-canvas">
+          <div className="logic-node logic-node-group logic-node-root">
+            <span className="logic-port logic-port-out" aria-hidden="true" />
+            <div className="logic-node-header">
+              <span className="logic-node-kicker">Root group</span>
+              <strong>Match mode</strong>
+            </div>
+            <label>
+              <span>Root match</span>
+              <select className="select" defaultValue={conditions?.combinator || "AND"} name="rootCombinator">
+                <option value="AND">All top-level conditions must match</option>
+                <option value="OR">Any top-level condition can match</option>
+              </select>
+            </label>
+          </div>
+          <div className="logic-branches">
+            <LogicConditionNode condition={primaryCondition} required title="Condition 1" />
+            <LogicConditionNode
+              condition={secondCondition}
+              enableName="condition2Enabled"
+              prefix="condition2"
+              title="Condition 2"
+            />
+            <div className="logic-node logic-node-group logic-node-nested">
+              <span className="logic-port logic-port-in" aria-hidden="true" />
+              <span className="logic-port logic-port-out" aria-hidden="true" />
+              <div className="logic-node-header">
+                <span className="logic-node-kicker">Nested group</span>
+                <label className="checkbox-field compact">
+                  <input
+                    defaultChecked={Boolean(nestedGroup)}
+                    name="nestedGroupEnabled"
+                    type="checkbox"
+                  />
+                  <span>Use group</span>
+                </label>
+              </div>
+              <label>
+                <span>Nested match</span>
+                <select className="select" defaultValue={nestedGroup?.combinator || "AND"} name="nestedCombinator">
+                  <option value="AND">All nested conditions must match</option>
+                  <option value="OR">Any nested condition can match</option>
+                </select>
+              </label>
+              <div className="logic-nested-stack">
+                <LogicConditionNode
+                  condition={nestedPrimaryCondition}
+                  prefix="nested1"
+                  title="Nested condition 1"
+                />
+                <LogicConditionNode
+                  condition={nestedSecondCondition}
+                  enableName="nested2Enabled"
+                  prefix="nested2"
+                  title="Nested condition 2"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+    </>
+  );
+}
+
+function LogicConditionNode({
+  condition,
+  enableName,
+  prefix,
+  required = false,
+  title
+}: {
+  condition?: ConditionLeaf;
+  enableName?: string;
+  prefix?: string;
+  required?: boolean;
+  title: string;
+}) {
+  return (
+    <div className={`logic-node logic-node-condition${enableName ? " optional" : ""}`}>
+      <span className="logic-port logic-port-in" aria-hidden="true" />
+      <div className="logic-node-header">
+        <div>
+          <span className="logic-node-kicker">Condition</span>
+          <strong>{title}</strong>
+        </div>
+        {enableName ? (
+          <label className="checkbox-field compact">
+            <input defaultChecked={Boolean(condition)} name={enableName} type="checkbox" />
+            <span>Use</span>
+          </label>
+        ) : (
+          <span className="rule-pill">required</span>
+        )}
+      </div>
+      <div className="logic-node-fields">
+        <ConditionInputs condition={condition} prefix={prefix} required={required} />
+      </div>
+    </div>
+  );
+}
+
+function ConditionInputs({
+  condition,
+  prefix = "",
+  required = false
+}: {
+  condition?: ConditionLeaf;
+  prefix?: string;
+  required?: boolean;
+}) {
+  const field = condition?.field || "filename";
+
+  return (
+    <>
       <label>
         <span>Match field</span>
-        <select className="select" defaultValue={field} name="field">
+        <select className="select" defaultValue={field} name={prefixedFieldName(prefix, "field")}>
           <option value="filename">Filename</option>
           <option value="file_type">File type</option>
           <option value="day_of_week">Day of week</option>
@@ -581,7 +711,11 @@ function RuleFields({
       </label>
       <label>
         <span>Operator</span>
-        <select className="select" defaultValue={operatorFormValue(condition)} name="operator">
+        <select
+          className="select"
+          defaultValue={operatorFormValue(condition)}
+          name={prefixedFieldName(prefix, "operator")}
+        >
           <optgroup label="Filename">
             <option value="contains">contains</option>
             <option value="starts_with">starts with</option>
@@ -600,6 +734,7 @@ function RuleFields({
             <option value="day_is_one_of">is one of</option>
           </optgroup>
           <optgroup label="Time">
+            <option value="time_between">between</option>
             <option value="time_before">before</option>
             <option value="time_after">after</option>
           </optgroup>
@@ -610,18 +745,18 @@ function RuleFields({
         <input
           className="input"
           defaultValue={condition ? ruleValueToInput(condition.value) : ""}
-          name="value"
+          name={prefixedFieldName(prefix, "value")}
           placeholder="Engineering, mp4, Mon, or 09:30"
-          required
+          required={required}
         />
         <small className="field-hint">
-          Use commas for “is one of”. Days use Mon, Tue, Wed. Times use HH:mm.
+          Use commas for “is one of”. Days use Mon, Tue, Wed. Times use HH:mm or HH:mm-HH:mm.
         </small>
       </label>
       <label className="checkbox-field">
         <input
           defaultChecked={condition?.caseSensitive || false}
-          name="caseSensitive"
+          name={prefixedFieldName(prefix, "caseSensitive")}
           type="checkbox"
         />
         <span>Case-sensitive filename matching</span>
@@ -684,6 +819,9 @@ async function createPipelineAction(formData: FormData) {
     PrivacyStatus.PUBLIC,
     PrivacyStatus.UNLISTED
   ]);
+  if (privacyStatus === PrivacyStatus.PUBLIC && !hasPublicPrivacyConfirmation(formData)) {
+    redirect("/pipelines?error=PublicPrivacyConfirmationRequired");
+  }
   const pollingIntervalMinutes = parsePollingIntervalMinutes(formData);
   if (!pollingIntervalMinutes) {
     redirect("/pipelines?error=InvalidPollingCadence");
@@ -806,6 +944,7 @@ async function updatePipelineAction(formData: FormData) {
       userId: access.userId
     },
     select: {
+      privacyStatus: true,
       sourceFolderId: true
     }
   });
@@ -815,6 +954,11 @@ async function updatePipelineAction(formData: FormData) {
   }
 
   const folderChanged = pipeline.sourceFolderId !== sourceFolderId;
+  const switchingToPublic =
+    pipeline.privacyStatus !== PrivacyStatus.PUBLIC && privacyStatus === PrivacyStatus.PUBLIC;
+  if (switchingToPublic && !hasPublicPrivacyConfirmation(formData)) {
+    redirect("/pipelines?error=PublicPrivacyConfirmationRequired");
+  }
 
   await prisma.pipeline.update({
     where: { id: pipelineId },
@@ -1039,7 +1183,7 @@ function getRequiredFormValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
 
-function getEnumValue<T extends string>(formData: FormData, key: string, values: T[]) {
+function getEnumValue<T extends string>(formData: FormData, key: string, values: readonly T[]) {
   const value = String(formData.get(key) || "");
   return values.includes(value as T) ? (value as T) : values[0];
 }
@@ -1075,23 +1219,22 @@ function parsePlaylistValue(value: string) {
   };
 }
 
-function firstCondition(node: Pipeline["rules"][number]["conditions"]): ConditionLeaf | undefined {
-  const [child] = node.children;
-  if (!child) {
-    return undefined;
-  }
-  if (child.type === "condition") {
-    return child;
-  }
-  return firstCondition(child);
+function conditionChildAt(group: ConditionGroup, index: number): ConditionLeaf | undefined {
+  return group.children.filter((child): child is ConditionLeaf => child.type === "condition")[index];
 }
 
-function conditionSummary(condition?: ConditionLeaf) {
-  if (!condition) {
-    return "No editable condition found.";
-  }
+function firstNestedGroup(group: ConditionGroup): ConditionGroup | undefined {
+  return group.children.find((child): child is ConditionGroup => child.type === "group");
+}
 
-  return `${condition.field.replaceAll("_", " ")} ${condition.operator.replaceAll("_", " ")} ${ruleValueToInput(condition.value)}.`;
+function conditionTreeSummary(group: ConditionGroup) {
+  const directConditions = group.children.filter((child) => child.type === "condition").length;
+  const nestedGroups = group.children.filter((child) => child.type === "group").length;
+  const parts = [`${group.combinator} group`, `${directConditions} condition${directConditions === 1 ? "" : "s"}`];
+  if (nestedGroups > 0) {
+    parts.push(`${nestedGroups} nested group${nestedGroups === 1 ? "" : "s"}`);
+  }
+  return `${parts.join(" with ")}.`;
 }
 
 function ruleValueToInput(value: ConditionLeaf["value"]) {
@@ -1121,35 +1264,80 @@ function operatorFormValue(condition?: ConditionLeaf) {
 }
 
 function buildConditionTree(formData: FormData) {
-  const field = getEnumValue<ConditionField>(formData, "field", [
+  const rootCombinator = getEnumValue(formData, "rootCombinator", ["AND", "OR"] as const);
+  const primaryCondition = parseConditionFromForm(formData);
+  if (!primaryCondition) {
+    return undefined;
+  }
+
+  const children: ConditionNode[] = [primaryCondition];
+
+  if (formData.get("condition2Enabled") === "on") {
+    const secondCondition = parseConditionFromForm(formData, "condition2");
+    if (!secondCondition) {
+      return undefined;
+    }
+    children.push(secondCondition);
+  }
+
+  if (formData.get("nestedGroupEnabled") === "on") {
+    const nestedPrimaryCondition = parseConditionFromForm(formData, "nested1");
+    if (!nestedPrimaryCondition) {
+      return undefined;
+    }
+
+    const nestedChildren: ConditionNode[] = [nestedPrimaryCondition];
+    if (formData.get("nested2Enabled") === "on") {
+      const nestedSecondCondition = parseConditionFromForm(formData, "nested2");
+      if (!nestedSecondCondition) {
+        return undefined;
+      }
+      nestedChildren.push(nestedSecondCondition);
+    }
+
+    children.push({
+      id: `group-${randomUUID()}`,
+      type: "group",
+      combinator: getEnumValue(formData, "nestedCombinator", ["AND", "OR"] as const),
+      children: nestedChildren
+    });
+  }
+
+  return {
+    id: `group-${randomUUID()}`,
+    type: "group" as const,
+    combinator: rootCombinator,
+    children
+  };
+}
+
+function parseConditionFromForm(formData: FormData, prefix = ""): ConditionLeaf | undefined {
+  const field = getEnumValue<ConditionField>(formData, prefixedFieldName(prefix, "field"), [
     "filename",
     "file_type",
     "day_of_week",
     "time_of_day"
   ]);
-  const operator = normalizeOperator(field, getRequiredFormValue(formData, "operator"));
-  const rawValue = getRequiredFormValue(formData, "value");
+  const operator = normalizeOperator(field, getRequiredFormValue(formData, prefixedFieldName(prefix, "operator")));
+  const rawValue = getRequiredFormValue(formData, prefixedFieldName(prefix, "value"));
   if (!rawValue) {
     return undefined;
   }
 
-  const condition: ConditionLeaf = {
+  return {
     id: `cond-${randomUUID()}`,
     type: "condition",
     field,
     operator,
     value: conditionValue(operator, rawValue),
-    ...(field === "filename" && formData.get("caseSensitive") === "on"
+    ...(field === "filename" && formData.get(prefixedFieldName(prefix, "caseSensitive")) === "on"
       ? { caseSensitive: true }
       : {})
   };
+}
 
-  return {
-    id: `group-${randomUUID()}`,
-    type: "group" as const,
-    combinator: "AND" as const,
-    children: [condition]
-  };
+function prefixedFieldName(prefix: string, key: string) {
+  return prefix ? `${prefix}${key[0].toUpperCase()}${key.slice(1)}` : key;
 }
 
 function normalizeOperator(field: ConditionField, rawOperator: string): ConditionOperator {
@@ -1162,7 +1350,7 @@ function normalizeOperator(field: ConditionField, rawOperator: string): Conditio
     filename: ["contains", "starts_with", "ends_with", "equals", "matches_wildcard", "matches_regex"],
     file_type: ["equals", "is_one_of"],
     day_of_week: ["is", "is_not", "is_one_of"],
-    time_of_day: ["before", "after"]
+    time_of_day: ["between", "before", "after"]
   };
 
   return allowed[field].includes(withoutPrefix as ConditionOperator)
@@ -1178,7 +1366,16 @@ function conditionValue(operator: ConditionOperator, value: string) {
       .filter(Boolean);
   }
 
+  if (operator === "between") {
+    const [start = "", end = ""] = value.split(/[-,]/).map((item) => item.trim());
+    return { start, end };
+  }
+
   return value;
+}
+
+function hasPublicPrivacyConfirmation(formData: FormData) {
+  return formData.get("publicPrivacyConfirmed") === "on";
 }
 
 function parsePollingIntervalMinutes(formData: FormData) {
@@ -1218,6 +1415,8 @@ function pipelineErrorMessage(error: string) {
     PipelineArchived: "This pipeline has been archived.",
     PipelineNotEnabled: "Enable the pipeline before running detection.",
     PipelineNotFound: "Pipeline not found.",
+    PublicPrivacyConfirmationRequired:
+      "Confirm that public uploads can be visible on YouTube before saving public privacy.",
     RuleNotFound: "Routing rule not found.",
     TokenRefreshFailed: "Google could not refresh the Drive token. Reconnect Drive and try again.",
     DriveListFailed: "Google Drive could not list files in this folder."
