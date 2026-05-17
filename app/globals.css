@@ -1,14 +1,14 @@
 :root {
   color-scheme: light;
-  --bg: #fafaf9;
-  --surface: #ffffff;
-  --surface-muted: #f5f5f4;
-  --surface-raised: #ffffff;
+  --bg: #f6f1ed;
+  --surface: #fffdfb;
+  --surface-muted: #eee8e2;
+  --surface-raised: #fffaf6;
   --ink: #0c0a09;
-  --muted: #78716c;
-  --subtle: #a8a29e;
-  --line: #e5e7eb;
-  --line-strong: #d6d3d1;
+  --muted: #746c64;
+  --subtle: #a79c92;
+  --line: #e2d9d0;
+  --line-strong: #cfc3b9;
   --blue: #3ba6f1;
   --blue-ink: #075985;
   --blue-soft: #e0f2fe;
@@ -21,10 +21,10 @@
   --violet: #7c3aed;
   --violet-soft: #ede9fe;
   --teal: #0f766e;
-  --shadow: 0 20px 60px rgba(28, 25, 23, 0.06);
-  --shadow-tight: 0 1px 2px rgba(28, 25, 23, 0.06);
-  --shadow-md: 0 4px 16px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
-  --shadow-lg: 0 12px 32px rgba(28, 25, 23, 0.08), 0 2px 6px rgba(28, 25, 23, 0.04);
+  --shadow: 0 22px 70px rgba(80, 61, 47, 0.08);
+  --shadow-tight: 0 1px 2px rgba(80, 61, 47, 0.08);
+  --shadow-md: 0 4px 16px rgba(80, 61, 47, 0.08), 0 1px 2px rgba(80, 61, 47, 0.05);
+  --shadow-lg: 0 16px 42px rgba(80, 61, 47, 0.12), 0 2px 6px rgba(80, 61, 47, 0.06);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-spring: cubic-bezier(0.18, 0.9, 0.24, 1);
   --dur-fast: 140ms;
@@ -85,7 +85,8 @@ body {
 body {
   margin: 0;
   background:
-    linear-gradient(180deg, var(--surface) 0, var(--bg) 280px),
+    radial-gradient(48% 40% at 72% 4%, rgba(59, 166, 241, 0.08), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, var(--bg)) 0, var(--bg) 300px),
     var(--bg);
   color: var(--ink);
   font-family:
@@ -141,7 +142,7 @@ textarea {
 }
 
 .sidebar {
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
   border-right: 1px solid var(--line);
   color: var(--ink);
   display: flex;
@@ -264,7 +265,8 @@ textarea {
 
 .nav {
   display: grid;
-  gap: 8px;
+  gap: 7px;
+  margin-bottom: auto;
 }
 
 .nav a {
@@ -274,8 +276,15 @@ textarea {
   color: var(--muted);
   display: flex;
   gap: 10px;
-  min-height: 38px;
-  padding: 9px 10px;
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.nav a span {
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .nav a:hover,
@@ -317,7 +326,7 @@ textarea {
   border-top: 1px solid var(--line);
   display: grid;
   gap: 8px;
-  margin-top: auto;
+  margin-top: 14px;
   padding-top: 14px;
 }
 
@@ -332,12 +341,12 @@ textarea {
 
 .topbar {
   align-items: center;
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
-  min-height: 72px;
-  padding: 16px 28px;
+  min-height: 120px;
+  padding: 24px 34px;
   position: sticky;
   top: 0;
   z-index: 10;
@@ -556,9 +565,10 @@ html[data-privacy="on"] input[data-private] {
 }
 
 .topbar h1 {
-  font-size: 20px;
+  font-family: var(--font-serif-loaded), Georgia, serif;
+  font-size: clamp(28px, 3vw, 42px);
   font-weight: 560;
-  line-height: 1.2;
+  line-height: 1.05;
   margin: 0;
   view-transition-name: page-title;
 }
@@ -570,14 +580,18 @@ html[data-privacy="on"] input[data-private] {
 }
 
 .content {
-  padding: 28px;
+  margin: 0 auto;
+  max-width: 1480px;
+  padding: 34px;
+  width: 100%;
 }
 
 .metric-grid {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 18px;
+  margin: 0 auto 26px;
+  max-width: 1180px;
 }
 
 .metric {
@@ -595,7 +609,8 @@ html[data-privacy="on"] input[data-private] {
   border-radius: 8px;
   box-shadow: var(--shadow-tight);
   overflow: hidden;
-  padding: 15px;
+  min-height: 106px;
+  padding: 18px;
   position: relative;
 }
 
@@ -664,8 +679,11 @@ html[data-privacy="on"] input[data-private] {
   align-items: center;
   color: var(--muted);
   display: inline-flex;
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: 760;
   gap: 7px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .metric span i {
@@ -693,7 +711,8 @@ html[data-privacy="on"] input[data-private] {
 .metric strong {
   color: color-mix(in srgb, var(--metric-accent) 70%, var(--ink));
   display: block;
-  font-size: 30px;
+  font-family: var(--font-serif-loaded), Georgia, serif;
+  font-size: 40px;
   font-weight: 520;
   letter-spacing: 0;
   line-height: 1.05;
@@ -759,13 +778,15 @@ html[data-privacy="on"] input[data-private] {
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin: 0 auto 18px;
+  max-width: 1180px;
 }
 
 .filter-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  justify-content: flex-end;
 }
 
 .view-toolbar {
@@ -822,10 +843,17 @@ html[data-privacy="on"] input[data-private] {
 }
 
 .tabs {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface-muted) 80%, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-tight);
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: 4px;
+  margin-bottom: 0;
+  padding: 5px;
+  width: fit-content;
 }
 
 .tab,
@@ -927,7 +955,7 @@ html[data-privacy="on"] input[data-private] {
 .input,
 .textarea {
   background: var(--surface);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--ink);
   min-height: 38px;
@@ -1034,6 +1062,9 @@ html[data-privacy="on"] input[data-private] {
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: var(--shadow);
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 1180px;
   overflow: hidden;
 }
 
@@ -1221,10 +1252,11 @@ td {
 }
 
 th {
-  background: var(--surface-muted);
+  background: color-mix(in srgb, var(--surface-muted) 74%, var(--surface));
   color: var(--muted);
   font-size: 11px;
-  font-weight: 620;
+  font-weight: 760;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
