@@ -23,6 +23,19 @@
   --teal: #0f766e;
   --shadow: 0 20px 60px rgba(28, 25, 23, 0.06);
   --shadow-tight: 0 1px 2px rgba(28, 25, 23, 0.06);
+  --shadow-md: 0 4px 16px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-lg: 0 12px 32px rgba(28, 25, 23, 0.08), 0 2px 6px rgba(28, 25, 23, 0.04);
+  --accent: var(--blue);
+  --accent-ink: var(--blue-ink);
+  --accent-soft: var(--blue-soft);
+  --success: var(--green);
+  --success-soft: var(--green-soft);
+  --warning: var(--amber);
+  --warning-soft: var(--amber-soft);
+  --danger: var(--red);
+  --danger-soft: var(--red-soft);
+  --info: var(--violet);
+  --info-soft: var(--violet-soft);
 }
 
 :root[data-theme="dark"] {
@@ -50,6 +63,8 @@
   --teal: #5eead4;
   --shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
   --shadow-tight: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.28);
 }
 
 * {
@@ -1627,7 +1642,8 @@ td strong {
 
 .landing-hero {
   background:
-    radial-gradient(circle at 80% 20%, rgba(59, 166, 241, 0.16), transparent 32%),
+    radial-gradient(60% 50% at 80% 20%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    radial-gradient(50% 42% at 18% 100%, color-mix(in srgb, var(--info) 12%, transparent), transparent 62%),
     linear-gradient(
       180deg,
       color-mix(in srgb, var(--surface) 96%, transparent),
@@ -1687,10 +1703,22 @@ td strong {
 }
 
 .eyebrow {
+  align-items: center;
   color: var(--blue-ink);
+  display: inline-flex;
   font-size: 13px;
   font-weight: 650;
+  gap: 8px;
   margin: 0 0 16px;
+}
+
+.eyebrow::before {
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  content: "";
+  height: 6px;
+  width: 6px;
 }
 
 .landing-copy h1 {
@@ -1824,12 +1852,247 @@ td strong {
 }
 
 .scene-topline {
-  background: linear-gradient(90deg, transparent, rgba(59, 166, 241, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 48%, transparent), transparent);
   height: 1px;
   left: 8%;
   position: absolute;
   right: 8%;
   top: 86px;
+}
+
+.routing-demo {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: blur(20px) saturate(170%);
+  border: 1px solid color-mix(in srgb, var(--ink) 6%, var(--line));
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, #ffffff 6%, transparent) inset,
+    var(--shadow);
+  display: grid;
+  gap: 12px;
+  isolation: isolate;
+  max-width: 460px;
+  overflow: hidden;
+  padding: 24px;
+  position: relative;
+  width: 100%;
+}
+
+.routing-demo::before {
+  background: radial-gradient(
+    60% 50% at 50% -10%,
+    color-mix(in srgb, var(--accent) 14%, transparent),
+    transparent 70%
+  );
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+
+.routing-node {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.routing-node[data-active="true"] {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.routing-node-label {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 8px;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.routing-node-glyph {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  display: inline-flex;
+  font-size: 10px;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+
+.routing-file,
+.routing-landing {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  font-size: 13px;
+  font-weight: 580;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.routing-file > span,
+.routing-landing > span:nth-child(2),
+.routing-rule-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routing-file.is-arrived {
+  animation: routing-pop-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.routing-landing {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease;
+}
+
+.routing-landing.is-landed {
+  animation: routing-pop-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.routing-landing svg {
+  color: var(--success);
+}
+
+.routing-connector {
+  align-items: center;
+  color: var(--line-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 24px;
+  justify-self: center;
+  transition: color 200ms ease;
+  width: 100%;
+}
+
+.routing-connector[data-active="true"] {
+  color: var(--accent);
+}
+
+.routing-connector-line {
+  background-image: linear-gradient(to bottom, currentColor 0 4px, transparent 4px 9px);
+  background-repeat: repeat-y;
+  background-size: 100% 9px;
+  display: block;
+  height: 18px;
+  opacity: 0.55;
+  width: 2px;
+}
+
+.routing-connector[data-active="true"] .routing-connector-line {
+  animation: routing-flow 0.9s linear infinite;
+  opacity: 1;
+}
+
+.routing-connector-arrow {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  display: block;
+  opacity: 0.55;
+}
+
+.routing-connector[data-active="true"] .routing-connector-arrow {
+  opacity: 1;
+}
+
+.routing-rules {
+  display: grid;
+  gap: 4px;
+}
+
+.routing-rule {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  gap: 10px;
+  grid-template-columns: 56px minmax(0, 1fr);
+  padding: 6px 10px;
+  transition:
+    background 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+
+.routing-rule-token {
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  border-radius: 4px;
+  color: var(--subtle);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 4px;
+  text-align: center;
+}
+
+.routing-rule[data-matched="true"] {
+  background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  color: var(--ink);
+}
+
+.routing-rule[data-matched="true"] .routing-rule-token {
+  animation: routing-match-pulse 1.2s ease;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+@keyframes routing-flow {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 0 18px;
+  }
+}
+
+@keyframes routing-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes routing-match-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+
+  40% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
 }
 
 .route-field {
@@ -2126,6 +2389,10 @@ td strong {
 
 @media (prefers-reduced-motion: reduce) {
   .route-line::after,
+  .routing-connector[data-active="true"] .routing-connector-line,
+  .routing-file.is-arrived,
+  .routing-landing.is-landed,
+  .routing-rule[data-matched="true"] .routing-rule-token,
   .metric,
   .metric::before,
   .metric::after,
@@ -2162,6 +2429,10 @@ td strong {
   border: 1px solid var(--line);
   min-height: 168px;
   padding: 22px;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .landing-workflow article:first-child {
@@ -2172,8 +2443,14 @@ td strong {
   border-radius: 0 8px 8px 0;
 }
 
+.landing-workflow article:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line-strong));
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
 .landing-workflow span {
-  color: var(--blue);
+  color: var(--accent);
   font-size: 12px;
   font-weight: 740;
 }
@@ -2205,6 +2482,9 @@ td strong {
   border: 1px solid var(--line);
   min-height: 190px;
   padding: 22px;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .landing-proof article:first-child {
@@ -2216,7 +2496,17 @@ td strong {
 }
 
 .landing-proof svg {
-  color: var(--blue);
+  background: var(--accent-soft);
+  border-radius: 8px;
+  box-sizing: content-box;
+  color: var(--accent-ink);
+  padding: 8px;
+}
+
+.landing-proof article:hover,
+.landing-reliability article:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
 }
 
 .landing-proof h2,
@@ -2261,7 +2551,7 @@ td strong {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
@@ -2282,6 +2572,12 @@ td strong {
   padding: 5px 9px;
 }
 
+.product-board-toolbar span:first-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
 .product-board-row {
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -2296,7 +2592,7 @@ td strong {
 }
 
 .product-board-row svg {
-  color: var(--blue);
+  color: var(--accent);
 }
 
 .product-board-row strong,
@@ -2367,7 +2663,12 @@ td strong {
 
 .rule-builder-action {
   align-items: center;
-  border: 1px solid var(--line);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--danger) 8%, var(--surface)),
+    var(--surface)
+  );
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, var(--line));
   border-radius: 8px;
   color: var(--ink);
   display: flex;
@@ -2392,10 +2693,17 @@ td strong {
   border-radius: 8px;
   min-height: 190px;
   padding: 22px;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .landing-reliability svg {
-  color: var(--blue);
+  background: var(--accent-soft);
+  border-radius: 8px;
+  box-sizing: content-box;
+  color: var(--accent-ink);
+  padding: 8px;
 }
 
 .landing-reliability h2 {
@@ -2411,13 +2719,20 @@ td strong {
 
 .landing-next {
   align-items: center;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 8%, var(--surface)),
+    var(--surface)
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 8px;
   display: flex;
   gap: 24px;
   justify-content: space-between;
   margin-top: 76px;
   margin-bottom: 72px;
   max-width: 1180px;
-  padding: 0 clamp(18px, 5vw, 0px);
+  padding: clamp(22px, 4vw, 40px);
 }
 
 .landing-next div {
@@ -2768,6 +3083,15 @@ td strong {
 
   .landing-lede {
     font-size: 17px;
+  }
+
+  .routing-demo {
+    max-width: 100%;
+    padding: 16px;
+  }
+
+  .routing-rule {
+    grid-template-columns: 48px minmax(0, 1fr);
   }
 
   .hero-product-card {

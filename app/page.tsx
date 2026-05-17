@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AccessModal } from "@/components/auth/AccessModal";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
+import { RoutingDemo } from "@/components/landing/RoutingDemo";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signIn } from "@/auth";
 
@@ -44,13 +45,6 @@ const workflow = [
   { label: "Evaluate rules", detail: "Run first-match-wins routing with a full trace." },
   { label: "Upload safely", detail: "Send videos to YouTube as unlisted by default." },
   { label: "Recover issues", detail: "Approve, retry, route, skip, or mark handled." }
-];
-
-const queueStates = [
-  ["Needs approval", "1"],
-  ["Needs routing", "1"],
-  ["Failed", "1"],
-  ["Uploaded", "1"]
 ];
 
 async function signInWithGoogle() {
@@ -140,47 +134,7 @@ export default async function Home({
             </div>
           </div>
 
-          <div className="scene-dashboard hero-product-card" aria-hidden="true">
-            <div className="scene-head">
-              <RelayRoomLogo />
-              <span>Operations queue</span>
-            </div>
-            <div className="scene-main">
-              <div className="scene-metrics">
-                {queueStates.map(([label, value]) => (
-                  <div className="scene-metric" key={label}>
-                    <small>{label}</small>
-                    <strong>{value}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="scene-table">
-                {heroRows.map((row) => (
-                  <div className="scene-row" key={row.file}>
-                    <div>
-                      <strong>{row.file}</strong>
-                      <small>{row.pipeline}</small>
-                    </div>
-                    <span className="status-chip" data-tone={row.tone}>
-                      <i />
-                      {row.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="scene-decision">
-                <div>
-                  <span>Rule matched</span>
-                  <strong>Engineering Standup</strong>
-                </div>
-                <ArrowRight aria-hidden="true" size={16} />
-                <div>
-                  <span>Playlist</span>
-                  <strong>Engineering Standups</strong>
-                </div>
-              </div>
-            </div>
-          </div>
+          <RoutingDemo />
         </div>
       </section>
 
