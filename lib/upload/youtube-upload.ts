@@ -33,6 +33,10 @@ interface YouTubePlaylistInsertResponse extends GoogleApiError {
   id?: string;
 }
 
+interface YouTubeVideosListResponse extends GoogleApiError {
+  items?: Array<{ id?: string }>;
+}
+
 const maxMvpUploadBytes = 256 * 1024 * 1024;
 const uploadableStatuses = new Set<QueueStatus>([
   QueueStatus.DETECTED,
@@ -144,18 +148,33 @@ export async function uploadQueueItemToYouTube({
     }
 
     if (item.youtubeVideoId && !item.youtubePlaylistId) {
-      await addVideoToPlaylist({
+      const existingVideoStillExists = await verifyYouTubeVideoExists({
         accessToken: youtubeAccessToken,
-        playlistId: item.intendedPlaylistId,
         videoId: item.youtubeVideoId
       });
+      if (!existingVideoStillExists) {
+        await prisma.queueItem.update({
+          where: { id: item.id },
+          data: {
+            youtubeUrl: null,
+            youtubeVideoId: null
+          }
+        });
+      } else {
+        await addVideoToPlaylist({
+          accessToken: youtubeAccessToken,
+          playlistId: item.intendedPlaylistId,
+          videoId: item.youtubeVideoId
+        });
 
-      return markUploadComplete({
-        itemId: item.id,
-        playlistId: item.intendedPlaylistId,
-        userId,
-        videoId: item.youtubeVideoId
-      });
+        return markUploadComplete({
+          attemptId: attempt.id,
+          itemId: item.id,
+          playlistId: item.intendedPlaylistId,
+          userId,
+          videoId: item.youtubeVideoId
+        });
+      }
     }
 
     const file = await downloadDriveFile({
@@ -178,6 +197,11 @@ export async function uploadQueueItemToYouTube({
       title: item.renderedTitle || item.filename
     });
 
+    await requireVerifiedYouTubeVideo({
+      accessToken: youtubeAccessToken,
+      videoId
+    });
+
     await addVideoToPlaylist({
       accessToken: youtubeAccessToken,
       playlistId: item.intendedPlaylistId,
@@ -197,7 +221,7 @@ export async function uploadQueueItemToYouTube({
     const lastError = error instanceof Error ? error.message : "Upload failed.";
     const finishedAt = new Date();
     const partialVideoId =
-      error instanceof PlaylistInsertAfterUploadError ? error.videoId : undefined;
+      error instanceof PostVideoUploadError ? error.videoId : undefined;
     const youtubeUrl = partialVideoId
       ? `https://www.youtube.com/watch?v=${partialVideoId}`
       : undefined;
@@ -570,6 +594,51 @@ async function addVideoToPlaylist({
   }
 }
 
+async function requireVerifiedYouTubeVideo({
+  accessToken,
+  videoId
+}: {
+  accessToken: string;
+  videoId: string;
+}) {
+  const exists = await verifyYouTubeVideoExists({ accessToken, videoId });
+  if (!exists) {
+    throw new PostVideoUploadError(
+      new ClassifiedUploadError(
+        "YouTube upload verification failed. Google did not return the uploaded video.",
+        FailureReason.UNKNOWN
+      ),
+      videoId
+    );
+  }
+}
+
+async function verifyYouTubeVideoExists({
+  accessToken,
+  videoId
+}: {
+  accessToken: string;
+  videoId: string;
+}) {
+  const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+  url.searchParams.set("id", videoId);
+  url.searchParams.set("part", "id");
+
+  const response = await fetchWithTransientRetries(url, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const payload = await readGoogleJson<YouTubeVideosListResponse>(
+    response,
+    "YouTube upload verification failed."
+  );
+
+  if (!response.ok || payload.error) {
+    throw classifyGoogleError(payload, "YouTube upload verification failed.");
+  }
+
+  return Boolean(payload.items?.some((item) => item.id === videoId));
+}
+
 function classifyGoogleError(payload: GoogleApiError, fallbackMessage: string) {
   const reason = payload.error?.errors?.[0]?.reason;
   const message = payload.error?.message || fallbackMessage;
@@ -669,12 +738,19 @@ class ClassifiedUploadError extends Error {
   }
 }
 
-class PlaylistInsertAfterUploadError extends ClassifiedUploadError {
+class PostVideoUploadError extends ClassifiedUploadError {
   constructor(
     error: ClassifiedUploadError,
     readonly videoId: string
   ) {
     super(error.message, error.reason);
+    this.name = "PostVideoUploadError";
+  }
+}
+
+class PlaylistInsertAfterUploadError extends PostVideoUploadError {
+  constructor(error: ClassifiedUploadError, videoId: string) {
+    super(error, videoId);
     this.name = "PlaylistInsertAfterUploadError";
   }
 }
