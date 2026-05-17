@@ -8,6 +8,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { AppShell } from "@/components/layout/AppShell";
+import { EmptyState } from "@/components/empty/EmptyState";
 import { WorkspaceUserFilter } from "@/components/workspace/WorkspaceUserFilter";
 import {
   ArchivedPipelineControls,
@@ -272,14 +273,15 @@ export default async function PipelinesPage({
             </div>
           ))}
           {pipelines.length === 0 ? (
-            <div className="empty-state">
-              <strong>{showingArchived ? "No archived pipelines yet." : "No pipelines yet."}</strong>
-              <p>
-                {showingArchived
+            <EmptyState
+              illustration="pipeline"
+              title={showingArchived ? "No archived pipelines yet" : "No pipelines yet"}
+              body={
+                showingArchived
                   ? "Pipelines you archive will show here for reference."
-                  : "Use the new pipeline form above to create your first watched-folder pipeline."}
-              </p>
-            </div>
+                  : "Use the new pipeline form above to create your first watched-folder pipeline."
+              }
+            />
           ) : null}
         </section>
         <aside className="stack">

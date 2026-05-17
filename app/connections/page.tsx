@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
+import { EmptyState } from "@/components/empty/EmptyState";
 import { ConnectionActions } from "@/components/connections/ConnectionActions";
 import { WorkspaceUserFilter } from "@/components/workspace/WorkspaceUserFilter";
 import { requireAppAccess } from "@/lib/auth/account";
@@ -132,10 +133,11 @@ export default async function ConnectionsPage({
           </tbody>
         </table>
         {connections.length === 0 ? (
-          <div className="empty-state">
-            <strong>No connections yet.</strong>
-            <p>Connect Drive and YouTube accounts to start building real pipelines.</p>
-          </div>
+          <EmptyState
+            illustration="connection"
+            title="No accounts connected yet"
+            body="Link Drive and YouTube to begin routing recordings. You can use separate accounts for source and destination."
+          />
         ) : null}
       </div>
     </AppShell>

@@ -314,6 +314,18 @@ textarea {
   transform: translateY(-1px);
 }
 
+.account-menu[data-open="true"] .account-badge {
+  border-color: var(--line-strong);
+}
+
+.account-badge-chevron {
+  transition: transform 140ms ease;
+}
+
+.account-menu[data-open="true"] .account-badge-chevron {
+  transform: rotate(180deg);
+}
+
 .account-badge img,
 .account-badge > span {
   border-radius: 999px;
@@ -998,6 +1010,182 @@ tr:last-child td {
 .empty-state p {
   color: var(--muted);
   margin: 0;
+}
+
+.empty-state-rich {
+  align-items: center;
+  display: grid;
+  justify-items: center;
+}
+
+.empty-state-art {
+  color: color-mix(in srgb, var(--blue) 72%, var(--muted));
+  height: 96px;
+  margin-bottom: 8px;
+  opacity: 0.78;
+  width: 144px;
+}
+
+.empty-state-art svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.empty-state-action {
+  margin-top: 14px;
+}
+
+.error-state {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+  margin: 10vh auto;
+  max-width: 720px;
+  padding: 28px;
+}
+
+.error-state-art {
+  color: color-mix(in srgb, var(--red) 74%, var(--muted));
+  height: 88px;
+  width: 148px;
+}
+
+.error-state-art svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.error-state-eyebrow {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.error-state > strong {
+  font-size: 28px;
+  line-height: 1.12;
+}
+
+.error-state > p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.error-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.error-state-detail {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 4px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+}
+
+.error-state-detail code {
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error-state-detail span {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.global-error-shell {
+  min-height: 100vh;
+  padding: 48px 24px;
+}
+
+.skeleton {
+  animation: skeletonPulse 1.3s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--surface-muted),
+    color-mix(in srgb, var(--surface-muted) 60%, var(--surface)),
+    var(--surface-muted)
+  );
+  background-size: 220% 100%;
+  border-radius: 8px;
+  display: block;
+}
+
+.skeleton-title {
+  height: 26px;
+}
+
+.skeleton-line {
+  height: 14px;
+  margin-top: 10px;
+}
+
+.skeleton-pill {
+  border-radius: 999px;
+  height: 40px;
+  width: 168px;
+}
+
+.skeleton-card {
+  height: 110px;
+}
+
+.skeleton-panel {
+  height: 220px;
+}
+
+.skeleton-side-panel {
+  height: 170px;
+}
+
+.skeleton-table {
+  display: grid;
+  gap: 1px;
+  padding: 0;
+}
+
+.skeleton-table-head {
+  border-radius: 0;
+  height: 42px;
+}
+
+.skeleton-row {
+  border-radius: 0;
+  height: 58px;
+}
+
+@keyframes skeletonPulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 td strong {

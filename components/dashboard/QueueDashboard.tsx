@@ -15,6 +15,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { QueueItem, QueueStatus } from "@/lib/domain/types";
+import { EmptyState } from "@/components/empty/EmptyState";
 import { displayWorkspaceUser } from "@/lib/workspace/users";
 
 type QueueTab = "all" | QueueStatus;
@@ -287,14 +288,15 @@ export function QueueDashboard({
           </tbody>
         </table>
         {visibleItems.length === 0 ? (
-          <div className="empty-state">
-            <strong>{items.length === 0 ? "No queue items yet." : "No queue items match these filters."}</strong>
-            <p>
-              {items.length === 0
+          <EmptyState
+            illustration={items.length === 0 ? "queue" : "filter"}
+            title={items.length === 0 ? "No queue items yet" : "No queue items match these filters"}
+            body={
+              items.length === 0
                 ? "Connect accounts and create a pipeline to start detecting recordings."
-                : "Try another status tab or switch back to all pipelines."}
-            </p>
-          </div>
+                : "Try another status tab or switch back to all pipelines."
+            }
+          />
         ) : null}
       </div>
     </>
