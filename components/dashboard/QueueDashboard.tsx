@@ -13,9 +13,10 @@ import {
   X
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { QueueItem, QueueStatus } from "@/lib/domain/types";
 import { EmptyState } from "@/components/empty/EmptyState";
+import { useToast } from "@/components/toast/ToastContext";
 import { displayWorkspaceUser } from "@/lib/workspace/users";
 
 type QueueTab = "all" | QueueStatus;
@@ -26,12 +27,6 @@ type QueueActionPayload = {
   playlistName?: string;
   youtubeUrl?: string;
 };
-type ActionState =
-  | {
-      message: string;
-      tone: "danger" | "success";
-    }
-  | undefined;
 type QueueDetails = {
   activityLog?: Array<{
     actor: string;
@@ -77,7 +72,7 @@ export function QueueDashboard({
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
   const [pipelineFilter, setPipelineFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("detected_desc");
-  const [state, setState] = useState<ActionState>();
+  const { toast } = useToast();
   const [busyAction, setBusyAction] = useState<{ itemId: string; action: QueueAction } | null>(
     null
   );
@@ -129,7 +124,6 @@ export function QueueDashboard({
     }
 
     setBusyAction({ itemId: item.id, action });
-    setState(undefined);
 
     try {
       const response = await fetch(`/api/queue/${encodeURIComponent(item.id)}/actions`, {
@@ -146,15 +140,16 @@ export function QueueDashboard({
         throw new Error(queueActionErrorMessage(payload.error));
       }
 
-      setState({
+      toast({
         tone: "success",
-        message: payload.message || "Queue item updated."
+        title: payload.message || "Queue item updated"
       });
       router.refresh();
     } catch (error) {
-      setState({
+      toast({
         tone: "danger",
-        message: error instanceof Error ? error.message : "Queue action failed."
+        title: "Queue action failed",
+        body: error instanceof Error ? error.message : undefined
       });
     } finally {
       setBusyAction(null);
@@ -183,9 +178,10 @@ export function QueueDashboard({
 
       setDetails(payload);
     } catch (error) {
-      setState({
+      toast({
         tone: "danger",
-        message: error instanceof Error ? error.message : "Unable to load queue details."
+        title: "Couldn't load queue details",
+        body: error instanceof Error ? error.message : undefined
       });
     } finally {
       setDetailsState("idle");
@@ -250,12 +246,6 @@ export function QueueDashboard({
         </div>
       </section>
 
-      {state ? (
-        <div className={`notice ${state.tone}`} role={state.tone === "danger" ? "alert" : "status"}>
-          {state.message}
-        </div>
-      ) : null}
-
       <div className="table-wrap responsive-table-wrap">
         <table className="responsive-table">
           <thead>
@@ -288,15 +278,19 @@ export function QueueDashboard({
           </tbody>
         </table>
         {visibleItems.length === 0 ? (
-          <EmptyState
-            illustration={items.length === 0 ? "queue" : "filter"}
-            title={items.length === 0 ? "No queue items yet" : "No queue items match these filters"}
-            body={
-              items.length === 0
-                ? "Connect accounts and create a pipeline to start detecting recordings."
-                : "Try another status tab or switch back to all pipelines."
-            }
-          />
+          items.length === 0 ? (
+            <EmptyState
+              illustration="queue"
+              title="The queue is empty"
+              body="Recordings detected in Drive folders appear here. Connect accounts and create a pipeline to start."
+            />
+          ) : (
+            <EmptyState
+              illustration="filter"
+              title="Nothing matches these filters"
+              body="Try another status tab, sort order, or pipeline filter."
+            />
+          )
         ) : null}
       </div>
     </>
@@ -711,19 +705,31 @@ function QueueDetailsPanel({
   return (
     <div className="queue-detail-panel">
       <div className="queue-detail-header">
-        <div>
-          <span className="eyebrow">Queue details</span>
+        <div className="queue-detail-title">
+          <span className="topbar-eyebrow">Queue details</span>
           <h2 data-private>{item.filename}</h2>
+          <span className={`badge ${item.status}`}>
+            {item.status.replaceAll("_", " ")}
+          </span>
         </div>
-        <button className="icon-button" onClick={onClose} type="button">
+        <button
+          aria-label="Close details"
+          className="icon-button"
+          onClick={onClose}
+          type="button"
+        >
           <X aria-hidden="true" size={16} />
         </button>
       </div>
 
-      {isLoading ? <UploadProgressBar /> : null}
+      {isLoading ? (
+        <div aria-busy="true" aria-label="Loading details" className="detail-loading-skeleton">
+          <span className="skeleton line-sm" style={{ width: "30%" }} />
+          <span className="skeleton line" style={{ width: "70%" }} />
+        </div>
+      ) : null}
 
       <div className="detail-grid">
-        <Detail label="Status" value={item.status.replaceAll("_", " ")} />
         <Detail isPrivate label="Pipeline" value={item.pipelineName} />
         <Detail isPrivate label="User" value={displayWorkspaceUser(item.owner)} />
         <Detail isPrivate label="Drive file" value={item.driveFileId} />
@@ -741,27 +747,44 @@ function QueueDetailsPanel({
 
       <div className="detail-columns">
         <section className="detail-section">
-          <h3>Upload attempts</h3>
+          <h3>
+            Upload attempts
+            {attempts.length ? (
+              <span className="detail-section-count">{attempts.length}</span>
+            ) : null}
+          </h3>
           {attempts.length ? (
             <div className="attempt-list">
               {attempts.map((attempt) => (
                 <div className="attempt-item" key={attempt.attemptNumber}>
-                  <div>
-                    <strong>Attempt {attempt.attemptNumber}</strong>
-                    <span>{attempt.success ? "Succeeded" : attempt.failureReason || "Failed"}</span>
+                  <span className="attempt-index" aria-hidden="true">
+                    {attempt.attemptNumber}
+                  </span>
+                  <div className="attempt-content">
+                    <div>
+                      <strong>{attempt.success ? "Succeeded" : "Failed"}</strong>
+                      <span>
+                        {attempt.success ? "Upload complete" : attempt.failureReason || "Reason unknown"}
+                      </span>
+                    </div>
+                    <time>{formatAbsolute(attempt.finishedAt || attempt.startedAt)}</time>
+                    {attempt.rawError ? <p>{attempt.rawError}</p> : null}
                   </div>
-                  <time>{formatAbsolute(attempt.finishedAt || attempt.startedAt)}</time>
-                  {attempt.rawError ? <p>{attempt.rawError}</p> : null}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="muted">No upload attempts yet.</p>
+            <p className="detail-section-empty">No upload attempts yet.</p>
           )}
         </section>
 
         <section className="detail-section">
-          <h3>Activity</h3>
+          <h3>
+            Activity
+            {activityLog.length ? (
+              <span className="detail-section-count">{activityLog.length}</span>
+            ) : null}
+          </h3>
           {activityLog.length ? (
             <ol className="timeline">
               {activityLog.map((entry, index) => (
@@ -773,7 +796,7 @@ function QueueDetailsPanel({
               ))}
             </ol>
           ) : (
-            <p className="muted">No activity recorded yet.</p>
+            <p className="detail-section-empty">No activity recorded yet.</p>
           )}
         </section>
       </div>
@@ -807,15 +830,57 @@ function Metric({
   tone: "approval" | "failed" | "routing" | "uploaded";
   value: number;
 }) {
+  const needsAttention =
+    (tone === "approval" || tone === "routing" || tone === "failed") && value > 0;
   return (
-    <div className="metric" data-tone={tone}>
+    <div className="metric" data-attention={needsAttention} data-tone={tone}>
       <span>
         <i aria-hidden="true" />
         {label}
       </span>
-      <strong>{value}</strong>
+      <strong>
+        <CountUp value={value} />
+      </strong>
     </div>
   );
+}
+
+function CountUp({ duration = 700, value }: { duration?: number; value: number }) {
+  const [display, setDisplay] = useState(value);
+  const latestValue = useRef(value);
+
+  useEffect(() => {
+    latestValue.current = value;
+    if (typeof window === "undefined") {
+      setDisplay(value);
+      return;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setDisplay(value);
+      return;
+    }
+
+    let frame = 0;
+    const start = performance.now();
+    const from = display;
+
+    function tick(now: number) {
+      const elapsed = now - start;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(from + (latestValue.current - from) * eased));
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+      }
+    }
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+    // display is intentionally sampled at animation start.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, value]);
+
+  return <>{display}</>;
 }
 
 function count(items: QueueItem[], status: QueueStatus): number {

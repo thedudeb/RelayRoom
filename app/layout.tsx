@@ -1,6 +1,27 @@
 import type { Metadata } from "next";
+import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
+import { ToastProvider } from "@/components/toast/ToastContext";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans-loaded",
+  display: "swap"
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-serif-loaded",
+  display: "swap",
+  axes: ["opsz", "SOFT"]
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-loaded",
+  display: "swap"
+});
 
 export const metadata: Metadata = {
   title: "RelayRoom",
@@ -16,7 +37,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}
+    >
       <body>
         <Script id="theme-init" strategy="beforeInteractive">
           {`
@@ -30,7 +55,7 @@ export default function RootLayout({
             } catch (error) {}
           `}
         </Script>
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
