@@ -1,4 +1,4 @@
-import { GitBranch, ListChecks, PlugZap, Settings } from "lucide-react";
+import { CircleHelp, Eye, GitBranch, ListChecks, Moon, PlugZap, Settings } from "lucide-react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 
 const navItems = [
@@ -24,6 +24,7 @@ export function SkeletonShell({
           <RelayRoomLogo />
           <span>Drive to YouTube operations</span>
         </div>
+        <p className="sidebar-section-label">Workspace</p>
         <nav className="nav" aria-label="Loading navigation" aria-busy="true">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -35,6 +36,20 @@ export function SkeletonShell({
             );
           })}
         </nav>
+        <div className="sidebar-utilities" aria-label="Loading workspace utilities" aria-busy="true">
+          <button className="button" disabled type="button">
+            <Eye aria-hidden="true" size={17} />
+            Privacy
+          </button>
+          <button className="button" disabled type="button">
+            <Moon aria-hidden="true" size={17} />
+            Dark mode
+          </button>
+          <button className="button" disabled type="button">
+            <CircleHelp aria-hidden="true" size={17} />
+            Tutorial
+          </button>
+        </div>
       </aside>
       <main className="main">
         <header className="topbar">
