@@ -143,7 +143,7 @@ export function DriveFolderPicker({
             data-private
             disabled={disabled}
             name="sourceFolderName"
-            onChange={(event) => setFolderName(event.target.value)}
+            readOnly
             required
             value={folderName}
           />
@@ -167,12 +167,16 @@ export function DriveFolderPicker({
           data-private
           disabled={disabled}
           name="sourceFolderId"
-          onChange={(event) => setFolderId(event.target.value)}
-          placeholder="Choose a folder or paste an ID"
+          placeholder="Choose a folder with Picker"
+          readOnly
           required
           value={folderId}
         />
-        {status ? <small className={`field-hint ${statusTone}`}>{status}</small> : null}
+        {status ? (
+          <small className={`field-hint ${statusTone}`}>{status}</small>
+        ) : (
+          <small className="field-hint">Folder IDs are filled only by Google Picker.</small>
+        )}
       </label>
     </>
   );

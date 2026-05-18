@@ -2,6 +2,7 @@ import { ConnectionKind, ConnectionStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 
 interface GoogleRefreshResponse {
@@ -208,6 +209,11 @@ async function getUsableYouTubeAccessToken(
 
   if (!response.ok || !payload.access_token || payload.error) {
     console.error("YouTube token refresh failed.", payload);
+    await markConnectionRefreshFailed({
+      connectionId: connection.id,
+      kind: ConnectionKind.YOUTUBE,
+      message: "YouTube token refresh failed. Reconnect YouTube and enable affected pipelines."
+    });
     return null;
   }
 

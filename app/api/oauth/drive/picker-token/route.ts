@@ -2,6 +2,7 @@ import { ConnectionKind, ConnectionStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 
 interface GoogleRefreshResponse {
@@ -102,6 +103,11 @@ async function getUsableDriveAccessToken(
 
   if (!response.ok || !payload.access_token || payload.error) {
     console.error("Drive token refresh failed.", payload);
+    await markConnectionRefreshFailed({
+      connectionId: connection.id,
+      kind: ConnectionKind.DRIVE,
+      message: "Google Drive token refresh failed. Reconnect Drive and enable affected pipelines."
+    });
     return null;
   }
 

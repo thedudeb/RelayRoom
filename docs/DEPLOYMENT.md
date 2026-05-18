@@ -185,5 +185,6 @@ curl -X POST \
 
   ```bash
   curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/queue
+  curl -H "Authorization: Bearer rrp_live_..." "https://relay-room-one.vercel.app/api/queue?detectedFrom=2026-05-01&detectedTo=2026-05-18"
   curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/pipelines
   ```

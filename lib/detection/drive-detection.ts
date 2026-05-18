@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { DriveFileMetadata, Pipeline } from "@/lib/domain/types";
+import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
@@ -538,6 +539,11 @@ async function getUsableDriveAccessToken(
 
   if (!response.ok || !payload.access_token || payload.error) {
     console.error("Drive token refresh failed.", payload);
+    await markConnectionRefreshFailed({
+      connectionId: connection.id,
+      kind: ConnectionKind.DRIVE,
+      message: "Google Drive token refresh failed. Reconnect Drive and enable affected pipelines."
+    });
     return null;
   }
 
@@ -600,6 +606,11 @@ async function getUsableYouTubeAccessToken(
 
   if (!response.ok || !payload.access_token || payload.error) {
     console.error("YouTube token refresh failed.", payload);
+    await markConnectionRefreshFailed({
+      connectionId: connection.id,
+      kind: ConnectionKind.YOUTUBE,
+      message: "YouTube token refresh failed. Reconnect YouTube and enable affected pipelines."
+    });
     return null;
   }
 

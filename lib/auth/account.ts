@@ -8,11 +8,13 @@ import { redirect } from "next/navigation";
 export type AppAccess =
   | {
       account: AccountSummary | null;
+      authMethod: "demo";
       isDemo: true;
       userId: null;
     }
   | {
       account: AccountSummary;
+      authMethod: "api_key" | "session";
       isDemo: false;
       userId: string;
     };
@@ -37,6 +39,7 @@ export async function requireAppAccess(searchParams?: {
   if (isTruthyParam(searchParams?.demo)) {
     return {
       account: null,
+      authMethod: "demo",
       isDemo: true,
       userId: null
     };
@@ -70,6 +73,7 @@ export async function requireAppAccess(searchParams?: {
       email: user.email,
       image: user.image
     },
+    authMethod: "session",
     isDemo: false,
     userId: user.id
   };
@@ -82,6 +86,7 @@ export async function getApiAccess(
   if (isTruthyParam(searchParams.get("demo") || undefined)) {
     return {
       account: null,
+      authMethod: "demo",
       isDemo: true,
       userId: null
     };
@@ -119,6 +124,7 @@ export async function getApiAccess(
       email: user.email,
       image: user.image
     },
+    authMethod: "session",
     isDemo: false,
     userId: user.id
   };
@@ -164,6 +170,7 @@ async function getApiKeyAccess(request: { headers: Headers }): Promise<AppAccess
       email: record.user.email,
       image: record.user.image
     },
+    authMethod: "api_key",
     isDemo: false,
     userId: record.user.id
   };

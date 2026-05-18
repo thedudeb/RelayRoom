@@ -21,11 +21,14 @@ export async function GET(
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
+  const ownerFilter =
+    !access.isDemo && access.authMethod === "api_key" ? { userId: access.userId } : undefined;
+
   const [queueItems, pipelines] = access.isDemo
     ? await Promise.all([getQueueItemsForDemo(), getPipelinesForDemo()])
     : await Promise.all([
-        getQueueItemsForUser(access.userId),
-        getPipelinesForUser(access.userId)
+        getQueueItemsForUser(access.userId, ownerFilter),
+        getPipelinesForUser(access.userId, ownerFilter)
       ]);
   const item = queueItems.find((queueItem) => queueItem.id === id);
   if (!item) {
@@ -33,6 +36,7 @@ export async function GET(
   }
 
   const pipeline = pipelines.find((candidate) => candidate.id === item.pipelineId);
+  const timezone = access.isDemo ? demoTimezone : await getQueueOwnerTimezone(item.owner.id);
   const evaluation = pipeline
     ? evaluatePipelineRules(
         pipeline,
@@ -44,10 +48,10 @@ export async function GET(
           createdTime: item.driveCreatedTime,
           sourceFolderId: pipeline.sourceFolderId
         },
-        demoTimezone
+        timezone
     )
     : undefined;
-  const details = access.isDemo ? getDemoQueueDetails(item) : await getQueueDetails(id);
+  const details = access.isDemo ? getDemoQueueDetails(item) : await getQueueDetails(id, ownerFilter);
 
   return NextResponse.json({
     item,
@@ -56,10 +60,11 @@ export async function GET(
   });
 }
 
-async function getQueueDetails(queueItemId: string) {
+async function getQueueDetails(queueItemId: string, ownerFilter?: { userId: string }) {
   const [activityLog, attempts] = await Promise.all([
     prisma.activityLogEntry.findMany({
       where: {
+        ...(ownerFilter ? { queueItem: ownerFilter } : {}),
         queueItemId
       },
       orderBy: { createdAt: "desc" },
@@ -73,6 +78,7 @@ async function getQueueDetails(queueItemId: string) {
     }),
     prisma.uploadAttempt.findMany({
       where: {
+        ...(ownerFilter ? { queueItem: ownerFilter } : {}),
         queueItemId
       },
       orderBy: { attemptNumber: "desc" },
@@ -106,6 +112,15 @@ async function getQueueDetails(queueItemId: string) {
       youtubeVideoId: attempt.youtubeVideoId
     }))
   };
+}
+
+async function getQueueOwnerTimezone(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true }
+  });
+
+  return user?.timezone || "UTC";
 }
 
 function getDemoQueueDetails(item: Awaited<ReturnType<typeof getQueueItemsForDemo>>[number]) {

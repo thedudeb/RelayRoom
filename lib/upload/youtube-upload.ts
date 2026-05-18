@@ -7,6 +7,7 @@ import {
   QueueStatus
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 import { getVideoContentValidationError } from "./video-file-validation";
 
@@ -343,6 +344,11 @@ async function getUsableGoogleAccessToken({
 
   if (!response.ok || !payload.access_token || payload.error) {
     console.error(`${serviceName} token refresh failed.`, payload);
+    await markConnectionRefreshFailed({
+      connectionId: connection.id,
+      kind: serviceName === "Drive" ? ConnectionKind.DRIVE : ConnectionKind.YOUTUBE,
+      message: `${serviceName} token refresh failed. Reconnect ${serviceName} and enable affected pipelines.`
+    });
     throw new ClassifiedUploadError(
       `${serviceName} token refresh failed. Reconnect ${serviceName} and try again.`,
       FailureReason.AUTH_REVOKED

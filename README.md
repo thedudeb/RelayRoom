@@ -162,6 +162,7 @@ Supported read-only endpoints:
 
 - `GET /api/queue`
 - `GET /api/queue?status=failed`
+- `GET /api/queue?detectedFrom=2026-05-01&detectedTo=2026-05-18`
 - `GET /api/queue/:id`
 - `GET /api/pipelines`
 

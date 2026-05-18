@@ -23,17 +23,19 @@ export default async function SettingsPage({
     userEnabled?: string;
     userDisabled?: string;
     userRemoved?: string;
+    timezoneUpdated?: string;
   }>;
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
-  const [ownerState, readiness, activeApiKey, telemetry] = access.isDemo
-    ? [null, await getReadinessState(), null, await getOperationsTelemetry()]
+  const [ownerState, readiness, activeApiKey, telemetry, profile] = access.isDemo
+    ? [null, await getReadinessState(), null, await getOperationsTelemetry(), { timezone: "UTC" }]
     : await Promise.all([
         getOwnerState(access.userId),
         getReadinessState(),
         getActiveApiKey(access.userId),
-        getOperationsTelemetry()
+        getOperationsTelemetry(),
+        getProfileState(access.userId)
       ]);
 
   return (
@@ -58,6 +60,11 @@ export default async function SettingsPage({
           User removed.
         </div>
       ) : null}
+      {params?.timezoneUpdated ? (
+        <div className="notice success" role="status">
+          Timezone saved.
+        </div>
+      ) : null}
       {params?.error ? (
         <div className="notice danger" role="alert">
           {settingsErrorMessage(params.error)}
@@ -71,14 +78,26 @@ export default async function SettingsPage({
           <section className="panel" data-tour="api-key-panel">
             <h2>Profile</h2>
             <div className="stack">
-              <label className="stack">
-                <span>Timezone</span>
-                <select className="select" defaultValue="America/Halifax">
-                  <option value="America/Halifax">America/Halifax</option>
-                  <option value="America/New_York">America/New_York</option>
-                  <option value="America/Los_Angeles">America/Los_Angeles</option>
-                </select>
-              </label>
+              <form action={updateTimezoneAction} className="stack">
+                <label className="stack">
+                  <span>Timezone</span>
+                  <select
+                    className="select"
+                    defaultValue={profile.timezone}
+                    disabled={access.isDemo}
+                    name="timezone"
+                  >
+                    {timezoneOptions(profile.timezone).map((timezone) => (
+                      <option key={timezone} value={timezone}>
+                        {timezone}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="button" disabled={access.isDemo} type="submit">
+                  Save timezone
+                </button>
+              </form>
               <ApiKeyPanel activeKey={activeApiKey} />
             </div>
           </section>
@@ -129,6 +148,15 @@ async function getActiveApiKey(userId: string) {
     lastUsedAt: apiKey.lastUsedAt?.toLocaleString() || null,
     name: apiKey.name
   };
+}
+
+async function getProfileState(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true }
+  });
+
+  return { timezone: user?.timezone || "UTC" };
 }
 
 type ReadinessTone = "attention" | "missing" | "ready";
@@ -836,6 +864,28 @@ async function removeUserAction(formData: FormData) {
   redirect("/settings?userRemoved=true");
 }
 
+async function updateTimezoneAction(formData: FormData) {
+  "use server";
+
+  const access = await requireAppAccess();
+  if (access.isDemo) {
+    redirect("/settings?demo=true&error=DemoReadOnly");
+  }
+
+  const timezone = getRequiredFormValue(formData, "timezone");
+  if (!isValidTimezone(timezone)) {
+    redirect("/settings?error=InvalidTimezone");
+  }
+
+  await prisma.user.update({
+    where: { id: access.userId },
+    data: { timezone }
+  });
+
+  revalidatePath("/settings");
+  redirect("/settings?timezoneUpdated=true");
+}
+
 async function assertManageableUser(targetUserId: string, currentUserId: string | null) {
   if (!targetUserId) {
     redirect("/settings?error=MissingUser");
@@ -866,11 +916,40 @@ function getRequiredFormValue(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isValidTimezone(timezone: string) {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function timezoneOptions(currentTimezone: string) {
+  const options = [
+    "UTC",
+    "America/Halifax",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Vancouver",
+    "Europe/London",
+    "Europe/Berlin",
+    "Asia/Tokyo",
+    "Australia/Sydney"
+  ];
+
+  return Array.from(new Set([currentTimezone, ...options])).filter(Boolean);
+}
+
 function settingsErrorMessage(error: string) {
   const messages: Record<string, string> = {
     CannotManageOwner: "Owner accounts cannot be disabled or removed.",
     CannotManageSelf: "You cannot disable or remove your own account.",
+    DemoReadOnly: "Demo settings cannot be changed.",
     DisableBeforeRemove: "Disable a user before removing them.",
+    InvalidTimezone: "Choose a valid IANA timezone.",
     MissingUser: "Choose a user first.",
     OwnerOnly: "Only the platform owner can manage user access.",
     UserNotFound: "User not found."

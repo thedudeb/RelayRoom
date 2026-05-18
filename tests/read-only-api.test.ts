@@ -18,6 +18,7 @@ vi.mock("@/lib/data/repository", () => ({
 
 const access = {
   account: { email: "owner@example.com", image: null, name: "Owner" },
+  authMethod: "api_key",
   isDemo: false,
   userId: "owner-user"
 };
@@ -46,5 +47,39 @@ describe("read-only API scoping", () => {
     expect(getQueueItemsForUser).toHaveBeenCalledWith("owner-user", {
       userId: "owner-user"
     });
+  });
+
+  it("filters queue items by detected date range", async () => {
+    vi.mocked(getQueueItemsForUser).mockResolvedValue([
+      {
+        detectedAt: "2026-05-01T12:00:00.000Z",
+        id: "old-item",
+        pipelineId: "pipeline-1",
+        status: "needs_approval"
+      },
+      {
+        detectedAt: "2026-05-18T12:00:00.000Z",
+        id: "new-item",
+        pipelineId: "pipeline-1",
+        status: "needs_approval"
+      }
+    ] as never);
+
+    const response = await getQueue(
+      new NextRequest(
+        "http://localhost:3000/api/queue?detectedFrom=2026-05-10T00:00:00.000Z&detectedTo=2026-05-20T00:00:00.000Z"
+      )
+    );
+    const payload = await response.json();
+
+    expect(payload.items.map((item: { id: string }) => item.id)).toEqual(["new-item"]);
+  });
+
+  it("rejects invalid queue date filters", async () => {
+    const response = await getQueue(
+      new NextRequest("http://localhost:3000/api/queue?detectedFrom=not-a-date")
+    );
+
+    expect(response.status).toBe(400);
   });
 });
