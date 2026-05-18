@@ -2,6 +2,7 @@ import { ConnectionKind, ConnectionStatus, PipelineStatus, Role } from "@prisma/
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
+import { ApiKeyPanel } from "@/components/settings/ApiKeyPanel";
 import { requireAppAccess, requireOwnerAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
 
@@ -18,9 +19,13 @@ export default async function SettingsPage({
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
-  const [ownerState, readiness] = access.isDemo
-    ? [null, await getReadinessState()]
-    : await Promise.all([getOwnerState(access.userId), getReadinessState()]);
+  const [ownerState, readiness, activeApiKey] = access.isDemo
+    ? [null, await getReadinessState(), null]
+    : await Promise.all([
+        getOwnerState(access.userId),
+        getReadinessState(),
+        getActiveApiKey(access.userId)
+      ]);
 
   return (
     <AppShell
@@ -63,16 +68,7 @@ export default async function SettingsPage({
                   <option value="America/Los_Angeles">America/Los_Angeles</option>
                 </select>
               </label>
-              <label className="stack">
-                <span>Read-only API key</span>
-                <input
-                  className="input"
-                  readOnly
-                  value="rpp_live_demo_redacted_9b6c"
-                  aria-label="Read-only API key"
-                />
-              </label>
-              <button className="button" type="button">Rotate API key</button>
+              <ApiKeyPanel activeKey={activeApiKey} />
             </div>
           </section>
         </section>
@@ -97,6 +93,31 @@ export default async function SettingsPage({
       </div>
     </AppShell>
   );
+}
+
+async function getActiveApiKey(userId: string) {
+  const apiKey = await prisma.apiKey.findFirst({
+    where: {
+      revokedAt: null,
+      userId
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      createdAt: true,
+      lastUsedAt: true,
+      name: true
+    }
+  });
+
+  if (!apiKey) {
+    return null;
+  }
+
+  return {
+    createdAt: apiKey.createdAt.toLocaleString(),
+    lastUsedAt: apiKey.lastUsedAt?.toLocaleString() || null,
+    name: apiKey.name
+  };
 }
 
 type ReadinessTone = "attention" | "missing" | "ready";

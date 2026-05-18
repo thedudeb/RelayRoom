@@ -9,7 +9,7 @@ import {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const access = await getApiAccess(searchParams);
+  const access = await getApiAccess(searchParams, request);
 
   if (!access) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });

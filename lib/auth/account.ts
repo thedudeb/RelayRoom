@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import type { AccountSummary } from "@/components/layout/AppShell";
 import { prisma } from "@/lib/db/prisma";
+import { hashApiKey, isRelayRoomApiKey } from "@/lib/security/api-keys";
 import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 
@@ -74,13 +75,21 @@ export async function requireAppAccess(searchParams?: {
   };
 }
 
-export async function getApiAccess(searchParams: URLSearchParams): Promise<AppAccess | null> {
+export async function getApiAccess(
+  searchParams: URLSearchParams,
+  request?: { headers: Headers }
+): Promise<AppAccess | null> {
   if (isTruthyParam(searchParams.get("demo") || undefined)) {
     return {
       account: null,
       isDemo: true,
       userId: null
     };
+  }
+
+  const apiKeyAccess = request ? await getApiKeyAccess(request) : null;
+  if (apiKeyAccess) {
+    return apiKeyAccess;
   }
 
   const session = await auth();
@@ -112,6 +121,51 @@ export async function getApiAccess(searchParams: URLSearchParams): Promise<AppAc
     },
     isDemo: false,
     userId: user.id
+  };
+}
+
+async function getApiKeyAccess(request: { headers: Headers }): Promise<AppAccess | null> {
+  const authHeader = request.headers.get("authorization");
+  const apiKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  if (!isRelayRoomApiKey(apiKey)) {
+    return null;
+  }
+
+  const keyHash = hashApiKey(apiKey);
+  const record = await prisma.apiKey.findUnique({
+    where: { keyHash },
+    select: {
+      id: true,
+      revokedAt: true,
+      user: {
+        select: {
+          disabledAt: true,
+          email: true,
+          id: true,
+          image: true,
+          name: true
+        }
+      }
+    }
+  });
+
+  if (!record?.user || record.revokedAt || record.user.disabledAt) {
+    return null;
+  }
+
+  await prisma.apiKey.update({
+    where: { id: record.id },
+    data: { lastUsedAt: new Date() }
+  });
+
+  return {
+    account: {
+      name: record.user.name,
+      email: record.user.email,
+      image: record.user.image
+    },
+    isDemo: false,
+    userId: record.user.id
   };
 }
 

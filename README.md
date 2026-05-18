@@ -83,6 +83,8 @@ Google Cloud Console will need three OAuth clients:
 - **Drive connection client:** `drive.readonly`, paired with Google Picker for folder selection.
 - **YouTube connection client:** `youtube.upload` and `youtube`.
 
+The original spec calls for `drive.file`, but RelayRoom currently uses `drive.readonly` deliberately. During testing, `drive.file` only exposed files that RelayRoom created or that were explicitly opened through Picker, which made watched-folder detection miss existing user-uploaded recordings. `drive.readonly` lets RelayRoom list the chosen folder reliably while still keeping access scoped to read-only Drive data; uploads remain handled through the separate YouTube grant.
+
 For local development, register these redirect URIs:
 
 - `http://localhost:3000/api/auth/callback/google`
@@ -125,6 +127,22 @@ Drive push notifications can be added later once the core queue and upload state
 For production, set `CRON_SECRET` in Vercel. Vercel automatically sends it as a bearer token when invoking cron jobs. For local/manual calls, `DETECTION_WEBHOOK_SECRET` can use the same value.
 
 See `docs/DEPLOYMENT.md` for the production deployment checklist covering Vercel environment variables, Google OAuth, Neon, cron, and smoke testing.
+
+## Read-Only API Keys
+
+Allowed users can generate or rotate a read-only API key from Settings. RelayRoom only shows the raw key once; it stores a SHA-256 hash in the database. Use the key as a bearer token:
+
+```bash
+curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/queue
+curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/pipelines
+```
+
+Supported read-only endpoints:
+
+- `GET /api/queue`
+- `GET /api/queue?status=failed`
+- `GET /api/queue/:id`
+- `GET /api/pipelines`
 
 ## YouTube Quota Note
 

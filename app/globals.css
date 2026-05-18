@@ -1696,6 +1696,36 @@ html[data-privacy="on"] input[data-private] {
   text-transform: uppercase;
 }
 
+.template-fields {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: var(--space-4);
+  grid-column: 1 / -1;
+  padding: var(--space-4);
+}
+
+.template-fields legend {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  padding: 0 var(--space-2);
+  text-transform: uppercase;
+}
+
+.api-key-status {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.api-key-output {
+  min-height: 76px;
+  resize: vertical;
+}
+
 .field-hint {
   color: var(--muted);
   font-size: var(--text-xs);

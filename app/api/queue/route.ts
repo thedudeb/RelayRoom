@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get("status") as QueueStatus | null;
   const pipelineId = searchParams.get("pipelineId");
   const userId = searchParams.get("userId") || undefined;
-  const access = await getApiAccess(searchParams);
+  const access = await getApiAccess(searchParams, request);
 
   if (!access) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
@@ -24,5 +24,10 @@ export async function GET(request: NextRequest) {
     return true;
   });
 
-  return NextResponse.json({ items, count: items.length });
+  const counts = items.reduce<Record<string, number>>((summary, item) => {
+    summary[item.status] = (summary[item.status] || 0) + 1;
+    return summary;
+  }, {});
+
+  return NextResponse.json({ items, count: items.length, counts });
 }

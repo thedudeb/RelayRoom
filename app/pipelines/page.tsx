@@ -380,6 +380,11 @@ function CreatePipelinePanel({
           </select>
         </label>
         <PollingCadenceField disabled={!canCreate} hint="Saved as minutes internally." />
+        <TemplateFields
+          disabled={!canCreate}
+          descriptionDefault="Recorded on {date} at {time}. Routed by RelayRoom from {source_folder_name}."
+          titleDefault="{filename}"
+        />
         <div className="form-actions">
           <button className="button primary" disabled={!canCreate} type="submit">
             Create pipeline
@@ -450,6 +455,10 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
           hint="Changing cadence affects future scheduled runs."
           initialMinutes={pipeline.pollingIntervalMinutes}
         />
+        <TemplateFields
+          descriptionDefault={pipeline.defaultDescriptionTemplate}
+          titleDefault={pipeline.defaultTitleTemplate}
+        />
         <div className="form-actions">
           <button className="button primary" type="submit">
             Save changes
@@ -457,6 +466,46 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
         </div>
       </form>
     </details>
+  );
+}
+
+function TemplateFields({
+  descriptionDefault,
+  disabled = false,
+  titleDefault
+}: {
+  descriptionDefault: string;
+  disabled?: boolean;
+  titleDefault: string;
+}) {
+  return (
+    <fieldset className="template-fields">
+      <legend>Upload templates</legend>
+      <label>
+        <span>Default YouTube title</span>
+        <input
+          className="input"
+          defaultValue={titleDefault}
+          disabled={disabled}
+          name="defaultTitleTemplate"
+          required
+        />
+        <small className="field-hint">
+          Variables: {"{filename}"}, {"{filename_no_ext}"}, {"{date}"}, {"{time}"}, {"{rule_name}"}, {"{playlist_name}"}.
+        </small>
+      </label>
+      <label>
+        <span>Default YouTube description</span>
+        <textarea
+          className="input"
+          defaultValue={descriptionDefault}
+          disabled={disabled}
+          name="defaultDescriptionTemplate"
+          required
+          rows={3}
+        />
+      </label>
+    </fieldset>
   );
 }
 
@@ -473,7 +522,7 @@ function RuleManager({
     <details className="edit-panel">
       <summary>Routing rules</summary>
       <div className="rule-editor">
-        {pipeline.rules.map((rule) => {
+        {pipeline.rules.map((rule, index) => {
           const playlistValue = playlistOptionValue(rule.playlist.id, rule.playlist.name);
 
           return (
@@ -491,8 +540,10 @@ function RuleManager({
                 <input name="ruleId" type="hidden" value={rule.id} />
                 <RuleFields
                   conditions={rule.conditions}
+                  defaultDescriptionTemplate={rule.descriptionTemplate || ""}
                   defaultName={rule.name}
                   defaultPlaylistValue={playlistValue}
+                  defaultTitleTemplate={rule.titleTemplate || ""}
                   playlistOptions={playlistOptions}
                 />
                 <div className="form-actions">
@@ -501,12 +552,28 @@ function RuleManager({
                   </button>
                 </div>
               </form>
-              <form action={deleteRuleAction}>
-                <input name="ruleId" type="hidden" value={rule.id} />
-                <button className="button danger subtle" type="submit">
-                  Delete rule
-                </button>
-              </form>
+              <div className="actions">
+                <form action={moveRuleAction}>
+                  <input name="ruleId" type="hidden" value={rule.id} />
+                  <input name="direction" type="hidden" value="up" />
+                  <button className="button" disabled={index === 0} type="submit">
+                    Move up
+                  </button>
+                </form>
+                <form action={moveRuleAction}>
+                  <input name="ruleId" type="hidden" value={rule.id} />
+                  <input name="direction" type="hidden" value="down" />
+                  <button className="button" disabled={index === pipeline.rules.length - 1} type="submit">
+                    Move down
+                  </button>
+                </form>
+                <form action={deleteRuleAction}>
+                  <input name="ruleId" type="hidden" value={rule.id} />
+                  <button className="button danger subtle" type="submit">
+                    Delete rule
+                  </button>
+                </form>
+              </div>
             </div>
           );
         })}
@@ -523,12 +590,14 @@ function RuleManager({
             <form action={createRuleAction} className="form-grid compact">
               <input name="pipelineId" type="hidden" value={pipeline.id} />
               <RuleFields
+                defaultDescriptionTemplate=""
                 defaultName="New routing rule"
                 defaultPlaylistValue={
                   defaultPlaylist
                     ? playlistOptionValue(defaultPlaylist.id, defaultPlaylist.name)
                     : undefined
                 }
+                defaultTitleTemplate=""
                 playlistOptions={playlistOptions}
               />
               <div className="form-actions">
@@ -549,13 +618,17 @@ function RuleManager({
 
 function RuleFields({
   conditions,
+  defaultDescriptionTemplate,
   defaultName,
   defaultPlaylistValue,
+  defaultTitleTemplate,
   playlistOptions
 }: {
   conditions?: ConditionGroup;
+  defaultDescriptionTemplate: string;
   defaultName: string;
   defaultPlaylistValue?: string;
+  defaultTitleTemplate: string;
   playlistOptions: { id: string; name: string }[];
 }) {
   const primaryCondition = conditions ? conditionChildAt(conditions, 0) : undefined;
@@ -598,6 +671,28 @@ function RuleFields({
           />
         }
       />
+      <fieldset className="template-fields">
+        <legend>Rule template overrides</legend>
+        <label>
+          <span>Title override</span>
+          <input
+            className="input"
+            defaultValue={defaultTitleTemplate}
+            name="titleTemplateOverride"
+            placeholder="Leave blank to use pipeline default"
+          />
+        </label>
+        <label>
+          <span>Description override</span>
+          <textarea
+            className="input"
+            defaultValue={defaultDescriptionTemplate}
+            name="descriptionTemplateOverride"
+            placeholder="Leave blank to use pipeline default"
+            rows={3}
+          />
+        </label>
+      </fieldset>
     </>
   );
 }
@@ -803,6 +898,11 @@ async function createPipelineAction(formData: FormData) {
   const youtubePlaylistName = getRequiredFormValue(formData, "youtubePlaylistName");
   const sourceFolderId = getRequiredFormValue(formData, "sourceFolderId");
   const sourceFolderName = getRequiredFormValue(formData, "sourceFolderName");
+  const defaultTitleTemplate =
+    getRequiredFormValue(formData, "defaultTitleTemplate") || "{filename}";
+  const defaultDescriptionTemplate =
+    getRequiredFormValue(formData, "defaultDescriptionTemplate") ||
+    "Recorded on {date} at {time}. Routed by RelayRoom from {source_folder_name}.";
   const mode = getEnumValue(formData, "mode", [PipelineMode.AUTO, PipelineMode.MANUAL_APPROVAL]);
   const privacyStatus = getEnumValue(formData, "privacyStatus", [
     PrivacyStatus.PUBLIC,
@@ -853,9 +953,8 @@ async function createPipelineAction(formData: FormData) {
 
   await prisma.pipeline.create({
     data: {
-      defaultDescriptionTemplate:
-        "Recorded on {date} at {time}. Routed by RelayRoom from {source_folder_name}.",
-      defaultTitleTemplate: "{filename}",
+      defaultDescriptionTemplate,
+      defaultTitleTemplate,
       destinationChannelName:
         youtubeConnection.channelName || youtubeConnection.channelHandle || youtubeConnection.label,
       driveConnectionId: driveConnection.id,
@@ -912,6 +1011,11 @@ async function updatePipelineAction(formData: FormData) {
   const name = getRequiredFormValue(formData, "name");
   const sourceFolderId = getRequiredFormValue(formData, "sourceFolderId");
   const sourceFolderName = getRequiredFormValue(formData, "sourceFolderName");
+  const defaultTitleTemplate =
+    getRequiredFormValue(formData, "defaultTitleTemplate") || "{filename}";
+  const defaultDescriptionTemplate =
+    getRequiredFormValue(formData, "defaultDescriptionTemplate") ||
+    "Recorded on {date} at {time}. Routed by RelayRoom from {source_folder_name}.";
   const mode = getEnumValue(formData, "mode", [PipelineMode.AUTO, PipelineMode.MANUAL_APPROVAL]);
   const privacyStatus = getEnumValue(formData, "privacyStatus", [
     PrivacyStatus.PUBLIC,
@@ -953,6 +1057,8 @@ async function updatePipelineAction(formData: FormData) {
     where: { id: pipelineId },
     data: {
       errorMessage: null,
+      defaultDescriptionTemplate,
+      defaultTitleTemplate,
       mode,
       name,
       pollingIntervalMinutes,
@@ -979,6 +1085,8 @@ async function createRuleAction(formData: FormData) {
   const ruleName = getRequiredFormValue(formData, "ruleName");
   const playlist = parsePlaylistValue(getRequiredFormValue(formData, "playlist"));
   const conditionTree = buildConditionTree(formData);
+  const titleTemplateOverride = optionalFormValue(formData, "titleTemplateOverride");
+  const descriptionTemplateOverride = optionalFormValue(formData, "descriptionTemplateOverride");
 
   if (!pipelineId || !ruleName || !playlist || !conditionTree) {
     redirect("/pipelines?error=MissingRuleFields");
@@ -1032,8 +1140,8 @@ async function createRuleAction(formData: FormData) {
       name: ruleName,
       pipelineId,
       priority: nextPriority,
-      titleTemplateOverride: null,
-      descriptionTemplateOverride: null,
+      titleTemplateOverride,
+      descriptionTemplateOverride,
       youtubePlaylistId: playlist.id,
       youtubePlaylistName: playlist.name
     }
@@ -1055,6 +1163,8 @@ async function updateRuleAction(formData: FormData) {
   const ruleName = getRequiredFormValue(formData, "ruleName");
   const playlist = parsePlaylistValue(getRequiredFormValue(formData, "playlist"));
   const conditionTree = buildConditionTree(formData);
+  const titleTemplateOverride = optionalFormValue(formData, "titleTemplateOverride");
+  const descriptionTemplateOverride = optionalFormValue(formData, "descriptionTemplateOverride");
 
   if (!ruleId || !ruleName || !playlist || !conditionTree) {
     redirect("/pipelines?error=MissingRuleFields");
@@ -1105,11 +1215,74 @@ async function updateRuleAction(formData: FormData) {
     where: { id: ruleId },
     data: {
       conditionTree: conditionTree as unknown as Prisma.InputJsonValue,
+      descriptionTemplateOverride,
       name: ruleName,
+      titleTemplateOverride,
       youtubePlaylistId: playlist.id,
       youtubePlaylistName: playlist.name
     }
   });
+
+  revalidatePath("/pipelines");
+  redirect("/pipelines?ruleUpdated=true");
+}
+
+async function moveRuleAction(formData: FormData) {
+  "use server";
+
+  const access = await requireAppAccess();
+  if (access.isDemo) {
+    redirect("/pipelines?demo=true&error=DemoReadOnly");
+  }
+
+  const ruleId = getRequiredFormValue(formData, "ruleId");
+  const direction = getEnumValue(formData, "direction", ["up", "down"] as const);
+  if (!ruleId) {
+    redirect("/pipelines?error=MissingRuleFields");
+  }
+
+  const rule = await prisma.rule.findFirst({
+    where: {
+      id: ruleId,
+      pipeline: { archivedAt: null, userId: access.userId }
+    },
+    select: { pipelineId: true }
+  });
+
+  if (!rule) {
+    redirect("/pipelines?error=RuleNotFound");
+  }
+
+  const rules = await prisma.rule.findMany({
+    where: {
+      pipelineId: rule.pipelineId,
+      pipeline: { archivedAt: null, userId: access.userId }
+    },
+    orderBy: { priority: "asc" },
+    select: { id: true }
+  });
+  const index = rules.findIndex((candidate) => candidate.id === ruleId);
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+
+  if (index < 0 || swapIndex < 0 || swapIndex >= rules.length) {
+    redirect("/pipelines?ruleUpdated=true");
+  }
+
+  const reordered = [...rules];
+  const [selected] = reordered.splice(index, 1);
+  if (!selected) {
+    redirect("/pipelines?ruleUpdated=true");
+  }
+  reordered.splice(swapIndex, 0, selected);
+
+  await prisma.$transaction(
+    reordered.map((candidate, priorityIndex) =>
+      prisma.rule.update({
+        where: { id: candidate.id },
+        data: { priority: priorityIndex + 1 }
+      })
+    )
+  );
 
   revalidatePath("/pipelines");
   redirect("/pipelines?ruleUpdated=true");
@@ -1170,6 +1343,11 @@ async function deleteRuleAction(formData: FormData) {
 
 function getRequiredFormValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
+}
+
+function optionalFormValue(formData: FormData, key: string) {
+  const value = getRequiredFormValue(formData, key);
+  return value.length ? value : null;
 }
 
 function getEnumValue<T extends string>(formData: FormData, key: string, values: readonly T[]) {

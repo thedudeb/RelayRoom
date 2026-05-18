@@ -32,35 +32,11 @@ export async function POST(
       id,
       userId: access.userId
     },
-    select: {
-      sourceFolderId: true
-    }
+    select: { id: true }
   });
 
   if (!pipeline) {
     return NextResponse.json({ error: "PipelineNotFound" }, { status: 404 });
-  }
-
-  if (nextStatus === PipelineStatus.ENABLED) {
-    const folderConflict = await prisma.pipeline.findFirst({
-      where: {
-        archivedAt: null,
-        id: { not: id },
-        sourceFolderId: pipeline.sourceFolderId,
-        status: PipelineStatus.ENABLED
-      },
-      select: { id: true, name: true }
-    });
-
-    if (folderConflict) {
-      return NextResponse.json(
-        {
-          error: "FolderAlreadyWatched",
-          message: `${folderConflict.name} is already watching this Drive folder. Disable it before enabling this pipeline.`
-        },
-        { status: 409 }
-      );
-    }
   }
 
   const result = await prisma.pipeline.updateMany({

@@ -15,7 +15,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const access = await getApiAccess(request.nextUrl.searchParams);
+  const access = await getApiAccess(request.nextUrl.searchParams, request);
 
   if (!access) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
