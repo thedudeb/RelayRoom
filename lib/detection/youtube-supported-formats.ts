@@ -56,6 +56,27 @@ export function isYouTubeSupportedVideoFile({
   return false;
 }
 
+export function describeUnsupportedVideoFile({
+  filename,
+  mimeType
+}: {
+  filename?: string | null;
+  mimeType?: string | null;
+}) {
+  const extension = getFileExtension(filename);
+  const normalizedMimeType = mimeType?.toLowerCase();
+
+  if (extension && !SUPPORTED_VIDEO_EXTENSIONS.has(extension)) {
+    return `.${extension} is not in RelayRoom's YouTube upload allowlist.`;
+  }
+
+  if (normalizedMimeType && !SUPPORTED_VIDEO_MIME_TYPES.has(normalizedMimeType)) {
+    return `${normalizedMimeType} is not a YouTube-supported video MIME type.`;
+  }
+
+  return "Missing a supported video extension or MIME type.";
+}
+
 export function getFileExtension(filename?: string | null) {
   if (!filename) {
     return undefined;

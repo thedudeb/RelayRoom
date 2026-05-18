@@ -37,6 +37,7 @@ import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
 import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField";
 import { RuleConditionEditor } from "@/components/pipelines/RuleConditionEditor";
 import { RuleBuilderModeToggle } from "@/components/pipelines/RuleBuilderModeToggle";
+import { RuleTester } from "@/components/pipelines/RuleTester";
 import { YouTubePlaylistPicker } from "@/components/pipelines/YouTubePlaylistPicker";
 import Link from "next/link";
 import type { Route } from "next";
@@ -524,6 +525,7 @@ function RuleManager({
     <details className="edit-panel">
       <summary>Routing rules</summary>
       <div className="rule-editor">
+        <RuleTester pipeline={pipeline} />
         {pipeline.rules.map((rule, index) => {
           const playlistValue = playlistOptionValue(rule.playlist.id, rule.playlist.name);
 

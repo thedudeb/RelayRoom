@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiAccess } from "@/lib/auth/account";
 import { probeDriveFolderForPipeline } from "@/lib/detection/drive-detection";
+import {
+  describeUnsupportedVideoFile,
+  isYouTubeSupportedVideoFile
+} from "@/lib/detection/youtube-supported-formats";
 import { prisma } from "@/lib/db/prisma";
 
 export async function POST(
@@ -42,13 +46,29 @@ export async function POST(
             })
             .join(" | ")
         : "No files returned by Drive.";
+    const unsupportedFiles = result.files.filter(
+      (file) => !isYouTubeSupportedVideoFile({ filename: file.name, mimeType: file.mimeType })
+    );
+    const unsupportedSummary =
+      unsupportedFiles.length > 0
+        ? ` Ignored preview: ${unsupportedFiles
+            .slice(0, 3)
+            .map(
+              (file) =>
+                `${file.name || "Untitled"} (${describeUnsupportedVideoFile({
+                  filename: file.name,
+                  mimeType: file.mimeType
+                })})`
+            )
+            .join(" | ")}${unsupportedFiles.length > 3 ? `, plus ${unsupportedFiles.length - 3} more` : ""}.`
+        : "";
     const watermark = result.processedFromTime
       ? result.processedFromTime.toLocaleString()
       : "not set";
 
     return NextResponse.json({
       files: result.files,
-      message: `Drive check for ${result.folderName}: ${fileSummary}. Watermark: ${watermark}.`
+      message: `Drive check for ${result.folderName}: ${fileSummary}. Watermark: ${watermark}.${unsupportedSummary}`
     });
   } catch (error) {
     return NextResponse.json(

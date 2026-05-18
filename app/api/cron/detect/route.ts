@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
         created: result.created,
         excludedByWatermark: result.excludedByWatermark,
         ignored: result.ignored,
+        ignoredFiles: result.ignoredFiles,
         pipelineId: pipeline.id,
         pipelineName: pipeline.name,
         skippedExisting: result.skippedExisting,

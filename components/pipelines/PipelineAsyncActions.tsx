@@ -14,6 +14,11 @@ type ActionState =
 interface ActionResponse {
   error?: string;
   excludedByWatermark?: number;
+  ignoredFiles?: Array<{
+    filename: string;
+    mimeType: string;
+    reason: string;
+  }>;
   ignored?: number;
   message?: string;
   created?: number;
@@ -400,6 +405,13 @@ function formatDetectionMessage(payload: ActionResponse) {
   const skippedExisting = payload.skippedExisting || 0;
   const ignored = payload.ignored || 0;
   const excludedByWatermark = payload.excludedByWatermark || 0;
+  const ignoredDetails = (payload.ignoredFiles || [])
+    .slice(0, 3)
+    .map((file) => `${file.filename}: ${file.reason}`)
+    .join(" | ");
+  const ignoredSuffix = ignoredDetails
+    ? ` Ignored detail: ${ignoredDetails}${(payload.ignoredFiles || []).length > 3 ? " | ..." : ""}.`
+    : "";
 
-  return `Detection finished. Created ${created} queue item${created === 1 ? "" : "s"}, skipped ${skippedExisting} already-queued file${skippedExisting === 1 ? "" : "s"}, excluded ${excludedByWatermark} pre-watermark video file${excludedByWatermark === 1 ? "" : "s"}, ignored ${ignored} unsupported file${ignored === 1 ? "" : "s"}.`;
+  return `Detection finished. Created ${created} queue item${created === 1 ? "" : "s"}, skipped ${skippedExisting} already-queued file${skippedExisting === 1 ? "" : "s"}, excluded ${excludedByWatermark} pre-watermark video file${excludedByWatermark === 1 ? "" : "s"}, ignored ${ignored} unsupported file${ignored === 1 ? "" : "s"}.${ignoredSuffix}`;
 }

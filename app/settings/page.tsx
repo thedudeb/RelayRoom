@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { ApiKeyPanel } from "@/components/settings/ApiKeyPanel";
+import { WebhookSmokeTest } from "@/components/settings/WebhookSmokeTest";
 import { requireAppAccess, requireOwnerAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
 
@@ -57,6 +58,7 @@ export default async function SettingsPage({
       <div className="split">
         <section className="stack">
           <ReadinessPanel readiness={readiness} />
+          <WebhookSmokeTest disabled={access.isDemo} />
           <section className="panel" data-tour="api-key-panel">
             <h2>Profile</h2>
             <div className="stack">

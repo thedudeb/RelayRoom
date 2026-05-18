@@ -12,7 +12,10 @@ import type { DriveFileMetadata, Pipeline } from "@/lib/domain/types";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
-import { isYouTubeSupportedVideoFile } from "./youtube-supported-formats";
+import {
+  describeUnsupportedVideoFile,
+  isYouTubeSupportedVideoFile
+} from "./youtube-supported-formats";
 
 interface DriveFile {
   createdTime?: string;
@@ -44,6 +47,7 @@ export interface DetectionResult {
   created: number;
   excludedByWatermark: number;
   ignored: number;
+  ignoredFiles: DetectionIgnoredFile[];
   skippedExisting: number;
 }
 
@@ -53,6 +57,12 @@ export interface DriveFolderProbeFile {
   mimeType?: string;
   name?: string;
   size?: string;
+}
+
+export interface DetectionIgnoredFile {
+  filename: string;
+  mimeType: string;
+  reason: string;
 }
 
 export async function runDriveDetectionForPipeline({
@@ -140,6 +150,7 @@ export async function runDriveDetectionForPipeline({
 
   let created = 0;
   let ignored = 0;
+  const ignoredFiles: DetectionIgnoredFile[] = [];
   let skippedExisting = 0;
   const domainPipeline = mapPipelineForEvaluation(pipeline);
   const timezone = pipeline.user.timezone || "UTC";
@@ -147,6 +158,11 @@ export async function runDriveDetectionForPipeline({
   for (const file of files) {
     if (!file.id || !file.name || !file.mimeType || !file.createdTime) {
       ignored += 1;
+      ignoredFiles.push({
+        filename: file.name || file.id || "Untitled Drive file",
+        mimeType: file.mimeType || "unknown",
+        reason: "Drive did not return the id, name, MIME type, and created time needed for detection."
+      });
       continue;
     }
 
@@ -170,6 +186,11 @@ export async function runDriveDetectionForPipeline({
 
     if (!isYouTubeSupportedVideoFile({ filename: file.name, mimeType: file.mimeType })) {
       ignored += 1;
+      ignoredFiles.push({
+        filename: file.name,
+        mimeType: file.mimeType,
+        reason: describeUnsupportedVideoFile({ filename: file.name, mimeType: file.mimeType })
+      });
       continue;
     }
 
@@ -245,7 +266,7 @@ export async function runDriveDetectionForPipeline({
     data: { lastDetectionAt: new Date() }
   });
 
-  return { created, excludedByWatermark, ignored, skippedExisting };
+  return { created, excludedByWatermark, ignored, ignoredFiles, skippedExisting };
 }
 
 async function maybeReprocessExistingUpload({
