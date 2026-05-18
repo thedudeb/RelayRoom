@@ -35,6 +35,8 @@ import type {
 import { displayWorkspaceUser, selectedWorkspaceUserId } from "@/lib/workspace/users";
 import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
 import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField";
+import { RuleConditionEditor } from "@/components/pipelines/RuleConditionEditor";
+import { RuleBuilderModeToggle } from "@/components/pipelines/RuleBuilderModeToggle";
 import { YouTubePlaylistPicker } from "@/components/pipelines/YouTubePlaylistPicker";
 import Link from "next/link";
 import type { Route } from "next";
@@ -583,115 +585,100 @@ function RuleFields({
           ))}
         </select>
       </label>
-      <fieldset className="logic-graph">
-        <legend>Logic graph</legend>
-        <div className="logic-graph-canvas">
-          <div className="logic-node logic-node-group logic-node-root">
-            <span className="logic-port logic-port-out" aria-hidden="true" />
-            <div className="logic-node-header">
-              <span className="logic-node-kicker">Root group</span>
-              <strong>Match mode</strong>
-            </div>
-            <label>
-              <span>Root match</span>
-              <select className="select" defaultValue={conditions?.combinator || "AND"} name="rootCombinator">
-                <option value="AND">All top-level conditions must match</option>
-                <option value="OR">Any top-level condition can match</option>
-              </select>
-            </label>
-          </div>
-          <div className="logic-branches">
-            <LogicConditionNode condition={primaryCondition} required title="Condition 1" />
-            <LogicConditionNode
-              condition={secondCondition}
-              enableName="condition2Enabled"
-              prefix="condition2"
-              title="Condition 2"
-            />
-            <div className="logic-node logic-node-group logic-node-nested">
-              <span className="logic-port logic-port-in" aria-hidden="true" />
-              <span className="logic-port logic-port-out" aria-hidden="true" />
-              <div className="logic-node-header">
-                <span className="logic-node-kicker">Nested group</span>
-                <label className="checkbox-field compact">
-                  <input
-                    defaultChecked={Boolean(nestedGroup)}
-                    name="nestedGroupEnabled"
-                    type="checkbox"
-                  />
-                  <span>Use group</span>
-                </label>
-              </div>
-              <label>
-                <span>Nested match</span>
-                <select className="select" defaultValue={nestedGroup?.combinator || "AND"} name="nestedCombinator">
-                  <option value="AND">All nested conditions must match</option>
-                  <option value="OR">Any nested condition can match</option>
-                </select>
-              </label>
-              <div className="logic-nested-stack">
-                <LogicConditionNode
-                  condition={nestedPrimaryCondition}
-                  prefix="nested1"
-                  title="Nested condition 1"
-                />
-                <LogicConditionNode
-                  condition={nestedSecondCondition}
-                  enableName="nested2Enabled"
-                  prefix="nested2"
-                  title="Nested condition 2"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </fieldset>
+      <RuleBuilderModeToggle
+        visual={<RuleConditionEditor initial={conditions} />}
+        classic={
+          <ClassicRuleEditor
+            conditions={conditions}
+            nestedGroup={nestedGroup}
+            nestedPrimaryCondition={nestedPrimaryCondition}
+            nestedSecondCondition={nestedSecondCondition}
+            primaryCondition={primaryCondition}
+            secondCondition={secondCondition}
+          />
+        }
+      />
     </>
   );
 }
 
-function LogicConditionNode({
-  condition,
-  enableName,
-  prefix,
-  required = false,
-  title
+function ClassicRuleEditor({
+  conditions,
+  nestedGroup,
+  nestedPrimaryCondition,
+  nestedSecondCondition,
+  primaryCondition,
+  secondCondition
 }: {
-  condition?: ConditionLeaf;
-  enableName?: string;
-  prefix?: string;
-  required?: boolean;
-  title: string;
+  conditions?: ConditionGroup;
+  nestedGroup?: ConditionGroup;
+  nestedPrimaryCondition?: ConditionLeaf;
+  nestedSecondCondition?: ConditionLeaf;
+  primaryCondition?: ConditionLeaf;
+  secondCondition?: ConditionLeaf;
 }) {
   return (
-    <div className={`logic-node logic-node-condition${enableName ? " optional" : ""}`}>
-      <span className="logic-port logic-port-in" aria-hidden="true" />
-      <div className="logic-node-header">
-        <div>
-          <span className="logic-node-kicker">Condition</span>
-          <strong>{title}</strong>
-        </div>
-        {enableName ? (
-          <label className="checkbox-field compact">
-            <input defaultChecked={Boolean(condition)} name={enableName} type="checkbox" />
-            <span>Use</span>
-          </label>
-        ) : (
-          <span className="rule-pill">required</span>
-        )}
-      </div>
-      <div className="logic-node-fields">
-        <ConditionInputs condition={condition} prefix={prefix} required={required} />
-      </div>
-    </div>
+    <fieldset className="classic-rule-editor">
+      <legend>Classic rule form</legend>
+      <label>
+        <span>Root match</span>
+        <select className="select" defaultValue={conditions?.combinator || "AND"} name="rootCombinator">
+          <option value="AND">All top-level conditions must match</option>
+          <option value="OR">Any top-level condition can match</option>
+        </select>
+      </label>
+      <ConditionInputs condition={primaryCondition} required />
+      <fieldset className="rule-subgroup">
+        <legend>Additional condition</legend>
+        <label className="checkbox-field">
+          <input
+            defaultChecked={Boolean(secondCondition)}
+            name="condition2Enabled"
+            type="checkbox"
+          />
+          <span>Use a second top-level condition</span>
+        </label>
+        <ConditionInputs condition={secondCondition} prefix="condition2" />
+      </fieldset>
+      <fieldset className="rule-subgroup">
+        <legend>Nested group</legend>
+        <label className="checkbox-field">
+          <input
+            defaultChecked={Boolean(nestedGroup)}
+            name="nestedGroupEnabled"
+            type="checkbox"
+          />
+          <span>Use a nested AND/OR group</span>
+        </label>
+        <label>
+          <span>Nested match</span>
+          <select className="select" defaultValue={nestedGroup?.combinator || "AND"} name="nestedCombinator">
+            <option value="AND">All nested conditions must match</option>
+            <option value="OR">Any nested condition can match</option>
+          </select>
+        </label>
+        <ConditionInputs condition={nestedPrimaryCondition} prefix="nested1" />
+        <label className="checkbox-field">
+          <input
+            defaultChecked={Boolean(nestedSecondCondition)}
+            name="nested2Enabled"
+            type="checkbox"
+          />
+          <span>Use a second nested condition</span>
+        </label>
+        <ConditionInputs condition={nestedSecondCondition} prefix="nested2" />
+      </fieldset>
+    </fieldset>
   );
 }
 
 function ConditionInputs({
+  compact = false,
   condition,
   prefix = "",
   required = false
 }: {
+  compact?: boolean;
   condition?: ConditionLeaf;
   prefix?: string;
   required?: boolean;
@@ -749,9 +736,11 @@ function ConditionInputs({
           placeholder="Engineering, mp4, Mon, or 09:30"
           required={required}
         />
-        <small className="field-hint">
-          Use commas for “is one of”. Days use Mon, Tue, Wed. Times use HH:mm or HH:mm-HH:mm.
-        </small>
+        {compact ? null : (
+          <small className="field-hint">
+            Use commas for “is one of”. Days use Mon, Tue, Wed. Times use HH:mm or HH:mm-HH:mm.
+          </small>
+        )}
       </label>
       <label className="checkbox-field">
         <input
@@ -1264,6 +1253,16 @@ function operatorFormValue(condition?: ConditionLeaf) {
 }
 
 function buildConditionTree(formData: FormData) {
+  const submittedTree = getRequiredFormValue(formData, "conditionTree");
+  if (submittedTree) {
+    try {
+      const parsed = JSON.parse(submittedTree);
+      return sanitizeConditionGroup(parsed);
+    } catch {
+      return undefined;
+    }
+  }
+
   const rootCombinator = getEnumValue(formData, "rootCombinator", ["AND", "OR"] as const);
   const primaryCondition = parseConditionFromForm(formData);
   if (!primaryCondition) {
@@ -1311,6 +1310,88 @@ function buildConditionTree(formData: FormData) {
   };
 }
 
+function sanitizeConditionGroup(input: unknown, depth = 0): ConditionGroup | undefined {
+  if (!isRecord(input) || input.type !== "group") {
+    return undefined;
+  }
+
+  const rawChildren = Array.isArray(input.children) ? input.children : [];
+  const children = rawChildren
+    .map((child): ConditionNode | undefined => {
+      if (!isRecord(child)) {
+        return undefined;
+      }
+      if (child.type === "condition") {
+        return sanitizeConditionLeaf(child);
+      }
+      if (child.type === "group" && depth < 2) {
+        return sanitizeConditionGroup(child, depth + 1);
+      }
+      return undefined;
+    })
+    .filter((child): child is ConditionNode => Boolean(child));
+
+  if (children.length === 0) {
+    return undefined;
+  }
+
+  return {
+    id: typeof input.id === "string" && input.id ? input.id : `group-${randomUUID()}`,
+    type: "group",
+    combinator: input.combinator === "OR" ? "OR" : "AND",
+    children
+  };
+}
+
+function sanitizeConditionLeaf(input: Record<string, unknown>): ConditionLeaf | undefined {
+  const field = isConditionField(input.field) ? input.field : undefined;
+  if (!field) {
+    return undefined;
+  }
+
+  const operator = normalizeOperator(field, String(input.operator || ""));
+  const value = sanitizeConditionValue(operator, input.value);
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return {
+    id: typeof input.id === "string" && input.id ? input.id : `cond-${randomUUID()}`,
+    type: "condition",
+    field,
+    operator,
+    value,
+    ...(field === "filename" && input.caseSensitive === true ? { caseSensitive: true } : {})
+  };
+}
+
+function sanitizeConditionValue(operator: ConditionOperator, rawValue: unknown): ConditionLeaf["value"] | undefined {
+  if (operator === "is_one_of") {
+    const values = (Array.isArray(rawValue) ? rawValue : String(rawValue || "").split(","))
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+    return values.length > 0 ? values : undefined;
+  }
+
+  if (operator === "between") {
+    const range = isRecord(rawValue)
+      ? { start: String(rawValue.start || "").trim(), end: String(rawValue.end || "").trim() }
+      : conditionValue(operator, String(rawValue || ""));
+    if (
+      typeof range === "object" &&
+      !Array.isArray(range) &&
+      range.start &&
+      range.end
+    ) {
+      return range;
+    }
+    return undefined;
+  }
+
+  const value = String(rawValue || "").trim();
+  return value ? value : undefined;
+}
+
 function parseConditionFromForm(formData: FormData, prefix = ""): ConditionLeaf | undefined {
   const field = getEnumValue<ConditionField>(formData, prefixedFieldName(prefix, "field"), [
     "filename",
@@ -1334,6 +1415,19 @@ function parseConditionFromForm(formData: FormData, prefix = ""): ConditionLeaf 
       ? { caseSensitive: true }
       : {})
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isConditionField(value: unknown): value is ConditionField {
+  return (
+    value === "filename" ||
+    value === "file_type" ||
+    value === "day_of_week" ||
+    value === "time_of_day"
+  );
 }
 
 function prefixedFieldName(prefix: string, key: string) {
