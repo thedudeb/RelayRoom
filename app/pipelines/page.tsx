@@ -38,6 +38,12 @@ import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField"
 import { RuleConditionEditor } from "@/components/pipelines/RuleConditionEditor";
 import { RuleBuilderModeToggle } from "@/components/pipelines/RuleBuilderModeToggle";
 import { RuleTester } from "@/components/pipelines/RuleTester";
+import {
+  finalPriorityForIndex,
+  reorderRuleIds,
+  temporaryPriorityForIndex,
+  type RuleMoveDirection
+} from "@/lib/rules/rule-ordering";
 import { YouTubePlaylistPicker } from "@/components/pipelines/YouTubePlaylistPicker";
 import Link from "next/link";
 import type { Route } from "next";
@@ -371,9 +377,18 @@ function CreatePipelinePanel({
             <option value={PrivacyStatus.PUBLIC}>Public</option>
           </select>
         </label>
-        <label className="checkbox-field public-privacy-confirmation">
-          <input disabled={!canCreate} name="publicPrivacyConfirmed" type="checkbox" />
-          <span>I understand public uploads can be visible on YouTube.</span>
+        <label className="public-privacy-confirmation">
+          <span>Public upload confirmation</span>
+          <input
+            className="input"
+            disabled={!canCreate}
+            name="publicPrivacyConfirmationText"
+            placeholder="Type the pipeline name when using Public"
+          />
+          <small className="field-hint">
+            Required only when Upload privacy is Public. Type the pipeline name exactly to confirm
+            public YouTube visibility.
+          </small>
         </label>
         <label>
           <span>Mode</span>
@@ -443,9 +458,17 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
             <option value={PrivacyStatus.PUBLIC}>Public</option>
           </select>
         </label>
-        <label className="checkbox-field public-privacy-confirmation">
-          <input name="publicPrivacyConfirmed" type="checkbox" />
-          <span>I understand public uploads can be visible on YouTube.</span>
+        <label className="public-privacy-confirmation">
+          <span>Public upload confirmation</span>
+          <input
+            className="input"
+            name="publicPrivacyConfirmationText"
+            placeholder={`Type "${pipeline.name}" when switching to Public`}
+          />
+          <small className="field-hint">
+            Required only when switching this pipeline to Public. Type the pipeline name exactly to
+            confirm public YouTube visibility.
+          </small>
         </label>
         <label>
           <span>Mode</span>
@@ -556,21 +579,39 @@ function RuleManager({
                   </button>
                 </div>
               </form>
-              <div className="actions">
+              <div className="rule-order-panel" aria-label={`Change priority for ${rule.name}`}>
+                <span className="muted">Priority</span>
+                <form action={moveRuleAction}>
+                  <input name="ruleId" type="hidden" value={rule.id} />
+                  <input name="direction" type="hidden" value="top" />
+                  <button className="button compact-button" disabled={index === 0} type="submit">
+                    Top
+                  </button>
+                </form>
                 <form action={moveRuleAction}>
                   <input name="ruleId" type="hidden" value={rule.id} />
                   <input name="direction" type="hidden" value="up" />
-                  <button className="button" disabled={index === 0} type="submit">
-                    Move up
+                  <button className="button compact-button" disabled={index === 0} type="submit">
+                    Up
                   </button>
                 </form>
                 <form action={moveRuleAction}>
                   <input name="ruleId" type="hidden" value={rule.id} />
                   <input name="direction" type="hidden" value="down" />
-                  <button className="button" disabled={index === pipeline.rules.length - 1} type="submit">
-                    Move down
+                  <button className="button compact-button" disabled={index === pipeline.rules.length - 1} type="submit">
+                    Down
                   </button>
                 </form>
+                <form action={moveRuleAction}>
+                  <input name="ruleId" type="hidden" value={rule.id} />
+                  <input name="direction" type="hidden" value="bottom" />
+                  <button className="button compact-button" disabled={index === pipeline.rules.length - 1} type="submit">
+                    Bottom
+                  </button>
+                </form>
+                <span className="muted">Rules evaluate from top to bottom.</span>
+              </div>
+              <div className="actions">
                 <form action={deleteRuleAction}>
                   <input name="ruleId" type="hidden" value={rule.id} />
                   <button className="button danger subtle" type="submit">
@@ -912,7 +953,7 @@ async function createPipelineAction(formData: FormData) {
     PrivacyStatus.PUBLIC,
     PrivacyStatus.UNLISTED
   ]);
-  if (privacyStatus === PrivacyStatus.PUBLIC && !hasPublicPrivacyConfirmation(formData)) {
+  if (privacyStatus === PrivacyStatus.PUBLIC && !hasPublicPrivacyConfirmation(formData, name)) {
     redirect("/pipelines?error=PublicPrivacyConfirmationRequired");
   }
   const pollingIntervalMinutes = parsePollingIntervalMinutes(formData);
@@ -1053,7 +1094,7 @@ async function updatePipelineAction(formData: FormData) {
   const folderChanged = pipeline.sourceFolderId !== sourceFolderId;
   const switchingToPublic =
     pipeline.privacyStatus !== PrivacyStatus.PUBLIC && privacyStatus === PrivacyStatus.PUBLIC;
-  if (switchingToPublic && !hasPublicPrivacyConfirmation(formData)) {
+  if (switchingToPublic && !hasPublicPrivacyConfirmation(formData, name)) {
     redirect("/pipelines?error=PublicPrivacyConfirmationRequired");
   }
 
@@ -1240,7 +1281,12 @@ async function moveRuleAction(formData: FormData) {
   }
 
   const ruleId = getRequiredFormValue(formData, "ruleId");
-  const direction = getEnumValue(formData, "direction", ["up", "down"] as const);
+  const direction = getEnumValue(formData, "direction", [
+    "up",
+    "down",
+    "top",
+    "bottom"
+  ] as const) as RuleMoveDirection;
   if (!ruleId) {
     redirect("/pipelines?error=MissingRuleFields");
   }
@@ -1265,28 +1311,26 @@ async function moveRuleAction(formData: FormData) {
     orderBy: { priority: "asc" },
     select: { id: true }
   });
-  const index = rules.findIndex((candidate) => candidate.id === ruleId);
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-
-  if (index < 0 || swapIndex < 0 || swapIndex >= rules.length) {
+  const ruleIds = rules.map((candidate) => candidate.id);
+  const reorderedRuleIds = reorderRuleIds(ruleIds, ruleId, direction);
+  if (reorderedRuleIds.join("\0") === ruleIds.join("\0")) {
     redirect("/pipelines?ruleUpdated=true");
   }
 
-  const reordered = [...rules];
-  const [selected] = reordered.splice(index, 1);
-  if (!selected) {
-    redirect("/pipelines?ruleUpdated=true");
-  }
-  reordered.splice(swapIndex, 0, selected);
-
-  await prisma.$transaction(
-    reordered.map((candidate, priorityIndex) =>
+  await prisma.$transaction([
+    ...reorderedRuleIds.map((candidateId, priorityIndex) =>
       prisma.rule.update({
-        where: { id: candidate.id },
-        data: { priority: priorityIndex + 1 }
+        where: { id: candidateId },
+        data: { priority: temporaryPriorityForIndex(priorityIndex) }
+      })
+    ),
+    ...reorderedRuleIds.map((candidateId, priorityIndex) =>
+      prisma.rule.update({
+        where: { id: candidateId },
+        data: { priority: finalPriorityForIndex(priorityIndex) }
       })
     )
-  );
+  ]);
 
   revalidatePath("/pipelines");
   redirect("/pipelines?ruleUpdated=true");
@@ -1650,8 +1694,9 @@ function conditionValue(operator: ConditionOperator, value: string) {
   return value;
 }
 
-function hasPublicPrivacyConfirmation(formData: FormData) {
-  return formData.get("publicPrivacyConfirmed") === "on";
+function hasPublicPrivacyConfirmation(formData: FormData, pipelineName: string) {
+  const confirmation = String(formData.get("publicPrivacyConfirmationText") || "").trim();
+  return confirmation === pipelineName.trim();
 }
 
 function parsePollingIntervalMinutes(formData: FormData) {
@@ -1692,7 +1737,7 @@ function pipelineErrorMessage(error: string) {
     PipelineNotEnabled: "Enable the pipeline before running detection.",
     PipelineNotFound: "Pipeline not found.",
     PublicPrivacyConfirmationRequired:
-      "Confirm that public uploads can be visible on YouTube before saving public privacy.",
+      "Type the pipeline name exactly to confirm public YouTube uploads.",
     RuleNotFound: "Routing rule not found.",
     TokenRefreshFailed: "Google could not refresh the Drive token. Reconnect Drive and try again.",
     DriveListFailed: "Google Drive could not list files in this folder."

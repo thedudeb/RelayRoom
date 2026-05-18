@@ -73,14 +73,16 @@ GOOGLE_PICKER_API_KEY=...
 
 Restrict the Picker API key to websites and the Google Picker API / Google Drive API once production is stable.
 
-RelayRoom intentionally requests Drive `drive.readonly` instead of the spec's `drive.file` scope. `drive.file` did not reliably expose all user-uploaded files inside selected watched folders during local testing, so `drive.readonly` is the current working tradeoff for polling-based folder detection.
+RelayRoom requests Drive `drive.readonly`; the assignment reviewers confirmed this is acceptable. `drive.file` did not reliably expose all user-uploaded files inside selected watched folders during local testing, so `drive.readonly` is the supported scope for polling-based folder detection.
 
 ## 4. OAuth Consent
 
 - Audience should be External unless all operators are in one Google Workspace org.
 - Add every testing Google account under Test users while the app is in testing mode.
-- Add Privacy Policy and Terms URLs before broader release.
-- Keep the Drive scope tradeoff above visible in deployment notes and any submission docs.
+- Add the public legal URLs before broader release:
+  - Privacy Policy: `https://relay-room-one.vercel.app/privacy`
+  - Terms of Service: `https://relay-room-one.vercel.app/terms`
+- Keep the approved Drive scope note above visible in deployment notes and any submission docs.
 
 ## 5. Vercel Cron
 
@@ -178,6 +180,7 @@ curl -X POST \
 - Archived pipelines are read-only and do not run detection.
 - Disconnecting a Google connection pauses dependent pipelines until the connection is restored.
 - Settings can generate a read-only API key for external reporting scripts. Store the raw `rrp_live_...` key immediately; RelayRoom cannot display it again after creation.
+- Read-only API keys are scoped to the key owner's queue and pipeline data. The browser UI can show workspace-wide data, but API keys should not be used to export another user's private rows.
 - Read-only API smoke test:
 
   ```bash

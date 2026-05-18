@@ -7,7 +7,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const status = searchParams.get("status") as QueueStatus | null;
   const pipelineId = searchParams.get("pipelineId");
-  const userId = searchParams.get("userId") || undefined;
   const access = await getApiAccess(searchParams, request);
 
   if (!access) {
@@ -16,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   const queueItems = access.isDemo
     ? await getQueueItemsForDemo()
-    : await getQueueItemsForUser(access.userId, { userId });
+    : await getQueueItemsForUser(access.userId, { userId: access.userId });
 
   const items = queueItems.filter((item) => {
     if (status && item.status !== status) return false;

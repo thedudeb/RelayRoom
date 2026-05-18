@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "postinstall": "prisma generate",
+    "smoke:local": "node scripts/smoke-local.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:deploy": "prisma migrate deploy",

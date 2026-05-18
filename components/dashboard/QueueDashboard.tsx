@@ -71,6 +71,9 @@ export function QueueDashboard({
   const relativeNowMs = isDemo ? demoNow : nowMs;
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
   const [pipelineFilter, setPipelineFilter] = useState("all");
+  const [ruleFilter, setRuleFilter] = useState("all");
+  const [detectedFrom, setDetectedFrom] = useState("");
+  const [detectedTo, setDetectedTo] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("detected_desc");
   const { toast } = useToast();
   const [busyAction, setBusyAction] = useState<{ itemId: string; action: QueueAction } | null>(
@@ -83,14 +86,30 @@ export function QueueDashboard({
     () => Array.from(new Set(items.map((item) => item.pipelineName))).sort(),
     [items]
   );
+  const ruleNames = useMemo(
+    () => Array.from(new Set(items.flatMap((item) => item.matchedRuleName || []))).sort(),
+    [items]
+  );
+  const hasUnmatchedItems = useMemo(
+    () => items.some((item) => !item.matchedRuleName),
+    [items]
+  );
+  const hasAdvancedFilters =
+    ruleFilter !== "all" || Boolean(detectedFrom) || Boolean(detectedTo);
 
   const visibleItems = useMemo(() => {
     return items
       .filter((item) => activeTab === "all" || item.status === activeTab)
       .filter((item) => pipelineFilter === "all" || item.pipelineName === pipelineFilter)
+      .filter((item) => {
+        if (ruleFilter === "all") return true;
+        if (ruleFilter === "__no_rule") return !item.matchedRuleName;
+        return item.matchedRuleName === ruleFilter;
+      })
+      .filter((item) => isWithinDetectedRange(item.detectedAt, detectedFrom, detectedTo))
       .slice()
       .sort((a, b) => compareQueueItems(a, b, sortMode));
-  }, [activeTab, items, pipelineFilter, sortMode]);
+  }, [activeTab, detectedFrom, detectedTo, items, pipelineFilter, ruleFilter, sortMode]);
 
   const activeCounts = {
     approval: count(items, "needs_approval"),
@@ -243,6 +262,48 @@ export function QueueDashboard({
             <option value="status_asc">Status</option>
             <option value="last_action_desc">Last action</option>
           </select>
+          <select
+            aria-label="Filter by matched rule"
+            className="select"
+            data-private={ruleFilter !== "all" && ruleFilter !== "__no_rule" ? true : undefined}
+            onChange={(event) => setRuleFilter(event.target.value)}
+            value={ruleFilter}
+          >
+            <option value="all">All rules</option>
+            {hasUnmatchedItems ? <option value="__no_rule">No matched rule</option> : null}
+            {ruleNames.map((ruleName) => (
+              <option key={ruleName} value={ruleName}>
+                {ruleName}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label="Detected from"
+            className="input filter-date-input"
+            onChange={(event) => setDetectedFrom(event.target.value)}
+            type="date"
+            value={detectedFrom}
+          />
+          <input
+            aria-label="Detected to"
+            className="input filter-date-input"
+            onChange={(event) => setDetectedTo(event.target.value)}
+            type="date"
+            value={detectedTo}
+          />
+          {hasAdvancedFilters ? (
+            <button
+              className="button ghost compact-button"
+              onClick={() => {
+                setRuleFilter("all");
+                setDetectedFrom("");
+                setDetectedTo("");
+              }}
+              type="button"
+            >
+              Clear filters
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -288,7 +349,7 @@ export function QueueDashboard({
             <EmptyState
               illustration="filter"
               title="Nothing matches these filters"
-              body="Try another status tab, sort order, or pipeline filter."
+              body="Try another status tab, owner, rule, date, or pipeline filter."
             />
           )
         ) : null}
@@ -969,6 +1030,19 @@ function compareQueueItems(a: QueueItem, b: QueueItem, sortMode: SortMode): numb
   }
 
   return new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime();
+}
+
+function isWithinDetectedRange(isoDate: string, fromDate: string, toDate: string) {
+  const time = new Date(isoDate).getTime();
+  if (fromDate) {
+    const start = new Date(`${fromDate}T00:00:00`).getTime();
+    if (Number.isFinite(start) && time < start) return false;
+  }
+  if (toDate) {
+    const end = new Date(`${toDate}T23:59:59.999`).getTime();
+    if (Number.isFinite(end) && time > end) return false;
+  }
+  return true;
 }
 
 function formatBytes(bytes?: number): string {

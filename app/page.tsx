@@ -106,6 +106,8 @@ export default async function Home({
           <nav aria-label="Landing navigation">
             <a href="/dashboard?demo=true">Demo</a>
             <Link href="/settings">API</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
             <ThemeToggle compact />
             <GoogleSignInButton />
           </nav>

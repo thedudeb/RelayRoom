@@ -1,4 +1,11 @@
-import { ConnectionKind, ConnectionStatus, PipelineStatus, Role } from "@prisma/client";
+import {
+  ConnectionKind,
+  ConnectionStatus,
+  FailureReason,
+  PipelineStatus,
+  Role,
+  QueueStatus
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
@@ -20,12 +27,13 @@ export default async function SettingsPage({
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
-  const [ownerState, readiness, activeApiKey] = access.isDemo
-    ? [null, await getReadinessState(), null]
+  const [ownerState, readiness, activeApiKey, telemetry] = access.isDemo
+    ? [null, await getReadinessState(), null, await getOperationsTelemetry()]
     : await Promise.all([
         getOwnerState(access.userId),
         getReadinessState(),
-        getActiveApiKey(access.userId)
+        getActiveApiKey(access.userId),
+        getOperationsTelemetry()
       ]);
 
   return (
@@ -58,6 +66,7 @@ export default async function SettingsPage({
       <div className="split">
         <section className="stack">
           <ReadinessPanel readiness={readiness} />
+          <OperationsTelemetryPanel telemetry={telemetry} />
           <WebhookSmokeTest disabled={access.isDemo} />
           <section className="panel" data-tour="api-key-panel">
             <h2>Profile</h2>
@@ -141,6 +150,109 @@ interface ReadinessState {
   };
   databaseError?: string;
   databaseOk: boolean;
+}
+
+interface OperationsTelemetryState {
+  databaseError?: string;
+  duePipelines: number;
+  failedAttempts24h: number;
+  lastAction?: {
+    at: string;
+    filename: string;
+    status: string;
+  };
+  lastDetection?: {
+    at: string;
+    filename: string;
+    pipelineName: string;
+  };
+  lastUploadAttempt?: {
+    at: string;
+    filename: string;
+    outcome: string;
+  };
+  queueCounts: Record<string, number>;
+  quotaFailures24h: number;
+  uploadAttempts24h: number;
+}
+
+function OperationsTelemetryPanel({ telemetry }: { telemetry: OperationsTelemetryState }) {
+  const needsAttention =
+    telemetry.failedAttempts24h > 0 ||
+    telemetry.quotaFailures24h > 0 ||
+    telemetry.queueCounts[QueueStatus.FAILED] > 0;
+
+  return (
+    <section className="panel" data-tour="operations-telemetry">
+      <div className="section-header">
+        <div>
+          <h2>Operations telemetry</h2>
+          <p className="muted">Production signals for cron, detection, uploads, and failures.</p>
+        </div>
+        <span className={`badge ${needsAttention ? "needs_routing" : "uploaded"}`}>
+          {needsAttention ? "review" : "healthy"}
+        </span>
+      </div>
+      <div className="preflight-metrics telemetry-metrics" aria-label="Operations telemetry metrics">
+        <ReadinessMetric label="Due pipelines" value={telemetry.duePipelines} />
+        <ReadinessMetric label="Upload attempts 24h" value={telemetry.uploadAttempts24h} />
+        <ReadinessMetric label="Failed attempts 24h" value={telemetry.failedAttempts24h} />
+        <ReadinessMetric label="Quota failures 24h" value={telemetry.quotaFailures24h} />
+      </div>
+      <div className="telemetry-grid">
+        <TelemetryCard
+          label="Last detection"
+          value={
+            telemetry.lastDetection
+              ? `${telemetry.lastDetection.filename} via ${telemetry.lastDetection.pipelineName}`
+              : "No detections yet"
+          }
+          detail={telemetry.lastDetection?.at}
+        />
+        <TelemetryCard
+          label="Last queue action"
+          value={
+            telemetry.lastAction
+              ? `${telemetry.lastAction.filename} is ${telemetry.lastAction.status.toLowerCase().replaceAll("_", " ")}`
+              : "No queue actions yet"
+          }
+          detail={telemetry.lastAction?.at}
+        />
+        <TelemetryCard
+          label="Last upload attempt"
+          value={
+            telemetry.lastUploadAttempt
+              ? `${telemetry.lastUploadAttempt.filename} ${telemetry.lastUploadAttempt.outcome}`
+              : "No upload attempts yet"
+          }
+          detail={telemetry.lastUploadAttempt?.at}
+        />
+      </div>
+      {telemetry.databaseError ? (
+        <div className="notice danger" role="alert">
+          Telemetry unavailable: {telemetry.databaseError}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function TelemetryCard({
+  detail,
+  label,
+  value
+}: {
+  detail?: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="telemetry-card">
+      <span>{label}</span>
+      <strong data-private>{value}</strong>
+      {detail ? <small>{detail}</small> : null}
+    </div>
+  );
 }
 
 function ReadinessPanel({ readiness }: { readiness: ReadinessState }) {
@@ -356,6 +468,121 @@ async function getReadinessState(): Promise<ReadinessState> {
   });
 
   return { checks, counts, databaseError, databaseOk };
+}
+
+async function getOperationsTelemetry(): Promise<OperationsTelemetryState> {
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const emptyState: OperationsTelemetryState = {
+    duePipelines: 0,
+    failedAttempts24h: 0,
+    queueCounts: {},
+    quotaFailures24h: 0,
+    uploadAttempts24h: 0
+  };
+
+  try {
+    const [
+      queueGroups,
+      enabledPipelines,
+      uploadAttempts24h,
+      failedAttempts24h,
+      quotaFailures24h,
+      lastDetection,
+      lastAction,
+      lastUploadAttempt
+    ] = await Promise.all([
+      prisma.queueItem.groupBy({
+        by: ["status"],
+        _count: { _all: true }
+      }),
+      prisma.pipeline.findMany({
+        where: { archivedAt: null, status: PipelineStatus.ENABLED },
+        select: {
+          id: true,
+          lastDetectionAt: true,
+          pollingIntervalMinutes: true
+        }
+      }),
+      prisma.uploadAttempt.count({
+        where: { startedAt: { gte: since24h } }
+      }),
+      prisma.uploadAttempt.count({
+        where: { finishedAt: { gte: since24h }, success: false }
+      }),
+      prisma.uploadAttempt.count({
+        where: { failureReason: FailureReason.QUOTA_EXCEEDED, finishedAt: { gte: since24h } }
+      }),
+      prisma.queueItem.findFirst({
+        orderBy: { detectedAt: "desc" },
+        select: {
+          detectedAt: true,
+          filename: true,
+          pipeline: { select: { name: true } }
+        }
+      }),
+      prisma.queueItem.findFirst({
+        orderBy: { lastActionAt: "desc" },
+        select: {
+          filename: true,
+          lastActionAt: true,
+          status: true
+        }
+      }),
+      prisma.uploadAttempt.findFirst({
+        orderBy: { startedAt: "desc" },
+        select: {
+          finishedAt: true,
+          startedAt: true,
+          success: true,
+          queueItem: { select: { filename: true } }
+        }
+      })
+    ]);
+
+    const now = Date.now();
+    const queueCounts = Object.fromEntries(
+      queueGroups.map((group) => [group.status, group._count._all])
+    );
+    const duePipelines = enabledPipelines.filter((pipeline) => {
+      if (!pipeline.lastDetectionAt) return true;
+      const cadenceMs = Math.max(5, pipeline.pollingIntervalMinutes) * 60 * 1000;
+      return now - pipeline.lastDetectionAt.getTime() >= cadenceMs;
+    }).length;
+
+    return {
+      duePipelines,
+      failedAttempts24h,
+      lastAction: lastAction
+        ? {
+            at: lastAction.lastActionAt.toLocaleString(),
+            filename: lastAction.filename,
+            status: lastAction.status
+          }
+        : undefined,
+      lastDetection: lastDetection
+        ? {
+            at: lastDetection.detectedAt.toLocaleString(),
+            filename: lastDetection.filename,
+            pipelineName: lastDetection.pipeline.name
+          }
+        : undefined,
+      lastUploadAttempt: lastUploadAttempt
+        ? {
+            at: (lastUploadAttempt.finishedAt || lastUploadAttempt.startedAt).toLocaleString(),
+            filename: lastUploadAttempt.queueItem.filename,
+            outcome: lastUploadAttempt.success ? "succeeded" : "failed"
+          }
+        : undefined,
+      queueCounts,
+      quotaFailures24h,
+      uploadAttempts24h
+    };
+  } catch (error) {
+    return {
+      ...emptyState,
+      databaseError: error instanceof Error ? error.message : "Unknown database error."
+    };
+  }
 }
 
 function checkValue(

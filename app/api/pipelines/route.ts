@@ -15,12 +15,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const userId = searchParams.get("userId") || undefined;
   const [pipelineData, queueItems] = access.isDemo
     ? await Promise.all([getPipelinesForDemo(), getQueueItemsForDemo()])
     : await Promise.all([
-        getPipelinesForUser(access.userId, { userId }),
-        getQueueItemsForUser(access.userId, { userId })
+        getPipelinesForUser(access.userId, { userId: access.userId }),
+        getQueueItemsForUser(access.userId, { userId: access.userId })
       ]);
 
   const pipelines = pipelineData.map((pipeline) => {

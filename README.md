@@ -9,7 +9,7 @@ This repository is being built from `SPEC.md`. The current implementation includ
 - **Web app:** Next.js App Router with TypeScript.
 - **Database:** PostgreSQL through Prisma.
 - **Auth:** Google sign-in for platform sessions, plus separate OAuth grants for Drive and YouTube connections.
-- **Detection path:** Custom polling is the initial implementation target. It is easier to reproduce in Codespaces and satisfies the spec's one-hour latency target.
+- **Detection path:** Polling is the production path, with the signed webhook receiver available for external automation smoke tests.
 - **Workers:** Upload and polling workers will run outside request/response paths. The queue state model is already represented in Prisma.
 - **Rule engine:** Pure TypeScript module under `lib/rules`. It evaluates ordered rules, supports nested AND/OR groups, and returns a full trace for dashboard debugging.
 
@@ -18,11 +18,14 @@ This repository is being built from `SPEC.md`. The current implementation includ
 Implemented now:
 
 - Dashboard UI with real and seeded queue items across `uploaded`, `failed`, `needs_approval`, `needs_routing`, `skipped`, and `externally_handled`.
+- Queue filters for owner, status, pipeline, matched rule, detected date range, and sort order.
 - Connections surface showing separate Drive and YouTube grants.
 - Pipeline creation, editing, archiving, restore, enable/disable, manual detection, and Drive folder probes.
 - Routing rule creation and editing for first-match playlist assignment.
+- Rule tester and logic preview for validating routing conditions before running detection.
 - YouTube upload approval, retry, manual routing, skip, restore, and externally-handled flows.
 - Workspace-wide visibility for allowed users, with user filters on queue, pipelines, and connections.
+- Public YouTube privacy requires an explicit pipeline-name confirmation before saving.
 - Read-only demo endpoints and demo UI:
   - `GET /api/health`
   - `GET /api/queue`
@@ -34,7 +37,7 @@ Implemented now:
 - Database seed script for the RelayRoom demo user, connections, pipelines, rules, queue rows, and activity log entries.
 - AES-256-GCM token vault helper for encrypting OAuth refresh tokens at rest.
 - Queue state transition helper for allowed operator/system actions.
-- Unit tests for first-match-wins routing, regex validation, token encryption, queue transitions, and workspace user filters.
+- Unit tests for first-match-wins routing, regex validation, token encryption, queue transitions, workspace user filters, queue ordering, and read-only API scoping.
 
 ## Local Development
 
@@ -83,7 +86,7 @@ Google Cloud Console will need three OAuth clients:
 - **Drive connection client:** `drive.readonly`, paired with Google Picker for folder selection.
 - **YouTube connection client:** `youtube.upload` and `youtube`.
 
-The original spec calls for `drive.file`, but RelayRoom currently uses `drive.readonly` deliberately. During testing, `drive.file` only exposed files that RelayRoom created or that were explicitly opened through Picker, which made watched-folder detection miss existing user-uploaded recordings. `drive.readonly` lets RelayRoom list the chosen folder reliably while still keeping access scoped to read-only Drive data; uploads remain handled through the separate YouTube grant.
+The assignment reviewers approved `drive.readonly` for RelayRoom. During testing, `drive.file` only exposed files that RelayRoom created or that were explicitly opened through Picker, which made watched-folder detection miss existing user-uploaded recordings. `drive.readonly` lets RelayRoom list the chosen folder reliably while still keeping Drive access read-only; uploads remain handled through the separate YouTube grant.
 
 For local development, register these redirect URIs:
 
@@ -148,7 +151,7 @@ See `docs/DEPLOYMENT.md` for the production deployment checklist covering Vercel
 
 ## Read-Only API Keys
 
-Allowed users can generate or rotate a read-only API key from Settings. RelayRoom only shows the raw key once; it stores a SHA-256 hash in the database. Use the key as a bearer token:
+Allowed users can generate or rotate a read-only API key from Settings. RelayRoom only shows the raw key once; it stores a SHA-256 hash in the database. API keys are intentionally scoped to the key owner's own queue and pipeline data, even though the signed-in web UI can show workspace-wide views with filters. Use the key as a bearer token:
 
 ```bash
 curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/queue
@@ -196,8 +199,22 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ## Next Implementation Steps
 
-1. Test with a second allowed Google account and verify shared workspace visibility plus user filters.
-2. Add automated browser coverage for login, demo navigation, routing, and queue actions.
-3. Improve production telemetry around cron runs, upload attempts, and quota failures.
-4. Add richer rule-builder validation, rule preview fixtures, and drag ordering.
-5. Prepare Privacy Policy / Terms links and production OAuth verification notes.
+1. Add full browser coverage for authenticated Google login, routing edits, and queue actions.
+2. Add alert delivery for production telemetry thresholds.
+3. Expand mobile QA coverage across Queue, Pipelines, Connections, and Settings.
+
+## Smoke Checks
+
+Run a lightweight public/demo smoke pass before deployment:
+
+```bash
+npm run smoke:local
+```
+
+To check production after Vercel deploys:
+
+```bash
+SMOKE_BASE_URL=https://relay-room-one.vercel.app npm run smoke:local
+```
+
+The smoke script checks the landing page, demo app pages, public legal pages, and demo read-only APIs.

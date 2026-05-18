@@ -1298,6 +1298,37 @@ html[data-privacy="on"] input[data-private] {
   line-height: 1;
 }
 
+.telemetry-metrics {
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+
+.telemetry-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-4);
+}
+
+.telemetry-card {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+  min-height: 116px;
+  padding: var(--space-4);
+}
+
+.telemetry-card span,
+.telemetry-card small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.telemetry-card strong {
+  overflow-wrap: anywhere;
+}
+
 .preflight-list {
   display: grid;
   gap: var(--space-2);
@@ -1398,6 +1429,24 @@ html[data-privacy="on"] input[data-private] {
 }
 
 .filter-row .select:focus-visible {
+  background-color: var(--surface);
+  border-color: var(--accent);
+}
+
+.filter-row .filter-date-input {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  max-width: 150px;
+  min-height: 32px;
+  padding-block: 0;
+}
+
+.filter-row .filter-date-input:hover {
+  background-color: var(--surface-muted);
+}
+
+.filter-row .filter-date-input:focus-visible {
   background-color: var(--surface);
   border-color: var(--accent);
 }
@@ -1664,6 +1713,12 @@ html[data-privacy="on"] input[data-private] {
 .button.sm,
 .icon-button.sm {
   min-height: 30px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.button.compact-button {
+  min-height: 32px;
   padding: 0 var(--space-2);
   font-size: var(--text-xs);
 }
@@ -2800,6 +2855,16 @@ td strong {
   margin-bottom: var(--space-4);
 }
 
+.rule-order-panel {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+}
+
 .rule-card-header h3 {
   color: var(--ink);
   font-size: var(--text-md);
@@ -3672,6 +3737,8 @@ td strong {
   border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
   border-radius: var(--radius-md);
   color: var(--ink);
+  display: grid;
+  gap: var(--space-2);
   padding: var(--space-3);
 }
 
@@ -4131,7 +4198,9 @@ td strong {
 .landing-nav nav {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+  justify-content: flex-end;
 }
 
 .auth-form {
@@ -5126,6 +5195,64 @@ td strong {
   text-transform: uppercase;
   min-height: 48px;
   padding-inline: var(--space-6);
+}
+
+.legal-page {
+  background:
+    radial-gradient(60% 45% at 82% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 62%),
+    var(--bg);
+  min-height: 100vh;
+  padding: var(--space-6) clamp(var(--space-4), 5vw, var(--space-12)) var(--space-12);
+}
+
+.legal-header {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  margin: 0 auto var(--space-8);
+  max-width: 920px;
+}
+
+.legal-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  color: var(--ink);
+  display: grid;
+  gap: var(--space-6);
+  margin: 0 auto;
+  max-width: 920px;
+  padding: clamp(var(--space-6), 5vw, var(--space-10));
+}
+
+.legal-card h1 {
+  font-family: var(--font-serif);
+  font-size: clamp(40px, 7vw, 72px);
+  font-weight: 400;
+  font-variation-settings: "opsz" 144, "SOFT" 50;
+  letter-spacing: -0.026em;
+  line-height: 1;
+  margin: 0;
+}
+
+.legal-card h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-snug);
+  margin: 0 0 var(--space-2);
+}
+
+.legal-card p {
+  color: var(--muted);
+  line-height: var(--leading-relaxed);
+  margin: 0;
+}
+
+.legal-updated {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: var(--space-5);
 }
 
 @media (max-width: 980px) {
