@@ -100,6 +100,7 @@ export async function POST(
     const update = getActionUpdate({
       action: body.action,
       currentStatus: item.status,
+      hasUploadedVideoMissingPlaylist: Boolean(item.youtubeVideoId && !item.youtubePlaylistId),
       intendedPlaylistId: item.intendedPlaylistId,
       matchedRuleId: item.matchedRuleId,
       playlistId: body.playlistId,
@@ -191,6 +192,7 @@ async function getManualRouteRules({
 function getActionUpdate({
   action,
   currentStatus,
+  hasUploadedVideoMissingPlaylist,
   intendedPlaylistId,
   matchedRuleId,
   now,
@@ -202,6 +204,7 @@ function getActionUpdate({
 }: {
   action: NonNullable<QueueActionBody["action"]>;
   currentStatus: PrismaQueueStatus;
+  hasUploadedVideoMissingPlaylist: boolean;
   intendedPlaylistId: string | null;
   matchedRuleId: string | null;
   now: Date;
@@ -217,7 +220,10 @@ function getActionUpdate({
   youtubeUrl?: string;
 }) {
   if (action === "route") {
-    if (currentStatus !== PrismaQueueStatus.NEEDS_ROUTING) {
+    const isRecoveringPlaylistAssignment =
+      currentStatus === PrismaQueueStatus.FAILED && hasUploadedVideoMissingPlaylist;
+
+    if (currentStatus !== PrismaQueueStatus.NEEDS_ROUTING && !isRecoveringPlaylistAssignment) {
       throw new Error(`Manual routing is not allowed from ${formatStatus(currentStatus)}.`);
     }
 
@@ -238,9 +244,12 @@ function getActionUpdate({
         previousStatus: currentStatus,
         status: PrismaQueueStatus.NEEDS_APPROVAL
       },
-      message: `Routed item to ${playlistName?.trim() || selectedRule.youtubePlaylistName}.`,
+      message: isRecoveringPlaylistAssignment
+        ? `Recovered playlist assignment to ${playlistName?.trim() || selectedRule.youtubePlaylistName}.`
+        : `Routed item to ${playlistName?.trim() || selectedRule.youtubePlaylistName}.`,
       metadata: {
         fromStatus: currentStatus,
+        recoveredPlaylistAssignment: isRecoveringPlaylistAssignment,
         playlistId: selectedRule.youtubePlaylistId,
         playlistName: playlistName?.trim() || selectedRule.youtubePlaylistName
       }

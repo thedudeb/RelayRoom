@@ -57,7 +57,7 @@ export default async function SettingsPage({
       <div className="split">
         <section className="stack">
           <ReadinessPanel readiness={readiness} />
-          <section className="panel">
+          <section className="panel" data-tour="api-key-panel">
             <h2>Profile</h2>
             <div className="stack">
               <label className="stack">
@@ -73,7 +73,7 @@ export default async function SettingsPage({
           </section>
         </section>
         <section className="stack">
-          <section className="panel">
+          <section className="panel" data-tour="owner-controls">
             <h2>Owner Controls</h2>
             <p className="muted">
               The first matching INITIAL_ADMIN_EMAIL account can disable or remove users. Workspace
@@ -148,7 +148,7 @@ function ReadinessPanel({ readiness }: { readiness: ReadinessState }) {
   const missingCount = readiness.checks.filter((check) => check.status === "missing").length;
 
   return (
-    <section className="panel">
+    <section className="panel" data-tour="readiness-panel">
       <div className="section-header">
         <div>
           <h2>Production readiness</h2>

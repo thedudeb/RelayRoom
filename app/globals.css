@@ -529,6 +529,100 @@ textarea {
   color: var(--ink);
 }
 
+.tutorial-layer {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: calc(var(--z-toast) + 1);
+}
+
+.tutorial-scrim {
+  background: color-mix(in srgb, var(--ink) 34%, transparent);
+  border: 0;
+  cursor: default;
+  inset: 0;
+  pointer-events: auto;
+  position: absolute;
+  z-index: 0;
+}
+
+.tutorial-spotlight {
+  border: 2px solid var(--blue);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 0 0 9999px color-mix(in srgb, var(--ink) 34%, transparent),
+    0 0 0 6px color-mix(in srgb, var(--blue) 16%, transparent),
+    var(--shadow-lg);
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.tutorial-card {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: var(--space-3);
+  left: 50%;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-4);
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.tutorial-card[style] {
+  transform: none;
+}
+
+.tutorial-card-header {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  justify-content: space-between;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.tutorial-card h2 {
+  font-size: var(--text-xl);
+  margin: 0;
+}
+
+.tutorial-card p {
+  color: var(--muted);
+  line-height: var(--leading-relaxed);
+  margin: 0;
+}
+
+.tutorial-progress {
+  background: var(--surface-muted);
+  border-radius: var(--radius-pill);
+  height: 6px;
+  overflow: hidden;
+}
+
+.tutorial-progress span {
+  background: var(--blue);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+.tutorial-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
 .sidebar-demo-pill span {
   background: var(--warning);
   border-radius: var(--radius-pill);

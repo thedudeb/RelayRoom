@@ -163,7 +163,7 @@ export default async function PipelinesPage({
           {pipelineErrorMessage(params.error)}
         </div>
       ) : null}
-      <div className="view-toolbar">
+      <div className="view-toolbar" data-tour="pipeline-owner-filter">
         <div className="actions" aria-label="Pipeline views">
           <Link className={showingArchived ? "button" : "button primary"} href={activePipelinesHref}>
             Active pipelines
@@ -263,10 +263,12 @@ export default async function PipelinesPage({
                 </div>
               ) : null}
               {!showingArchived && canManagePipeline ? (
-                <PipelineStatusControls
-                  initialStatus={pipeline.status}
-                  pipelineId={pipeline.id}
-                />
+                <div data-tour="pipeline-actions">
+                  <PipelineStatusControls
+                    initialStatus={pipeline.status}
+                    pipelineId={pipeline.id}
+                  />
+                </div>
               ) : null}
               {showingArchived && canManagePipeline ? (
                 <ArchivedPipelineControls pipelineId={pipeline.id} />
@@ -331,7 +333,7 @@ function CreatePipelinePanel({
   const canCreate = !isDemo && driveConnections.length > 0 && youtubeConnections.length > 0;
 
   return (
-    <div className="panel">
+    <div className="panel" data-tour="new-pipeline">
       <div className="section-header">
         <div>
           <h2>New pipeline</h2>
@@ -420,7 +422,7 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
     pipeline.privacyStatus === "public" ? PrivacyStatus.PUBLIC : PrivacyStatus.UNLISTED;
 
   return (
-    <details className="edit-panel">
+    <details className="edit-panel" data-tour="routing-rules">
       <summary>Edit pipeline</summary>
       <form action={updatePipelineAction} className="form-grid">
         <input name="pipelineId" type="hidden" value={pipeline.id} />

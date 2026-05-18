@@ -37,7 +37,7 @@ export default async function ConnectionsPage({
       account={access.account}
       isDemo={access.isDemo}
     >
-      <div className="section-header">
+      <div className="section-header" data-tour="connection-actions">
         <div className="actions">
           {access.isDemo ? (
             <>
@@ -78,7 +78,7 @@ export default async function ConnectionsPage({
         title="Connection owner"
         users={workspaceUsers}
       />
-      <div className="table-wrap responsive-table-wrap">
+      <div className="table-wrap responsive-table-wrap" data-tour="connection-table">
         <table className="responsive-table">
           <thead>
             <tr>

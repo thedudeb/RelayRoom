@@ -47,7 +47,7 @@ export function WorkspaceUserFilter({
     selectedUserId && selectedUserId !== currentUser?.id ? selectedUserId : "";
 
   return (
-    <div className="compact-filter" aria-label={title}>
+    <div className="compact-filter" aria-label={title} data-tour="workspace-user-filter">
       <span>{title}</span>
       <div className="compact-filter-actions">
         <button

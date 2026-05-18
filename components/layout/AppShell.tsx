@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 import { PrivacyToggle } from "@/components/privacy/PrivacyToggle";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { TutorialMode } from "@/components/tutorial/TutorialMode";
 import { signOutFromApp } from "@/lib/auth/actions";
 
 export interface AccountSummary {
@@ -49,7 +50,7 @@ export function AppShell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <NavLink className="brand" href={`/dashboard${demoSuffix}`}>
+        <NavLink className="brand" data-tour="brand" href={`/dashboard${demoSuffix}`}>
           <RelayRoomLogo />
           <span>Drive to YouTube operations</span>
         </NavLink>
@@ -64,6 +65,7 @@ export function AppShell({
                 key={item.href}
                 href={`${item.href}${demoSuffix}`}
                 data-active={active}
+                data-tour={`nav-${item.label.toLowerCase()}`}
               >
                 <Icon aria-hidden="true" size={17} />
                 <span>{item.label}</span>
@@ -80,6 +82,7 @@ export function AppShell({
         <div className="sidebar-utilities" aria-label="Workspace utilities">
           <PrivacyToggle />
           <ThemeToggle />
+          <TutorialMode />
         </div>
       </aside>
       <main className="main">
@@ -147,6 +150,7 @@ function AccountBadge({ account }: { account?: AccountSummary | null }) {
         aria-expanded={open}
         aria-haspopup="menu"
         className="account-badge"
+        data-tour="account"
         onClick={() => setOpen((value) => !value)}
         title={supportingText}
         type="button"

@@ -190,14 +190,14 @@ export function QueueDashboard({
 
   return (
     <>
-      <section className="metric-grid" aria-label="Queue summary">
+      <section className="metric-grid" aria-label="Queue summary" data-tour="queue-summary">
         <Metric label="Needs approval" tone="approval" value={activeCounts.approval} />
         <Metric label="Needs routing" tone="routing" value={activeCounts.routing} />
         <Metric label="Failed" tone="failed" value={activeCounts.failed} />
         <Metric label="Uploaded" tone="uploaded" value={activeCounts.uploaded} />
       </section>
 
-      <section className="toolbar">
+      <section className="toolbar" data-tour="queue-filters">
         <div className="tabs" aria-label="Queue status filters">
           {tabs.map((tab) => {
             const tabKey = tab.status || "all";
@@ -246,7 +246,7 @@ export function QueueDashboard({
         </div>
       </section>
 
-      <div className="table-wrap responsive-table-wrap">
+      <div className="table-wrap responsive-table-wrap" data-tour="queue-table">
         <table className="responsive-table">
           <thead>
             <tr>
@@ -510,13 +510,51 @@ function QueueActions({
   }
 
   if (item.status === "failed") {
+    const canRecoverPlaylist =
+      Boolean(item.youtubeVideoId) && !item.youtubePlaylistId && Boolean(item.routingOptions?.length);
+    const selectedPlaylist = item.routingOptions?.find(
+      (playlist) => playlist.id === selectedPlaylistId
+    );
+
     return (
       <div className="actions">
         {detailsButton}
+        {canRecoverPlaylist ? (
+          <select
+            aria-label={`Recover ${item.filename} to playlist`}
+            className="select route-select"
+            disabled={isBusy}
+            onChange={(event) => setSelectedPlaylistId(event.target.value)}
+            value={selectedPlaylistId}
+          >
+            {item.routingOptions?.map((playlist) => (
+              <option key={playlist.id} value={playlist.id}>
+                {playlist.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {canRecoverPlaylist ? (
+          <button
+            className="icon-button"
+            data-tooltip={selectedPlaylist ? "Recover playlist assignment" : "No playlist options"}
+            disabled={isBusy || !selectedPlaylist}
+            onClick={() =>
+              selectedPlaylist &&
+              onAction(item, "route", {
+                playlistId: selectedPlaylist.id,
+                playlistName: selectedPlaylist.name
+              })
+            }
+            type="button"
+          >
+            <Route aria-hidden="true" size={16} />
+          </button>
+        ) : null}
         <button
           className="icon-button"
-          data-tooltip="Retry upload"
-          disabled={isBusy}
+          data-tooltip={item.youtubeVideoId && !item.youtubePlaylistId ? "Retry playlist assignment" : "Retry upload"}
+          disabled={isBusy || (canRecoverPlaylist && !selectedPlaylist)}
           onClick={() => onAction(item, "upload")}
           type="button"
         >
