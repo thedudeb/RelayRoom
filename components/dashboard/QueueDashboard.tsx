@@ -455,7 +455,14 @@ function QueueActions({
   onDetails: (item: QueueItem) => void;
 }) {
   const isBusy = busyAction?.itemId === item.id;
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState(item.routingOptions?.[0]?.id || "");
+  const hasUploadedVideoMissingPlaylist = Boolean(item.youtubeVideoId && !item.youtubePlaylistId);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState(
+    item.intendedPlaylistId || item.routingOptions?.[0]?.id || ""
+  );
+
+  useEffect(() => {
+    setSelectedPlaylistId(item.intendedPlaylistId || item.routingOptions?.[0]?.id || "");
+  }, [item.id, item.intendedPlaylistId, item.routingOptions]);
 
   const detailsButton = (
     <button
@@ -511,7 +518,7 @@ function QueueActions({
 
   if (item.status === "failed") {
     const canRecoverPlaylist =
-      Boolean(item.youtubeVideoId) && !item.youtubePlaylistId && Boolean(item.routingOptions?.length);
+      hasUploadedVideoMissingPlaylist && Boolean(item.routingOptions?.length);
     const selectedPlaylist = item.routingOptions?.find(
       (playlist) => playlist.id === selectedPlaylistId
     );
@@ -553,9 +560,20 @@ function QueueActions({
         ) : null}
         <button
           className="icon-button"
-          data-tooltip={item.youtubeVideoId && !item.youtubePlaylistId ? "Retry playlist assignment" : "Retry upload"}
+          data-tooltip={hasUploadedVideoMissingPlaylist ? "Retry playlist assignment" : "Retry upload"}
           disabled={isBusy || (canRecoverPlaylist && !selectedPlaylist)}
-          onClick={() => onAction(item, "upload")}
+          onClick={() =>
+            onAction(
+              item,
+              "upload",
+              canRecoverPlaylist && selectedPlaylist
+                ? {
+                    playlistId: selectedPlaylist.id,
+                    playlistName: selectedPlaylist.name
+                  }
+                : undefined
+            )
+          }
           type="button"
         >
           <RotateCcw aria-hidden="true" size={16} />
@@ -739,6 +757,7 @@ function QueueDetailsPanel({
   const item = details.item;
   const attempts = details.attempts || [];
   const activityLog = details.activityLog || [];
+  const hasUploadedVideoMissingPlaylist = Boolean(item.youtubeVideoId && !item.youtubePlaylistId);
 
   return (
     <div className="queue-detail-panel">
@@ -772,9 +791,20 @@ function QueueDetailsPanel({
         <Detail isPrivate label="User" value={displayWorkspaceUser(item.owner)} />
         <Detail isPrivate label="Drive file" value={item.driveFileId} />
         <Detail isPrivate label="Playlist" value={item.intendedPlaylistName || "Unassigned"} />
+        {item.youtubeVideoId ? <Detail label="YouTube video" value={item.youtubeVideoId} /> : null}
         <Detail label="Rule" value={item.matchedRuleName || "No match"} />
         <Detail label="Last action" value={formatAbsolute(item.lastActionAt)} />
       </div>
+
+      {hasUploadedVideoMissingPlaylist ? (
+        <div className="detail-callout warning">
+          <strong>Upload recovered</strong>
+          <p>
+            The video exists on YouTube, but RelayRoom still needs to add it to the selected
+            playlist. Use Retry playlist assignment to finish without re-uploading the Drive file.
+          </p>
+        </div>
+      ) : null}
 
       {item.lastError ? (
         <div className="detail-callout danger">

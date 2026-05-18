@@ -212,7 +212,7 @@ function mapQueueItem(
     intendedPlaylistName: item.intendedPlaylistName || undefined,
     routingOptions: pipelineOptions.length ? pipelineOptions : fallbackOptions,
     youtubeVideoId: item.youtubeVideoId || undefined,
-    youtubePlaylistId: item.youtubePlaylistId || item.intendedPlaylistId || undefined,
+    youtubePlaylistId: item.youtubePlaylistId || undefined,
     youtubeUrl: item.youtubeUrl || undefined,
     failureReason: item.failureReason?.toLowerCase() as QueueItem["failureReason"],
     lastError: item.lastError || undefined,

@@ -41,6 +41,13 @@ export async function POST(
 
   if (body.action === "upload") {
     try {
+      await preparePlaylistRecovery({
+        playlistId: body.playlistId,
+        playlistName: body.playlistName,
+        queueItemId: id,
+        userId: access.userId
+      });
+
       const result = await uploadQueueItemToYouTube({
         queueItemId: id,
         userId: access.userId
@@ -155,6 +162,92 @@ export async function POST(
       { status: 400 }
     );
   }
+}
+
+async function preparePlaylistRecovery({
+  playlistId,
+  playlistName,
+  queueItemId,
+  userId
+}: {
+  playlistId?: string;
+  playlistName?: string;
+  queueItemId: string;
+  userId: string;
+}) {
+  if (!playlistId) {
+    return;
+  }
+
+  const item = await prisma.queueItem.findFirst({
+    where: {
+      id: queueItemId,
+      userId
+    },
+    include: {
+      pipeline: {
+        select: {
+          youtubeConnectionId: true
+        }
+      }
+    }
+  });
+
+  if (!item) {
+    throw new Error("Queue item not found.");
+  }
+
+  const isRecoveringPlaylistAssignment =
+    item.status === PrismaQueueStatus.FAILED && item.youtubeVideoId && !item.youtubePlaylistId;
+
+  if (!isRecoveringPlaylistAssignment) {
+    return;
+  }
+
+  const rules = await getManualRouteRules({
+    playlistId,
+    userId,
+    youtubeConnectionId: item.pipeline.youtubeConnectionId
+  });
+  const selectedRule = rules.find((rule) => rule.youtubePlaylistId === playlistId);
+
+  if (!selectedRule) {
+    throw new Error("Choose a valid playlist for this pipeline.");
+  }
+
+  const now = new Date();
+  const selectedPlaylistName = playlistName?.trim() || selectedRule.youtubePlaylistName;
+
+  await prisma.$transaction([
+    prisma.queueItem.update({
+      where: { id: item.id },
+      data: {
+        failureReason: null,
+        intendedPlaylistId: selectedRule.youtubePlaylistId,
+        intendedPlaylistName: selectedPlaylistName,
+        lastActionAt: now,
+        lastError: null,
+        matchedRuleId: null,
+        matchedRuleName: "Manual route",
+        previousStatus: item.status
+      }
+    }),
+    prisma.activityLogEntry.create({
+      data: {
+        actorType: "user",
+        message: `Selected ${selectedPlaylistName} for playlist recovery.`,
+        metadata: {
+          fromStatus: item.status,
+          playlistId: selectedRule.youtubePlaylistId,
+          playlistName: selectedPlaylistName,
+          recoveredPlaylistAssignment: true,
+          youtubeVideoId: item.youtubeVideoId
+        },
+        queueItemId: item.id,
+        userId
+      }
+    })
+  ]);
 }
 
 async function getManualRouteRules({

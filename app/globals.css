@@ -3865,6 +3865,16 @@ td strong {
   background: var(--danger);
 }
 
+.detail-callout.warning {
+  background: color-mix(in srgb, var(--warning-soft) 58%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--line));
+  color: color-mix(in srgb, var(--warning) 70%, var(--ink));
+}
+
+.detail-callout.warning::before {
+  background: var(--warning);
+}
+
 .detail-callout p,
 .attempt-item p,
 .timeline p {

@@ -246,6 +246,7 @@ export async function uploadQueueItemToYouTube({
           status: QueueStatus.FAILED,
           ...(partialVideoId
             ? {
+                youtubePlaylistId: null,
                 youtubeUrl,
                 youtubeVideoId: partialVideoId
               }
