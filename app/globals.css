@@ -1919,6 +1919,157 @@ html[data-privacy="on"] input[data-private] {
   color: var(--danger);
 }
 
+.timezone-picker {
+  display: grid;
+  gap: var(--space-2);
+  position: relative;
+}
+
+.timezone-picker-trigger {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+  width: 100%;
+}
+
+.timezone-picker-trigger:hover {
+  border-color: color-mix(in srgb, var(--ink) 22%, var(--line-strong));
+}
+
+.timezone-picker-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.timezone-picker-trigger:disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.timezone-picker-trigger > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timezone-picker-trigger strong,
+.timezone-option strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.timezone-picker-trigger small,
+.timezone-option small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.timezone-detect-button {
+  background: transparent;
+  border: 0;
+  color: var(--accent-strong);
+  cursor: pointer;
+  justify-self: start;
+  padding: 0;
+  text-align: left;
+}
+
+.timezone-detect-button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.timezone-picker-popover {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: var(--space-3);
+  left: 0;
+  max-height: min(420px, 62vh);
+  overflow: hidden;
+  padding: var(--space-3);
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  z-index: 90;
+}
+
+.timezone-picker-list {
+  display: grid;
+  gap: var(--space-3);
+  max-height: 320px;
+  overflow: auto;
+  padding-right: var(--space-1);
+}
+
+.timezone-group {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.timezone-group-label {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.timezone-option {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  text-align: left;
+  width: 100%;
+}
+
+.timezone-option:hover {
+  background: var(--surface-muted);
+}
+
+.timezone-option.selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
+.timezone-option > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timezone-empty {
+  color: var(--muted);
+  padding: var(--space-3);
+  text-align: center;
+}
+
 .cadence-custom-input {
   max-width: 160px;
 }

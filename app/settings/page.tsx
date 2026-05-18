@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { ApiKeyPanel } from "@/components/settings/ApiKeyPanel";
+import { TimezonePicker } from "@/components/settings/TimezonePicker";
 import { WebhookSmokeTest } from "@/components/settings/WebhookSmokeTest";
 import { requireAppAccess, requireOwnerAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
@@ -81,18 +82,7 @@ export default async function SettingsPage({
               <form action={updateTimezoneAction} className="stack">
                 <label className="stack">
                   <span>Timezone</span>
-                  <select
-                    className="select"
-                    defaultValue={profile.timezone}
-                    disabled={access.isDemo}
-                    name="timezone"
-                  >
-                    {timezoneOptions(profile.timezone).map((timezone) => (
-                      <option key={timezone} value={timezone}>
-                        {timezone}
-                      </option>
-                    ))}
-                  </select>
+                  <TimezonePicker disabled={access.isDemo} initialTimezone={profile.timezone} />
                 </label>
                 <button className="button" disabled={access.isDemo} type="submit">
                   Save timezone
@@ -923,24 +913,6 @@ function isValidTimezone(timezone: string) {
   } catch {
     return false;
   }
-}
-
-function timezoneOptions(currentTimezone: string) {
-  const options = [
-    "UTC",
-    "America/Halifax",
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/Vancouver",
-    "Europe/London",
-    "Europe/Berlin",
-    "Asia/Tokyo",
-    "Australia/Sydney"
-  ];
-
-  return Array.from(new Set([currentTimezone, ...options])).filter(Boolean);
 }
 
 function settingsErrorMessage(error: string) {
