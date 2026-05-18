@@ -101,7 +101,64 @@ curl -H "Authorization: Bearer $SECRET" http://localhost:3000/api/cron/detect
 
 Expected result includes `checkedAt`, `enabledPipelines`, `due`, `results`, and `skippedNotDue`.
 
-## 6. Production Smoke Test
+## 6. Signed Detection Webhook
+
+RelayRoom also exposes the spec's Path A receiver for external automation services:
+
+```text
+POST /api/webhooks/detection
+```
+
+Send the raw JSON body with these headers:
+
+```text
+x-relayroom-timestamp: 2026-05-18T12:00:00.000Z
+x-relayroom-signature: sha256=<hex hmac>
+```
+
+The HMAC input is:
+
+```text
+<timestamp>.<raw JSON body>
+```
+
+Example body for a folder event:
+
+```json
+{
+  "sourceFolderId": "DRIVE_FOLDER_ID",
+  "driveFileId": "OPTIONAL_FILE_ID",
+  "eventId": "OPTIONAL_AUTOMATION_EVENT_ID"
+}
+```
+
+Example body for one known pipeline:
+
+```json
+{
+  "pipelineId": "PIPELINE_ID",
+  "eventId": "OPTIONAL_AUTOMATION_EVENT_ID"
+}
+```
+
+If no enabled pipeline watches the folder, RelayRoom returns `202` with `ignored: true`. Matching pipelines fan out separately and still use the same watermark and duplicate protection as cron.
+
+Local signature smoke test:
+
+```bash
+BODY='{"sourceFolderId":"DRIVE_FOLDER_ID","eventId":"manual-smoke"}'
+SECRET=$(grep '^DETECTION_WEBHOOK_SECRET=' .env | cut -d= -f2-)
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+SIGNATURE=$(node -e "const crypto=require('crypto'); const [secret,ts,body]=process.argv.slice(1); console.log('sha256='+crypto.createHmac('sha256', secret).update(ts+'.'+body).digest('hex'))" "$SECRET" "$TIMESTAMP" "$BODY")
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-relayroom-timestamp: $TIMESTAMP" \
+  -H "x-relayroom-signature: $SIGNATURE" \
+  --data "$BODY" \
+  http://localhost:3000/api/webhooks/detection
+```
+
+## 7. Production Smoke Test
 
 1. Log in with the owner account.
 2. Connect Drive and YouTube.
@@ -114,7 +171,7 @@ Expected result includes `checkedAt`, `enabledPipelines`, `due`, `results`, and 
 9. Confirm the video appears in the connected YouTube account and playlist.
 10. Log in with a second allowed user and confirm shared workspace visibility plus user filtering.
 
-## 7. Operational Notes
+## 8. Operational Notes
 
 - YouTube uploads cost 1,600 quota units each.
 - Failed, skipped, externally handled, and uploaded queue items stay visible for auditability.

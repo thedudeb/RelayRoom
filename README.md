@@ -112,7 +112,9 @@ The callbacks encrypt Google access and refresh tokens before saving them to `OA
 
 ## Detection Design
 
-Initial path: polling.
+RelayRoom supports both detection paths from the spec.
+
+Path B: polling.
 
 - Each enabled pipeline has a `processedFromTime` watermark.
 - When a pipeline is enabled, existing files are not processed.
@@ -122,7 +124,23 @@ Initial path: polling.
 - Duplicate detections no-op through the unique queue mapping.
 - Vercel Cron invokes `GET /api/cron/detect` every five minutes. The endpoint only runs pipelines whose `pollingIntervalMinutes` cadence is due.
 
-Drive push notifications can be added later once the core queue and upload state machine are stable.
+Path A: signed webhook receiver.
+
+- External automation tools can call `POST /api/webhooks/detection`.
+- Requests must include `x-relayroom-timestamp` and `x-relayroom-signature`.
+- The signature is `sha256=` plus `HMAC_SHA256(DETECTION_WEBHOOK_SECRET, timestamp + "." + raw_json_body)`.
+- Payloads can identify either one pipeline or every enabled pipeline watching a Drive folder:
+
+  ```json
+  { "sourceFolderId": "DRIVE_FOLDER_ID", "driveFileId": "OPTIONAL_FILE_ID", "eventId": "OPTIONAL_EVENT_ID" }
+  ```
+
+  ```json
+  { "pipelineId": "PIPELINE_ID", "eventId": "OPTIONAL_EVENT_ID" }
+  ```
+
+- If no enabled pipeline watches the folder, the endpoint returns `202` with an ignored result instead of creating queue work.
+- Webhook-triggered detection reuses the same watermark, queue idempotency, and YouTube duplicate verification as polling.
 
 For production, set `CRON_SECRET` in Vercel. Vercel automatically sends it as a bearer token when invoking cron jobs. For local/manual calls, `DETECTION_WEBHOOK_SECRET` can use the same value.
 

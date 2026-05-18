@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { selectDuePipelines } from "@/lib/cron/scheduler";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
+import { safeEqualText } from "@/lib/security/webhook-signature";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,7 @@ function authorizeCronRequest(request: NextRequest):
   const fallbackHeaderSecret = request.headers.get("x-relayroom-cron-secret") || "";
   const providedSecret = headerSecret || fallbackHeaderSecret;
 
-  if (providedSecret !== expectedSecret) {
+  if (!providedSecret || !safeEqualText(providedSecret, expectedSecret)) {
     return { error: "Unauthorized", ok: false, status: 401 };
   }
 
