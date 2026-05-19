@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
+import { stopDriveWatchChannel, subscribeDriveFolderWatch } from "@/lib/drive/watch";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 export async function POST(
@@ -38,7 +39,9 @@ export async function POST(
       id,
       userId: access.userId
     },
-    select: { id: true }
+    include: {
+      driveConnection: true
+    }
   });
 
   if (!pipeline) {
@@ -63,7 +66,94 @@ export async function POST(
     return NextResponse.json({ error: "PipelineNotFound" }, { status: 404 });
   }
 
+  // Subscribe / unsubscribe the Drive push channel as a side effect of the
+  // status flip. Failures are non-fatal: polling still works as a backstop,
+  // and the renewal cron can re-attempt subscription on the next tick.
+  await syncDriveWatchSubscription({
+    nextStatus,
+    pipeline,
+    request
+  }).catch((error) => {
+    console.error("Drive watch sync failed.", { pipelineId: pipeline.id, error });
+  });
+
   revalidatePath("/dashboard");
   revalidatePath("/pipelines");
   return NextResponse.json({ status: nextStatus.toLowerCase() });
+}
+
+async function syncDriveWatchSubscription({
+  nextStatus,
+  pipeline,
+  request
+}: {
+  nextStatus: PipelineStatus;
+  pipeline: {
+    id: string;
+    sourceFolderId: string;
+    driveChannelId: string | null;
+    driveChannelResourceId: string | null;
+    driveChannelExpiresAt: Date | null;
+    driveConnection: Parameters<typeof subscribeDriveFolderWatch>[0]["driveConnection"];
+  };
+  request: NextRequest;
+}) {
+  const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!tokenKey) {
+    return;
+  }
+  const webhookUrl = process.env.DRIVE_WATCH_WEBHOOK_URL
+    || `${request.nextUrl.origin}/api/webhooks/drive`;
+
+  if (nextStatus === PipelineStatus.DISABLED) {
+    if (pipeline.driveChannelId && pipeline.driveChannelResourceId) {
+      try {
+        await stopDriveWatchChannel({
+          channelId: pipeline.driveChannelId,
+          resourceId: pipeline.driveChannelResourceId,
+          driveConnection: pipeline.driveConnection,
+          tokenKey
+        });
+      } catch (error) {
+        console.warn("Drive watch stop failed (continuing).", error);
+      }
+      await prisma.pipeline.update({
+        where: { id: pipeline.id },
+        data: {
+          driveChannelId: null,
+          driveChannelResourceId: null,
+          driveChannelToken: null,
+          driveChannelExpiresAt: null
+        }
+      });
+    }
+    return;
+  }
+
+  // ENABLED: subscribe if not already, or refresh if expired.
+  const now = new Date();
+  if (
+    pipeline.driveChannelId &&
+    pipeline.driveChannelExpiresAt &&
+    pipeline.driveChannelExpiresAt > now
+  ) {
+    return;
+  }
+
+  const subscription = await subscribeDriveFolderWatch({
+    folderId: pipeline.sourceFolderId,
+    pipelineId: pipeline.id,
+    driveConnection: pipeline.driveConnection,
+    tokenKey,
+    webhookUrl
+  });
+  await prisma.pipeline.update({
+    where: { id: pipeline.id },
+    data: {
+      driveChannelId: subscription.channelId,
+      driveChannelResourceId: subscription.resourceId,
+      driveChannelToken: subscription.channelToken,
+      driveChannelExpiresAt: subscription.expiresAt
+    }
+  });
 }

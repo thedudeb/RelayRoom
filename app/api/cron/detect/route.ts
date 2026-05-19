@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { selectDuePipelines } from "@/lib/cron/scheduler";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
+import { renewDriveWatchSubscriptions } from "@/lib/drive/renewal";
 import { authorizeCronRequest } from "@/lib/security/cron-auth";
 import { reapStaleUploads } from "@/lib/upload/youtube-upload";
 
@@ -20,6 +21,10 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const limit = pipelineLimit(request);
   const reapResult = await reapStaleUploads();
+  const renewalResult = await renewDriveWatchSubscriptions({
+    webhookUrl:
+      process.env.DRIVE_WATCH_WEBHOOK_URL || `${request.nextUrl.origin}/api/webhooks/drive`
+  });
   const pipelines = await prisma.pipeline.findMany({
     orderBy: [{ lastDetectionAt: "asc" }, { createdAt: "asc" }],
     select: {
@@ -77,6 +82,8 @@ export async function GET(request: NextRequest) {
     limit,
     reapedStaleUploads: reapResult.reaped,
     results,
+    renewedDriveWatches: renewalResult.renewed,
+    renewalFailures: renewalResult.failed,
     skippedNotDue,
     skippedSeedData
   });

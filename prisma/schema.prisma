@@ -183,6 +183,10 @@ model Pipeline {
   pollingIntervalMinutes     Int               @default(15)
   processedFromTime          DateTime?
   lastDetectionAt            DateTime?
+  driveChannelId             String?
+  driveChannelResourceId     String?
+  driveChannelToken          String?
+  driveChannelExpiresAt      DateTime?
   defaultTitleTemplate       String
   defaultDescriptionTemplate String
   errorMessage               String?
@@ -195,9 +199,11 @@ model Pipeline {
   rules                      Rule[]
   queueItems                 QueueItem[]
 
+  @@unique([driveChannelId])
   @@index([userId, status])
   @@index([userId, archivedAt])
   @@index([sourceFolderId])
+  @@index([driveChannelExpiresAt])
 }
 
 model Rule {
