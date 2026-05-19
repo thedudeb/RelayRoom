@@ -3,6 +3,12 @@ import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
+import { getUsableYouTubeAccessToken } from "@/lib/detection/drive-detection";
+import {
+  createChannelPlaylist,
+  verifyChannelPlaylist,
+  type YouTubePlaylistRef
+} from "@/lib/oauth/youtube-playlists";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
 
@@ -10,6 +16,10 @@ type QueueActionBody = {
   action?: "skip" | "restore" | "mark_externally_handled" | "route" | "upload";
   playlistId?: string;
   playlistName?: string;
+  // When supplied (and playlistId is absent), the route flow creates a new
+  // playlist with this title on the pipeline's destination channel before
+  // routing. SPEC §4.8 Edit-and-route.
+  createPlaylistName?: string;
   youtubeUrl?: string;
 };
 
@@ -111,14 +121,27 @@ export async function POST(
 
   const now = new Date();
   const youtubeUrl = normalizeOptionalUrl(body.youtubeUrl);
-  const routeRules =
-    body.action === "route"
-      ? await getManualRouteRules({
-          playlistId: body.playlistId,
-          userId: access.userId,
-          youtubeConnectionId: item.pipeline.youtubeConnectionId
-        })
-      : item.pipeline.rules;
+
+  // For the "route" action, resolve the destination playlist via the YouTube
+  // channel itself. This lifts the prior restriction that the playlist had
+  // to already be referenced by a rule on the pipeline (SPEC §4.8: edit-
+  // and-route may pick any playlist on the destination channel or create
+  // one inline).
+  let resolvedPlaylist: YouTubePlaylistRef | undefined;
+  if (body.action === "route") {
+    try {
+      resolvedPlaylist = await resolveRoutePlaylist({
+        body,
+        youtubeConnectionId: item.pipeline.youtubeConnectionId,
+        userId: access.userId
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "PlaylistResolutionFailed" },
+        { status: 400 }
+      );
+    }
+  }
 
   try {
     const update = getActionUpdate({
@@ -127,10 +150,10 @@ export async function POST(
       hasUploadedVideoMissingPlaylist: Boolean(item.youtubeVideoId && !item.youtubePlaylistId),
       intendedPlaylistId: item.intendedPlaylistId,
       matchedRuleId: item.matchedRuleId,
-      playlistId: body.playlistId,
-      playlistName: body.playlistName,
+      playlistId: resolvedPlaylist?.id ?? body.playlistId,
+      playlistName: resolvedPlaylist?.name ?? body.playlistName,
       previousStatus: item.previousStatus,
-      rules: routeRules.length ? routeRules : item.pipeline.rules,
+      rules: item.pipeline.rules,
       youtubeUrl,
       now
     });
@@ -267,6 +290,54 @@ async function preparePlaylistRecovery({
   ]);
 }
 
+async function resolveRoutePlaylist({
+  body,
+  youtubeConnectionId,
+  userId
+}: {
+  body: QueueActionBody;
+  youtubeConnectionId: string;
+  userId: string;
+}): Promise<YouTubePlaylistRef | undefined> {
+  const createTitle = body.createPlaylistName?.trim();
+  if (!createTitle && !body.playlistId) {
+    return undefined;
+  }
+
+  const connection = await prisma.oAuthConnection.findFirst({
+    where: { id: youtubeConnectionId, userId },
+    select: {
+      encryptedAccessToken: true,
+      encryptedRefreshToken: true,
+      expiresAt: true,
+      id: true,
+      kind: true,
+      status: true
+    }
+  });
+  if (!connection) {
+    throw new Error("YouTube connection not found for this pipeline.");
+  }
+  const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!tokenKey) {
+    throw new Error("MissingTokenKey");
+  }
+  const accessToken = await getUsableYouTubeAccessToken(connection, tokenKey);
+  if (!accessToken) {
+    throw new Error("YouTube token refresh failed. Reconnect the channel and try again.");
+  }
+
+  if (createTitle) {
+    return createChannelPlaylist({ accessToken, title: createTitle });
+  }
+
+  const verified = await verifyChannelPlaylist({ accessToken, playlistId: body.playlistId! });
+  if (!verified) {
+    throw new Error("That playlist isn't owned by the pipeline's destination channel.");
+  }
+  return verified;
+}
+
 async function getManualRouteRules({
   playlistId,
   userId,
@@ -337,16 +408,21 @@ function getActionUpdate({
       throw new Error(`Manual routing is not allowed from ${formatStatus(currentStatus)}.`);
     }
 
-    const selectedRule = rules.find((rule) => rule.youtubePlaylistId === playlistId);
-    if (!playlistId || !selectedRule) {
-      throw new Error("Choose a valid playlist for this pipeline.");
+    // The upstream resolver guarantees playlistId/playlistName come from a
+    // verified-on-channel playlist (or a freshly created one). We still
+    // surface a friendly name from an existing rule if one happens to
+    // reference the same playlist, so the activity log reads naturally.
+    if (!playlistId || !playlistName) {
+      throw new Error("Choose a playlist or enter a new playlist name.");
     }
+    const knownRule = rules.find((rule) => rule.youtubePlaylistId === playlistId);
+    const friendlyName = knownRule?.youtubePlaylistName || playlistName;
 
     return {
       data: {
         failureReason: null,
-        intendedPlaylistId: selectedRule.youtubePlaylistId,
-        intendedPlaylistName: playlistName?.trim() || selectedRule.youtubePlaylistName,
+        intendedPlaylistId: playlistId,
+        intendedPlaylistName: friendlyName,
         lastActionAt: now,
         lastError: null,
         matchedRuleId: null,
@@ -355,13 +431,13 @@ function getActionUpdate({
         status: PrismaQueueStatus.NEEDS_APPROVAL
       },
       message: isRecoveringPlaylistAssignment
-        ? `Recovered playlist assignment to ${playlistName?.trim() || selectedRule.youtubePlaylistName}.`
-        : `Routed item to ${playlistName?.trim() || selectedRule.youtubePlaylistName}.`,
+        ? `Recovered playlist assignment to ${friendlyName}.`
+        : `Routed item to ${friendlyName}.`,
       metadata: {
         fromStatus: currentStatus,
         recoveredPlaylistAssignment: isRecoveringPlaylistAssignment,
-        playlistId: selectedRule.youtubePlaylistId,
-        playlistName: playlistName?.trim() || selectedRule.youtubePlaylistName
+        playlistId,
+        playlistName: friendlyName
       }
     };
   }

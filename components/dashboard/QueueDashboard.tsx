@@ -7,6 +7,7 @@ import {
   ExternalLink,
   Info,
   Play,
+  Plus,
   RotateCcw,
   Route,
   SkipForward,
@@ -25,6 +26,7 @@ type QueueAction = "skip" | "restore" | "mark_externally_handled" | "route" | "u
 type QueueActionPayload = {
   playlistId?: string;
   playlistName?: string;
+  createPlaylistName?: string;
   youtubeUrl?: string;
 };
 type QueueDetails = {
@@ -738,6 +740,22 @@ function QueueActions({
           type="button"
         >
           <Route aria-hidden="true" size={16} />
+        </button>
+        <button
+          className="icon-button"
+          data-tooltip="Create a new playlist and route this item to it"
+          disabled={isBusy}
+          onClick={() => {
+            const title = window.prompt(
+              "Create a new playlist on the destination channel. Title:"
+            );
+            const trimmed = title?.trim();
+            if (!trimmed) return;
+            onAction(item, "route", { createPlaylistName: trimmed });
+          }}
+          type="button"
+        >
+          <Plus aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"

@@ -600,7 +600,7 @@ export async function getUsableDriveAccessToken(
   return payload.access_token;
 }
 
-async function getUsableYouTubeAccessToken(
+export async function getUsableYouTubeAccessToken(
   connection: {
     encryptedAccessToken: string | null;
     encryptedRefreshToken: string;
