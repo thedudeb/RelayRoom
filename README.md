@@ -9,8 +9,8 @@ This repository is being built from `SPEC.md`. The current implementation includ
 - **Web app:** Next.js App Router with TypeScript.
 - **Database:** PostgreSQL through Prisma.
 - **Auth:** Google sign-in for platform sessions, plus separate OAuth grants for Drive and YouTube connections.
-- **Detection path:** Polling is the production path, with the signed webhook receiver available for external automation smoke tests.
-- **Workers:** Upload and polling workers will run outside request/response paths. The queue state model is already represented in Prisma.
+- **Detection path:** Drive push notifications (`files.watch`) are the preferred low-latency path, with polling as the always-on backstop and a signed webhook receiver for external automation. All three reuse the same dedup/cold-start/rule-evaluation pipeline.
+- **Workers:** Detection runs on Vercel Cron; uploads run on an independent worker cron that drains `DETECTED` queue items with atomic per-item claims. A stale-`UPLOADING` reaper recovers items orphaned by a worker crash.
 - **Rule engine:** Pure TypeScript module under `lib/rules`. It evaluates ordered rules, supports nested AND/OR groups, and returns a full trace for dashboard debugging.
 
 ## Current Build Slice
@@ -110,12 +110,24 @@ Drive and YouTube connections are separate OAuth grants. Set these before testin
 - `GOOGLE_YOUTUBE_CLIENT_SECRET`
 - `GOOGLE_YOUTUBE_REDIRECT_URI`
 - `TOKEN_ENCRYPTION_KEY`
+- `GOOGLE_PICKER_API_KEY`
+- `GOOGLE_PICKER_APP_ID` (required — no client-id-prefix fallback)
+- `API_KEY_PEPPER` (optional; enables HMAC-hashed API keys)
+- `DRIVE_WATCH_WEBHOOK_URL` (optional; defaults to `${request origin}/api/webhooks/drive`. Set when the deployment URL Vercel reports doesn't match the one Google should call.)
 
-The callbacks encrypt Google access and refresh tokens before saving them to `OAuthConnection`.
+The callbacks encrypt Google access and refresh tokens before saving them to `OAuthConnection`. Disconnect wipes both the access token and refresh token from the row.
 
 ## Detection Design
 
-RelayRoom supports both detection paths from the spec.
+RelayRoom supports all three detection paths from the spec; they share the same downstream rule-evaluation and idempotency code.
+
+Path B (preferred): Drive push notifications.
+
+- On pipeline enable, RelayRoom subscribes to `files.watch` on the source folder, storing the channel id, resource id, secret token, and expiry on the pipeline row.
+- `POST /api/webhooks/drive` verifies `X-Goog-Channel-Token` with a constant-time compare, ignores Drive's initial `sync` handshake, and refuses unknown channel ids with 404 so Google stops retrying.
+- The receiver doesn't run detection inline — it just nulls `lastDetectionAt` for the matching pipeline, which the next cron tick treats as "due now." This keeps the webhook response fast (Google retries on slow acks) and lets the upload worker drain at its own rate.
+- A renewal pass inside `/api/cron/detect` re-subscribes any pipeline whose channel is within 24 hours of expiry (or missing entirely), capped to 10 channels per tick so a Drive outage can't stretch the cron.
+- Pipeline disable / archive stops the channel via `/channels/stop`.
 
 Path B: polling.
 
@@ -126,6 +138,7 @@ Path B: polling.
 - Idempotency is enforced with a unique `(pipeline_id, drive_file_id)` mapping.
 - Duplicate detections no-op through the unique queue mapping.
 - Vercel Cron invokes `GET /api/cron/detect` every five minutes. The endpoint only runs pipelines whose `pollingIntervalMinutes` cadence is due.
+- `GET /api/cron/process-uploads` runs every minute and drains `DETECTED` queue items into YouTube. It atomically claims items with a `status` filter on `updateMany` so two workers can't race the same item, and the stale-`UPLOADING` reaper cleans up after worker crashes.
 
 Path A: signed webhook receiver.
 
@@ -151,7 +164,7 @@ See `docs/DEPLOYMENT.md` for the production deployment checklist covering Vercel
 
 ## Read-Only API Keys
 
-Allowed users can generate or rotate a read-only API key from Settings. RelayRoom only shows the raw key once; it stores a SHA-256 hash in the database. API keys are intentionally scoped to the key owner's own queue and pipeline data, even though the signed-in web UI can show workspace-wide views with filters. Use the key as a bearer token:
+Allowed users can generate or rotate a read-only API key from Settings. RelayRoom only shows the raw key once; it stores a salted HMAC-SHA256 (`h1:…`) when `API_KEY_PEPPER` is set, falling back to plain SHA-256 in environments without it. Lookups try both forms so existing keys keep working after a pepper is provisioned. API key authentication is restricted to `GET`/`HEAD`/`OPTIONS` requests — mutating endpoints require a browser session. The keys are scoped to the key owner's own queue and pipeline data, even though the signed-in web UI can show workspace-wide views with filters. Use the key as a bearer token:
 
 ```bash
 curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/queue
@@ -165,6 +178,13 @@ Supported read-only endpoints:
 - `GET /api/queue?detectedFrom=2026-05-01&detectedTo=2026-05-18`
 - `GET /api/queue/:id`
 - `GET /api/pipelines`
+
+## Upload Pipeline
+
+- Drive → YouTube is fully streamed: the Drive download body becomes a `ReadableStream`, and RelayRoom uploads 8 MiB chunks with `Content-Range` headers to YouTube's resumable session. No part of the file is buffered in memory beyond a single chunk, so the only ceiling is YouTube's hard 256 GiB / 12-hour limit.
+- A pre-flight check against the stored `sizeBytes` snapshot rejects oversize files before any session is opened; a second check against the live Drive `Content-Length` catches files that grew between detection and upload.
+- The resumable session `POST` is one-shot (no retries — duplicate retries would leak sessions). Chunk `PUT`s are idempotent under `Content-Range` and are retried on transient 408 / 429 / 5xx with exponential backoff. The 308 "Resume Incomplete" response resumes from the server-acknowledged byte offset.
+- Permanent failures are classified (`quota_exceeded`, `auth_revoked`, `playlist_deleted`, `file_too_large`, `file_not_found`, `not_video`, `network_timeout`, `validation_error`, `rate_limited`, `unknown`) so the dashboard distinguishes "wait for quota" from "the operator needs to reconnect."
 
 ## YouTube Quota Note
 
@@ -190,7 +210,7 @@ npm test
 
 ## Token Storage
 
-Refresh tokens are stored encrypted at rest. The current helper in `lib/security/token-vault.ts` uses AES-256-GCM and requires `TOKEN_ENCRYPTION_KEY` to decode to exactly 32 bytes.
+Refresh tokens are stored encrypted at rest. The current helper in `lib/security/token-vault.ts` uses AES-256-GCM with an Associated Authenticated Data (AAD) string bound to the connection id, so a ciphertext copied into a different row fails to decrypt instead of silently succeeding. Older v1 ciphertexts (no AAD) still decrypt unchanged and re-encrypt as v2 on the next refresh. `TOKEN_ENCRYPTION_KEY` must decode to exactly 32 bytes.
 
 Generate a local key:
 
@@ -200,9 +220,10 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ## Next Implementation Steps
 
-1. Add full browser coverage for authenticated Google login, routing edits, and queue actions.
-2. Add alert delivery for production telemetry thresholds.
-3. Expand mobile QA coverage across Queue, Pipelines, Connections, and Settings.
+1. Detection fan-out to background workers at scale (currently capped at ~50 pipelines per cron tick; SPEC §7).
+2. Architecture-overview deliverable (SPEC §7) — flesh out data model diagram, scale story, and tradeoff log into `docs/ARCHITECTURE.md`.
+3. Browser-driven QA across the rule builder, queue actions, and mobile widths (375 / 480 / 700 / 980 breakpoints already in CSS — walk each surface in a real browser).
+4. Production telemetry / alerting wiring.
 
 ## Smoke Checks
 
