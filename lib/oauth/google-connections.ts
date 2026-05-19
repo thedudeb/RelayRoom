@@ -48,7 +48,9 @@ const connectionConfig = {
       "openid",
       "email",
       "profile",
-      "https://www.googleapis.com/auth/drive.readonly"
+      // drive.file: per-file access granted via Google Picker only. Avoids the
+      // broad-read overreach of drive.readonly (SPEC §4.2).
+      "https://www.googleapis.com/auth/drive.file"
     ]
   },
   youtube: {

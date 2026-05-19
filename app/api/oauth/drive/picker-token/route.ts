@@ -34,6 +34,10 @@ export async function GET() {
     return NextResponse.json({ error: "MissingGooglePickerApiKey" }, { status: 400 });
   }
 
+  if (!process.env.GOOGLE_PICKER_APP_ID) {
+    return NextResponse.json({ error: "MissingGooglePickerAppId" }, { status: 400 });
+  }
+
   const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
   if (!tokenKey) {
     return NextResponse.json({ error: "MissingTokenKey" }, { status: 400 });
@@ -126,10 +130,8 @@ async function getUsableDriveAccessToken(
 }
 
 function getPickerAppId() {
-  const configuredAppId = process.env.GOOGLE_PICKER_APP_ID;
-  if (configuredAppId) {
-    return configuredAppId;
-  }
-
-  return process.env.GOOGLE_DRIVE_CLIENT_ID?.split("-")[0] || "";
+  // Require an explicit Picker app id. The previous client-id-prefix fallback
+  // shipped a derived value to browsers alongside a Drive access token, which
+  // combined with drive.readonly was a real reach (ISSUE-039).
+  return process.env.GOOGLE_PICKER_APP_ID || "";
 }

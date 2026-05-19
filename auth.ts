@@ -26,7 +26,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const allowedEmails = getAllowedSignInEmails();
       if (allowedEmails.size === 0) {
-        return true;
+        // Fail closed: an empty allowlist must never grant access. Dev convenience requires
+        // explicit opt-in via AUTH_ALLOW_ANY=true and non-production NODE_ENV.
+        if (process.env.NODE_ENV !== "production" && process.env.AUTH_ALLOW_ANY === "true") {
+          return true;
+        }
+        return "/?error=AccessDenied";
       }
 
       return allowedEmails.has(email.toLowerCase()) || "/?error=AccessDenied";

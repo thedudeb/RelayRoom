@@ -79,9 +79,11 @@ export async function requireAppAccess(searchParams?: {
   };
 }
 
+const READ_ONLY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
 export async function getApiAccess(
   searchParams: URLSearchParams,
-  request?: { headers: Headers }
+  request?: { headers: Headers; method?: string }
 ): Promise<AppAccess | null> {
   if (isTruthyParam(searchParams.get("demo") || undefined)) {
     return {
@@ -92,7 +94,10 @@ export async function getApiAccess(
     };
   }
 
-  const apiKeyAccess = request ? await getApiKeyAccess(request) : null;
+  // API keys authorize read-only requests only. SPEC §4.10: REST API is read-only;
+  // mutations must use a browser session so CSRF + ownership checks apply uniformly.
+  const methodAllowsApiKey = !request?.method || READ_ONLY_METHODS.has(request.method.toUpperCase());
+  const apiKeyAccess = request && methodAllowsApiKey ? await getApiKeyAccess(request) : null;
   if (apiKeyAccess) {
     return apiKeyAccess;
   }
