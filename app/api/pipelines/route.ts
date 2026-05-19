@@ -15,11 +15,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
+  // Sessions see the whole workspace; API keys remain self-scoped.
+  const ownerFilter =
+    !access.isDemo && access.authMethod === "api_key" ? { userId: access.userId } : undefined;
   const [pipelineData, queueItems] = access.isDemo
     ? await Promise.all([getPipelinesForDemo(), getQueueItemsForDemo()])
     : await Promise.all([
-        getPipelinesForUser(access.userId, { userId: access.userId }),
-        getQueueItemsForUser(access.userId, { userId: access.userId })
+        getPipelinesForUser(access.userId, ownerFilter),
+        getQueueItemsForUser(access.userId, ownerFilter)
       ]);
 
   const pipelines = pipelineData.map((pipeline) => {

@@ -26,9 +26,12 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Sessions see the whole workspace; API keys remain self-scoped.
+  const ownerFilter =
+    !access.isDemo && access.authMethod === "api_key" ? { userId: access.userId } : undefined;
   const queueItems = access.isDemo
     ? await getQueueItemsForDemo()
-    : await getQueueItemsForUser(access.userId, { userId: access.userId });
+    : await getQueueItemsForUser(access.userId, ownerFilter);
 
   const items = queueItems.filter((item) => {
     if (status && item.status !== status) return false;
