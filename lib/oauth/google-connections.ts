@@ -81,7 +81,10 @@ export async function startGoogleConnection(kind: GoogleConnectionKind) {
     httpOnly: true,
     maxAge: 10 * 60,
     path: "/",
-    sameSite: "lax",
+    // Strict prevents third-party top-level navigations from kicking off an
+    // OAuth flow under the current user's identity. The callback runs on our
+    // own origin so Strict still lets the cookie ride along.
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production"
   });
 

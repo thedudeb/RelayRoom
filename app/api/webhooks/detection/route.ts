@@ -20,7 +20,10 @@ export async function POST(request: NextRequest) {
   const auth = verifyWebhookSignature({
     body: rawBody,
     headers: request.headers,
-    secret: process.env.DETECTION_WEBHOOK_SECRET || process.env.CRON_SECRET
+    // Trust domains stay separate: detection webhooks must not be verifiable
+    // with the cron secret. Operators who want unified trust must set both
+    // env vars to the same value explicitly.
+    secret: process.env.DETECTION_WEBHOOK_SECRET
   });
 
   if (!auth.ok) {
@@ -141,9 +144,19 @@ async function reserveWebhookEvent({
   timestamp: string | null;
 }) {
   const now = new Date();
-  const replayKey = eventId?.trim()
-    ? `event:${eventId.trim()}`
-    : `signature:${hashText(`${timestamp || ""}.${signature || ""}.${body}`)}`;
+  // Replay key falls back to the verified (timestamp, signature, body) tuple
+  // when no eventId is supplied. Signature verification ran upstream, so
+  // both timestamp and signature are guaranteed non-empty here — but assert
+  // explicitly to avoid a constant key from any future refactor.
+  let replayKey: string;
+  if (eventId?.trim()) {
+    replayKey = `event:${eventId.trim()}`;
+  } else {
+    if (!timestamp || !signature) {
+      return { ok: false as const, reason: "MissingReplayKeyComponents" };
+    }
+    replayKey = `signature:${hashText(`${timestamp}.${signature}.${body}`)}`;
+  }
 
   try {
     await prisma.$transaction([

@@ -75,13 +75,24 @@ function normalizeSignature(signature: string | null) {
   return /^[a-f0-9]{64}$/i.test(hex) ? hex.toLowerCase() : "";
 }
 
+// Canonical formats only: integer seconds, integer milliseconds, or strict
+// RFC3339/ISO-8601. Free-form Date strings (e.g. "Mon May 18 2026") are rejected
+// to keep signer and verifier interpretations identical.
+const ISO_8601_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+
 function parseWebhookTimestamp(timestamp: string) {
-  const numeric = Number(timestamp);
-  if (Number.isFinite(numeric)) {
+  if (/^\d+$/.test(timestamp)) {
+    const numeric = Number(timestamp);
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
     const milliseconds = numeric > 10_000_000_000 ? numeric : numeric * 1000;
     return new Date(milliseconds);
   }
 
+  if (!ISO_8601_PATTERN.test(timestamp)) {
+    return null;
+  }
   const parsed = new Date(timestamp);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }

@@ -17,10 +17,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const secret = process.env.DETECTION_WEBHOOK_SECRET || process.env.CRON_SECRET;
+  const secret = process.env.DETECTION_WEBHOOK_SECRET;
   if (!secret) {
     return NextResponse.json(
-      { error: "MissingWebhookSecret", message: "Set DETECTION_WEBHOOK_SECRET or CRON_SECRET." },
+      { error: "MissingWebhookSecret", message: "Set DETECTION_WEBHOOK_SECRET." },
       { status: 500 }
     );
   }

@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
-import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
+import { rejectCrossSiteMutation, rejectCrossSiteRead } from "@/lib/security/request-guard";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 
 interface GoogleRefreshResponse {
@@ -34,6 +34,11 @@ interface CreatePlaylistResponse {
 }
 
 export async function GET(request: NextRequest) {
+  const originError = rejectCrossSiteRead(request);
+  if (originError) {
+    return originError;
+  }
+
   const context = await getYouTubeConnectionContext(request);
   if (context instanceof NextResponse) {
     return context;
