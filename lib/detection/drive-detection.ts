@@ -113,26 +113,37 @@ export async function runDriveDetectionForPipeline({
     throw new Error("TokenRefreshFailed");
   }
 
-  const watermark = pipeline.processedFromTime || pipeline.createdAt;
+  // SPEC §4.5: a null watermark must refuse detection, not fall back to
+  // createdAt. Pipelines may be created before enable; enabling sets
+  // processedFromTime, so the only paths to null here are legacy data or a bug.
+  if (!pipeline.processedFromTime) {
+    throw new Error("MissingDetectionWatermark");
+  }
+  const watermark = pipeline.processedFromTime;
+
+  // Single Drive listing per run: pull everything, then partition into
+  // "older than watermark" (counted as excluded) and "candidates" (the files
+  // we actually evaluate). The previous double-list doubled Drive quota use
+  // and opened a TOCTOU window where the two snapshots disagreed.
   const folderSnapshot = await listDriveFolderFiles({
     accessToken,
     folderId: pipeline.sourceFolderId
   });
-  const excludedByWatermark = folderSnapshot.filter((file) => {
-    if (
-      !file.createdTime ||
-      !isYouTubeSupportedVideoFile({ filename: file.name, mimeType: file.mimeType })
-    ) {
-      return false;
+  let excludedByWatermark = 0;
+  const files: DriveFile[] = [];
+  for (const file of folderSnapshot) {
+    if (!file.createdTime) {
+      files.push(file);
+      continue;
     }
-
-    return new Date(file.createdTime) <= watermark;
-  }).length;
-  const files = await listDriveFolderFiles({
-    accessToken,
-    folderId: pipeline.sourceFolderId,
-    newerThan: watermark
-  });
+    if (new Date(file.createdTime) <= watermark) {
+      if (isYouTubeSupportedVideoFile({ filename: file.name, mimeType: file.mimeType })) {
+        excludedByWatermark += 1;
+      }
+      continue;
+    }
+    files.push(file);
+  }
   const driveFileIds = files.flatMap((file) => (file.id ? [file.id] : []));
   const existingItems = driveFileIds.length
     ? await prisma.queueItem.findMany({
@@ -249,13 +260,29 @@ export async function runDriveDetectionForPipeline({
       }
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        existingByDriveFileId.set(file.id, {
-          driveFileId: file.id,
-          id: "",
-          status,
-          youtubeVideoId: null
+        // Race: another concurrent detection created this item. Re-fetch and
+        // run it through the same dedup pipeline as a normal duplicate would.
+        const raced = await prisma.queueItem.findFirst({
+          where: { driveFileId: file.id, pipelineId: pipeline.id },
+          select: { driveFileId: true, id: true, status: true, youtubeVideoId: true }
         });
-        skippedExisting += 1;
+        if (raced) {
+          existingByDriveFileId.set(file.id, raced);
+          const reprocessed = await maybeReprocessExistingUpload({
+            domainPipeline,
+            existingItem: raced,
+            file,
+            pipeline,
+            tokenKey,
+            timezone,
+            userId
+          });
+          if (!reprocessed) {
+            skippedExisting += 1;
+          }
+        } else {
+          skippedExisting += 1;
+        }
         continue;
       }
 
@@ -300,30 +327,48 @@ async function maybeReprocessExistingUpload({
   timezone: string;
   userId: string;
 }) {
-  if (existingItem.status !== QueueStatus.UPLOADED || !existingItem.youtubeVideoId) {
+  // SPEC §4.5 idempotency matrix:
+  //   SKIPPED                                                  → suppress (user-dismissed)
+  //   UPLOADING / UPLOADED with a youtubeVideoId still present → suppress (in-flight or live)
+  //   UPLOADED with a missing youtubeVideoId                   → reprocess (the upload is gone)
+  //   anything else (DETECTED, NEEDS_APPROVAL, NEEDS_ROUTING,
+  //   FAILED, EXTERNALLY_HANDLED)                              → suppress; the user owns the next move
+  if (existingItem.status === QueueStatus.SKIPPED) {
     return false;
   }
 
-  const youtubeAccessToken = await getUsableYouTubeAccessToken(pipeline.youtubeConnection, tokenKey);
-  if (!youtubeAccessToken) {
-    throw new Error("TokenRefreshFailed");
+  if (existingItem.status !== QueueStatus.UPLOADED) {
+    return false;
   }
 
-  const videoExists = await verifyYouTubeVideoExists({
-    accessToken: youtubeAccessToken,
-    videoId: existingItem.youtubeVideoId
-  });
-  if (videoExists) {
-    await prisma.activityLogEntry.create({
-      data: {
-        actorType: "system",
-        message: "Verified duplicate detection against YouTube; existing upload is still present.",
-        metadata: { youtubeVideoId: existingItem.youtubeVideoId },
-        queueItemId: existingItem.id,
-        userId
-      }
+  if (!existingItem.youtubeVideoId) {
+    // Treat a missing video id on an UPLOADED row as a verification miss
+    // and re-route through the normal reprocessing path below.
+  } else {
+    const youtubeAccessToken = await getUsableYouTubeAccessToken(
+      pipeline.youtubeConnection,
+      tokenKey
+    );
+    if (!youtubeAccessToken) {
+      throw new Error("TokenRefreshFailed");
+    }
+
+    const videoExists = await verifyYouTubeVideoExists({
+      accessToken: youtubeAccessToken,
+      videoId: existingItem.youtubeVideoId
     });
-    return false;
+    if (videoExists) {
+      await prisma.activityLogEntry.create({
+        data: {
+          actorType: "system",
+          message: "Verified duplicate detection against YouTube; existing upload is still present.",
+          metadata: { youtubeVideoId: existingItem.youtubeVideoId },
+          queueItemId: existingItem.id,
+          userId
+        }
+      });
+      return false;
+    }
   }
 
   if (!file.id || !file.name || !file.mimeType || !file.createdTime) {
@@ -467,7 +512,6 @@ async function listDriveFolderFiles({
       "fields",
       "nextPageToken,files(id,name,mimeType,size,createdTime)"
     );
-    url.searchParams.set("includeItemsFromAllDrives", "true");
     url.searchParams.set("orderBy", "createdTime desc");
     url.searchParams.set("pageSize", String(limit || 100));
     const queryParts = [`'${escapeDriveQueryValue(folderId)}' in parents`, "trashed = false"];
@@ -475,7 +519,10 @@ async function listDriveFolderFiles({
       queryParts.push(`createdTime > '${newerThan.toISOString()}'`);
     }
     url.searchParams.set("q", queryParts.join(" and "));
-    url.searchParams.set("supportsAllDrives", "true");
+    // Shared-drive flags are off by default. SPEC §4.2: "a folder I picked"
+    // is the mental model; shared drives surfaced unexpected content combined
+    // with the old broad scope. Reintroduce as an opt-in once the Picker
+    // metadata distinguishes shared-drive folders.
     if (pageToken) {
       url.searchParams.set("pageToken", pageToken);
     }
