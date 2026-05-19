@@ -162,6 +162,8 @@ For production, set `CRON_SECRET` in Vercel. Vercel automatically sends it as a 
 
 See `docs/DEPLOYMENT.md` for the production deployment checklist covering Vercel environment variables, Google OAuth, Neon, cron, and smoke testing.
 
+For a full system overview — data model, multi-account OAuth, rule engine, trigger paths, upload pipeline, token storage, scaling story, tradeoffs — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## Read-Only API Keys
 
 Allowed users can generate or rotate a read-only API key from Settings. RelayRoom only shows the raw key once; it stores a salted HMAC-SHA256 (`h1:…`) when `API_KEY_PEPPER` is set, falling back to plain SHA-256 in environments without it. Lookups try both forms so existing keys keep working after a pepper is provisioned. API key authentication is restricted to `GET`/`HEAD`/`OPTIONS` requests — mutating endpoints require a browser session. The keys are scoped to the key owner's own queue and pipeline data, even though the signed-in web UI can show workspace-wide views with filters. Use the key as a bearer token:
@@ -221,7 +223,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ## Next Implementation Steps
 
 1. Detection fan-out to background workers at scale (currently capped at ~50 pipelines per cron tick; SPEC §7).
-2. Architecture-overview deliverable (SPEC §7) — flesh out data model diagram, scale story, and tradeoff log into `docs/ARCHITECTURE.md`.
+2. Mobile QA pass — CSS has 480 / 700 / 980 breakpoints but they haven't been walked on a real device.
 3. Browser-driven QA across the rule builder, queue actions, and mobile widths (375 / 480 / 700 / 980 breakpoints already in CSS — walk each surface in a real browser).
 4. Production telemetry / alerting wiring.
 
