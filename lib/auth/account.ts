@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import type { AccountSummary } from "@/components/layout/AppShell";
 import { prisma } from "@/lib/db/prisma";
-import { hashApiKey, isRelayRoomApiKey } from "@/lib/security/api-keys";
+import { candidateApiKeyHashes, isRelayRoomApiKey } from "@/lib/security/api-keys";
 import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
 
@@ -142,9 +142,8 @@ async function getApiKeyAccess(request: { headers: Headers }): Promise<AppAccess
     return null;
   }
 
-  const keyHash = hashApiKey(apiKey);
-  const record = await prisma.apiKey.findUnique({
-    where: { keyHash },
+  const record = await prisma.apiKey.findFirst({
+    where: { keyHash: { in: candidateApiKeyHashes(apiKey) } },
     select: {
       id: true,
       revokedAt: true,

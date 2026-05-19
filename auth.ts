@@ -6,7 +6,27 @@ import { prisma } from "@/lib/db/prisma";
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "database"
+    strategy: "database",
+    // 30-day rolling session; idle past 7 days re-authenticates.
+    maxAge: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24 * 7
+  },
+  // Explicit cookie hardening (ISSUE-043). NextAuth's defaults are reasonable
+  // but undeclared; pin them so a dependency bump can't silently relax them.
+  useSecureCookies: process.env.NODE_ENV === "production",
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-authjs.session-token"
+          : "authjs.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production"
+      }
+    }
   },
   providers: [
     Google({

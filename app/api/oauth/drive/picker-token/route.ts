@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
-import { decryptToken, encryptToken } from "@/lib/security/token-vault";
+import { decryptToken, encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
 
 interface GoogleRefreshResponse {
   access_token?: string;
@@ -77,12 +77,13 @@ async function getUsableDriveAccessToken(
   },
   tokenKey: string
 ) {
+  const aad = oauthTokenAad(connection.id);
   if (
     connection.encryptedAccessToken &&
     connection.expiresAt &&
     connection.expiresAt.getTime() > Date.now() + 60_000
   ) {
-    return decryptToken(connection.encryptedAccessToken, tokenKey);
+    return decryptToken(connection.encryptedAccessToken, tokenKey, aad);
   }
 
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
@@ -91,7 +92,7 @@ async function getUsableDriveAccessToken(
     return null;
   }
 
-  const refreshToken = decryptToken(connection.encryptedRefreshToken, tokenKey);
+  const refreshToken = decryptToken(connection.encryptedRefreshToken, tokenKey, aad);
   const response = await fetch("https://oauth2.googleapis.com/token", {
     body: new URLSearchParams({
       client_id: clientId,
@@ -119,7 +120,7 @@ async function getUsableDriveAccessToken(
   await prisma.oAuthConnection.update({
     where: { id: connection.id },
     data: {
-      encryptedAccessToken: encryptToken(payload.access_token, tokenKey),
+      encryptedAccessToken: encryptToken(payload.access_token, tokenKey, aad),
       expiresAt: payload.expires_in
         ? new Date(Date.now() + payload.expires_in * 1000)
         : connection.expiresAt

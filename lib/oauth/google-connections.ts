@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
-import { encryptToken } from "@/lib/security/token-vault";
+import { encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
 
 export type GoogleConnectionKind = "drive" | "youtube";
 
@@ -132,35 +132,43 @@ export async function handleGoogleConnectionCallback(
 
   const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
   if (!tokenKey) {
+    // Don't leave a usable refresh token sitting in Google's hands when the
+    // server can't safely persist it. Revoke first, then surface the error.
+    await revokeGoogleToken(tokenResponse.refresh_token || tokenResponse.access_token);
     redirect("/connections?error=MissingTokenKey");
   }
 
   const userInfo = await fetchGoogleUserInfo(tokenResponse.access_token);
   const accountEmail = userInfo.email || user.email;
+  // For YouTube, key existing-connection lookup on the channel id (one Google
+  // account can own multiple YouTube channels). For Drive, accountEmail is
+  // still the right key — one Drive per Google identity. (ISSUE-032)
+  const youtubeChannelForLookup =
+    kind === "youtube" ? await fetchYouTubeChannel(tokenResponse.access_token) : undefined;
   const existingConnection = await prisma.oAuthConnection.findFirst({
-    where: {
-      accountEmail,
-      kind: config.kind,
-      userId: user.id
-    }
+    where:
+      kind === "youtube" && youtubeChannelForLookup?.id
+        ? { channelId: youtubeChannelForLookup.id, kind: config.kind, userId: user.id }
+        : { accountEmail, kind: config.kind, userId: user.id }
   });
 
   if (!tokenResponse.refresh_token && !existingConnection) {
     redirect("/connections?error=MissingRefreshToken");
   }
 
-  const encryptedAccessToken = encryptToken(tokenResponse.access_token, tokenKey);
+  // Bind ciphertext to the target connection id. For the create path we
+  // reserve the id in advance so the same AAD can decrypt later.
+  const connectionId = existingConnection?.id ?? randomBytes(12).toString("hex");
+  const aad = oauthTokenAad(connectionId);
+  const encryptedAccessToken = encryptToken(tokenResponse.access_token, tokenKey, aad);
   const encryptedRefreshToken = tokenResponse.refresh_token
-    ? encryptToken(tokenResponse.refresh_token, tokenKey)
+    ? encryptToken(tokenResponse.refresh_token, tokenKey, aad)
     : undefined;
   const scopes = parseScopes(tokenResponse.scope, config.scopes);
   const expiresAt = tokenResponse.expires_in
     ? new Date(Date.now() + tokenResponse.expires_in * 1000)
     : undefined;
-  const youtubeChannel =
-    kind === "youtube"
-      ? await fetchYouTubeChannel(tokenResponse.access_token)
-      : undefined;
+  const youtubeChannel = youtubeChannelForLookup;
 
   const label =
     kind === "youtube"
@@ -191,6 +199,7 @@ export async function handleGoogleConnectionCallback(
   } else {
     await prisma.oAuthConnection.create({
       data: {
+        id: connectionId,
         accountEmail,
         channelHandle: youtubeChannel?.snippet?.customUrl,
         channelId: youtubeChannel?.id,
@@ -329,6 +338,19 @@ async function fetchYouTubeChannel(accessToken: string) {
 function parseScopes(scope: string | undefined, fallbackScopes: readonly string[]) {
   const scopes = scope?.split(" ").filter(Boolean);
   return scopes?.length ? scopes : [...fallbackScopes];
+}
+
+async function revokeGoogleToken(token: string | undefined) {
+  if (!token) return;
+  try {
+    await fetch("https://oauth2.googleapis.com/revoke", {
+      body: new URLSearchParams({ token }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST"
+    });
+  } catch (error) {
+    console.error("Post-exchange token revoke failed.", { error });
+  }
 }
 
 function stateCookieName(kind: GoogleConnectionKind) {

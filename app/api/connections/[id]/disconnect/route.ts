@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
-import { decryptToken } from "@/lib/security/token-vault";
+import { decryptToken, oauthTokenAad } from "@/lib/security/token-vault";
 
 export async function POST(
   request: NextRequest,
@@ -58,7 +58,12 @@ export async function POST(
     prisma.oAuthConnection.update({
       where: { id: connection.id },
       data: {
+        // SPEC §4.2 requires stored credentials to be removed on disconnect.
+        // Wipe both access and refresh material; downstream pipelines reference
+        // the connection by id so historical context is preserved without keeping
+        // a usable refresh token in the vault.
         encryptedAccessToken: null,
+        encryptedRefreshToken: "",
         errorMessage: "Disconnected by operator. Reconnect to resume dependent pipelines.",
         status: ConnectionStatus.ERRORED
       }
@@ -86,7 +91,7 @@ async function revokeGoogleToken(
   tokenKey: string
 ) {
   const encryptedToken = connection.encryptedAccessToken || connection.encryptedRefreshToken;
-  const token = decryptToken(encryptedToken, tokenKey);
+  const token = decryptToken(encryptedToken, tokenKey, oauthTokenAad(connection.id));
   const response = await fetch("https://oauth2.googleapis.com/revoke", {
     body: new URLSearchParams({ token }),
     headers: {
