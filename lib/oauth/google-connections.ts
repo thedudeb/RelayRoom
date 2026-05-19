@@ -48,9 +48,9 @@ const connectionConfig = {
       "openid",
       "email",
       "profile",
-      // drive.file: per-file access granted via Google Picker only. Avoids the
-      // broad-read overreach of drive.readonly (SPEC §4.2).
-      "https://www.googleapis.com/auth/drive.file"
+      // SPEC clarification: drive.readonly is acceptable for the watched-folder
+      // listing flow. Picker still scopes user intent to the chosen folder.
+      "https://www.googleapis.com/auth/drive.readonly"
     ]
   },
   youtube: {
