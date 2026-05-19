@@ -44,6 +44,12 @@ interface YouTubeVideosListResponse extends GoogleApiError {
 // chunk may be shorter.
 const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 
+// YouTube hard limits (https://developers.google.com/youtube/v3/docs/videos/insert):
+//   * 256 GiB max file size
+//   * 12-hour max duration (not enforceable from headers; surfaces at upload time)
+// SPEC §4.9 requires the size limit to be rejected upfront with a clear reason.
+const YOUTUBE_MAX_BYTES = 256 * 1024 * 1024 * 1024;
+
 const uploadableStatuses = new Set<QueueStatus>([
   QueueStatus.DETECTED,
   QueueStatus.NEEDS_APPROVAL,
@@ -103,6 +109,15 @@ export async function uploadQueueItemToYouTube({
 
   if (!item.intendedPlaylistId) {
     throw new Error("Route this item to a YouTube playlist before uploading.");
+  }
+
+  // Pre-flight size check using the size snapshot Drive returned at detection
+  // time, before we open any sessions or burn quota. The download path
+  // re-checks the live Content-Length too (the file may have grown).
+  if (item.sizeBytes && Number(item.sizeBytes) > YOUTUBE_MAX_BYTES) {
+    throw new Error(
+      `File is ${formatBytes(Number(item.sizeBytes))}, which exceeds YouTube's 256 GiB upload limit.`
+    );
   }
 
   validateConnections(item.pipeline);
@@ -431,6 +446,13 @@ async function openDriveFileStream({
     throw new ClassifiedUploadError(
       "Drive did not return a Content-Length; cannot start a resumable YouTube upload.",
       FailureReason.UNKNOWN
+    );
+  }
+  if (contentLength > YOUTUBE_MAX_BYTES) {
+    response.body?.cancel().catch(() => {});
+    throw new ClassifiedUploadError(
+      `Drive file is ${formatBytes(contentLength)}, which exceeds YouTube's 256 GiB upload limit.`,
+      FailureReason.FILE_TOO_LARGE
     );
   }
   if (!response.body) {
@@ -925,6 +947,17 @@ export async function reapStaleUploads(staleMinutes = 90) {
   ]);
 
   return { reaped: stale.length };
+}
+
+function formatBytes(bytes: number): string {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function formatStatus(status: QueueStatus): string {
