@@ -1,5 +1,5 @@
 import { ConnectionKind, ConnectionStatus } from "@prisma/client";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
@@ -12,7 +12,7 @@ interface GoogleRefreshResponse {
   expires_in?: number;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
   const email = session?.user?.email;
 
@@ -43,8 +43,14 @@ export async function GET() {
     return NextResponse.json({ error: "MissingTokenKey" }, { status: 400 });
   }
 
+  // Accept ?connectionId= so multi-Drive users can route the Picker through
+  // the specific connection they're configuring; fall back to most-recent
+  // active grant when unspecified (ISSUE-007). Ownership is enforced by
+  // userId in the where clause.
+  const connectionId = request.nextUrl.searchParams.get("connectionId") || undefined;
   const driveConnection = await prisma.oAuthConnection.findFirst({
     where: {
+      ...(connectionId ? { id: connectionId } : {}),
       kind: ConnectionKind.DRIVE,
       status: ConnectionStatus.ACTIVE,
       userId: user.id

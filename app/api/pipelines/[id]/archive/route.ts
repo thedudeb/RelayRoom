@@ -47,6 +47,10 @@ export async function POST(
   return NextResponse.json({ archived: true });
 }
 
+// Hard-delete an already-archived pipeline. Refusing to delete non-archived
+// rows keeps the two-step "archive then delete" safety: a misclick can't wipe
+// an active pipeline. Cascading deletes on Rule / QueueItem / UploadAttempt
+// clean up dependents (see schema.prisma onDelete: Cascade).
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -66,25 +70,24 @@ export async function DELETE(
     return NextResponse.json({ error: "MissingPipelineFields" }, { status: 400 });
   }
 
-  const result = await prisma.pipeline.updateMany({
-    data: {
-      archivedAt: null,
-      errorMessage: null,
-      status: PipelineStatus.DISABLED
-    },
-    where: {
-      archivedAt: { not: null },
-      id,
-      userId: access.userId
-    }
+  const existing = await prisma.pipeline.findFirst({
+    where: { id, userId: access.userId },
+    select: { archivedAt: true }
   });
-
-  if (result.count === 0) {
+  if (!existing) {
     return NextResponse.json({ error: "PipelineNotFound" }, { status: 404 });
   }
+  if (!existing.archivedAt) {
+    return NextResponse.json(
+      { error: "PipelineNotArchived", message: "Archive the pipeline before deleting it." },
+      { status: 409 }
+    );
+  }
+
+  await prisma.pipeline.delete({ where: { id } });
 
   revalidatePath("/dashboard");
   revalidatePath("/pipelines");
   revalidatePath("/connections");
-  return NextResponse.json({ restored: true });
+  return NextResponse.json({ deleted: true });
 }

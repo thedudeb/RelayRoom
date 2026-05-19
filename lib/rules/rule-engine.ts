@@ -181,8 +181,18 @@ function matchCondition(condition: ConditionLeaf, actual: unknown): boolean {
         return actualValue === expectedValue;
       case "matches_wildcard":
         return wildcardToRegExp(rawExpected, condition.caseSensitive).test(rawActual);
-      case "matches_regex":
+      case "matches_regex": {
+        // Bound the input length to keep a pathological user-supplied pattern
+        // from spending unbounded CPU on a long filename and DoSing the
+        // worker (ISSUE-015). A proper RE2 / worker-thread sandbox is the
+        // right long-term fix; the cap is a pragmatic first line of defense.
+        const MAX_REGEX_INPUT = 1024;
+        const MAX_PATTERN = 256;
+        if (rawActual.length > MAX_REGEX_INPUT || rawExpected.length > MAX_PATTERN) {
+          return false;
+        }
         return new RegExp(rawExpected, condition.caseSensitive ? "" : "i").test(rawActual);
+      }
       default:
         return false;
     }
@@ -233,7 +243,7 @@ export function renderTemplate(
   template: string,
   context: Record<string, string | undefined>
 ): string {
-  return template.replace(/\{([a-z_]+)\}/g, (_, key: string) => context[key] || "");
+  return template.replace(/\{([a-z_]+)\}/g, (_, key: string) => context[key] ?? "");
 }
 
 function wildcardToRegExp(pattern: string, caseSensitive = false): RegExp {

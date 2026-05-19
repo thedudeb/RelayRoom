@@ -329,7 +329,7 @@ export function ArchivedPipelineControls({ pipelineId }: { pipelineId: string })
     setState(undefined);
 
     try {
-      await postAction(`/api/pipelines/${pipelineId}/archive`, undefined, "DELETE");
+      await postAction(`/api/pipelines/${pipelineId}/unarchive`, undefined, "POST");
       setState({
         tone: "success",
         message: "Pipeline restored as disabled. Review it before enabling detection."

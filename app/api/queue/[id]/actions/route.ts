@@ -425,7 +425,13 @@ function getActionUpdate({
       data: {
         status: restoreStatus,
         previousStatus: null,
-        lastActionAt: now
+        lastActionAt: now,
+        // Clear externally-handled link state so a restored item can't be
+        // mistaken for a real upload. The audit trail in activityLog +
+        // uploadAttempts preserves the historical link for forensics.
+        ...(currentStatus === PrismaQueueStatus.EXTERNALLY_HANDLED
+          ? { youtubeUrl: null, youtubeVideoId: null }
+          : {})
       },
       message: `Restored item to ${formatStatus(restoreStatus)}.`,
       metadata: { fromStatus: currentStatus, toStatus: restoreStatus }
@@ -435,15 +441,34 @@ function getActionUpdate({
   throw new Error("Unsupported queue action.");
 }
 
+const ALLOWED_YOUTUBE_HOSTS = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "youtu.be"
+]);
+
 function normalizeOptionalUrl(rawUrl?: string): string | undefined {
   const trimmed = rawUrl?.trim();
   if (!trimmed) return undefined;
 
+  let parsed: URL;
   try {
-    return new URL(trimmed).toString();
+    parsed = new URL(trimmed);
   } catch {
     throw new Error("Enter a valid YouTube URL, or leave the field blank.");
   }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("YouTube link must be an http(s) URL.");
+  }
+  // Lock the host to known YouTube domains so the "marked externally
+  // handled" field can't be repurposed as a phishing link (ISSUE-041).
+  if (!ALLOWED_YOUTUBE_HOSTS.has(parsed.hostname.toLowerCase())) {
+    throw new Error("YouTube link must point to youtube.com, m.youtube.com, or youtu.be.");
+  }
+
+  return parsed.toString();
 }
 
 function extractYouTubeVideoId(youtubeUrl: string): string | undefined {
