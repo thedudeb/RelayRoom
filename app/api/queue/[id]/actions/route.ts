@@ -54,8 +54,19 @@ export async function POST(
         userId: access.userId
       });
 
+      const currentItem = await prisma.queueItem.findFirst({
+        where: { id, userId: access.userId },
+        select: { status: true }
+      });
+      if (!currentItem) {
+        return NextResponse.json({ error: "Queue item not found." }, { status: 404 });
+      }
+      const trigger =
+        currentItem.status === PrismaQueueStatus.NEEDS_APPROVAL ? "approve" : "retry";
+
       const result = await uploadQueueItemToYouTube({
         queueItemId: id,
+        trigger,
         userId: access.userId
       });
 

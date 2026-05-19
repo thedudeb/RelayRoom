@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { selectDuePipelines } from "@/lib/cron/scheduler";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
 import { safeEqualText } from "@/lib/security/webhook-signature";
+import { reapStaleUploads } from "@/lib/upload/youtube-upload";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
 
   const now = new Date();
   const limit = pipelineLimit(request);
+  const reapResult = await reapStaleUploads();
   const pipelines = await prisma.pipeline.findMany({
     orderBy: [{ lastDetectionAt: "asc" }, { createdAt: "asc" }],
     select: {
@@ -73,6 +75,7 @@ export async function GET(request: NextRequest) {
     due: duePipelines.length,
     enabledPipelines: runnablePipelines.length,
     limit,
+    reapedStaleUploads: reapResult.reaped,
     results,
     skippedNotDue,
     skippedSeedData

@@ -433,7 +433,7 @@ async function maybeReprocessExistingUpload({
 
 async function uploadAutoQueueItem(queueItemId: string, userId: string) {
   try {
-    await uploadQueueItemToYouTube({ queueItemId, userId });
+    await uploadQueueItemToYouTube({ queueItemId, trigger: "auto", userId });
   } catch {
     // uploadQueueItemToYouTube persists the failed state and attempt history.
   }

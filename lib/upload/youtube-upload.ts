@@ -10,7 +10,7 @@ import { prisma } from "@/lib/db/prisma";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
-import { getVideoContentValidationError } from "./video-file-validation";
+import { getVideoHeaderValidationError } from "./video-file-validation";
 
 interface GoogleRefreshResponse {
   access_token?: string;
@@ -39,18 +39,36 @@ interface YouTubeVideosListResponse extends GoogleApiError {
   items?: Array<{ id?: string }>;
 }
 
-const maxMvpUploadBytes = 256 * 1024 * 1024;
+// 8 MiB per chunk. Must be a multiple of 256 KiB per YouTube's resumable
+// upload spec; intermediate chunks must use exactly this size, the final
+// chunk may be shorter.
+const UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+
 const uploadableStatuses = new Set<QueueStatus>([
   QueueStatus.DETECTED,
   QueueStatus.NEEDS_APPROVAL,
   QueueStatus.FAILED
 ]);
 
+export type UploadTrigger = "auto" | "approve" | "retry";
+
+const allowedTransitions: Record<UploadTrigger, ReadonlySet<QueueStatus>> = {
+  auto: new Set([QueueStatus.DETECTED]),
+  approve: new Set([QueueStatus.NEEDS_APPROVAL]),
+  retry: new Set([QueueStatus.FAILED])
+};
+
 export async function uploadQueueItemToYouTube({
   queueItemId,
+  trigger,
   userId
 }: {
   queueItemId: string;
+  // The caller asserts what kind of transition is happening. We enforce that
+  // the queue item's current status matches the trigger (ISSUE-047): an
+  // approval click must not be able to fire on a DETECTED item, and an
+  // auto-upload must not bypass NEEDS_APPROVAL by accident.
+  trigger: UploadTrigger;
   userId: string;
 }) {
   const item = await prisma.queueItem.findFirst({
@@ -75,6 +93,12 @@ export async function uploadQueueItemToYouTube({
 
   if (!uploadableStatuses.has(item.status)) {
     throw new Error(`Upload is not allowed from ${formatStatus(item.status)}.`);
+  }
+
+  if (!allowedTransitions[trigger].has(item.status)) {
+    throw new Error(
+      `Upload trigger '${trigger}' cannot fire on a ${formatStatus(item.status)} item.`
+    );
   }
 
   if (!item.intendedPlaylistId) {
@@ -179,22 +203,17 @@ export async function uploadQueueItemToYouTube({
       }
     }
 
-    const file = await downloadDriveFile({
+    const driveFile = await openDriveFileStream({
       accessToken: driveAccessToken,
       driveFileId: item.driveFileId,
       filename: item.filename,
-      mimeType: item.mimeType,
-      sizeBytes: item.sizeBytes ? Number(item.sizeBytes) : undefined
+      mimeType: item.mimeType
     });
-    const validationError = getVideoContentValidationError(file);
-    if (validationError) {
-      throw new ClassifiedUploadError(validationError, FailureReason.NOT_VIDEO);
-    }
 
-    const videoId = await insertYouTubeVideo({
+    const videoId = await streamUploadToYouTube({
       accessToken: youtubeAccessToken,
       description: item.renderedDescription || "",
-      file,
+      file: driveFile,
       privacyStatus: item.pipeline.privacyStatus,
       title: item.renderedTitle || item.filename
     });
@@ -369,26 +388,24 @@ async function getUsableGoogleAccessToken({
   return payload.access_token;
 }
 
-async function downloadDriveFile({
+interface DriveFileStream {
+  body: ReadableStream<Uint8Array>;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+async function openDriveFileStream({
   accessToken,
   driveFileId,
   filename,
-  mimeType,
-  sizeBytes
+  mimeType
 }: {
   accessToken: string;
   driveFileId: string;
   filename: string;
   mimeType: string;
-  sizeBytes?: number;
-}) {
-  if (sizeBytes && sizeBytes > maxMvpUploadBytes) {
-    throw new ClassifiedUploadError(
-      "This MVP upload path supports files up to 256 MB. Resumable uploads are the next upgrade.",
-      FailureReason.FILE_TOO_LARGE
-    );
-  }
-
+}): Promise<DriveFileStream> {
   const response = await fetchWithTransientRetries(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFileId)}?alt=media`,
     {
@@ -408,11 +425,25 @@ async function downloadDriveFile({
     throw classifyGoogleError(payload, "Drive file download failed.");
   }
 
-  const bytes = await response.arrayBuffer();
+  const contentLength = Number(response.headers.get("content-length"));
+  if (!Number.isFinite(contentLength) || contentLength <= 0) {
+    throw new ClassifiedUploadError(
+      "Drive did not return a Content-Length; cannot start a resumable YouTube upload.",
+      FailureReason.UNKNOWN
+    );
+  }
+  if (!response.body) {
+    throw new ClassifiedUploadError(
+      "Drive response had no body to stream.",
+      FailureReason.UNKNOWN
+    );
+  }
+
   return {
-    bytes,
+    body: response.body,
     filename,
-    mimeType
+    mimeType,
+    sizeBytes: contentLength
   };
 }
 
@@ -481,7 +512,7 @@ async function markUploadComplete({
   };
 }
 
-async function insertYouTubeVideo({
+async function streamUploadToYouTube({
   accessToken,
   description,
   file,
@@ -490,28 +521,25 @@ async function insertYouTubeVideo({
 }: {
   accessToken: string;
   description: string;
-  file: { bytes: ArrayBuffer; filename: string; mimeType: string };
+  file: DriveFileStream;
   privacyStatus: PrivacyStatus;
   title: string;
 }) {
   const metadata = {
-    snippet: {
-      description,
-      title
-    },
-    status: {
-      privacyStatus: privacyStatus.toLowerCase()
-    }
+    snippet: { description, title },
+    status: { privacyStatus: privacyStatus.toLowerCase() }
   };
 
-  const createSessionResponse = await fetchWithTransientRetries(
+  // Resumable session creation: a POST that must NOT be retried — each call
+  // mints a new upload URL and leaks the previous session.
+  const createSessionResponse = await fetch(
     "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
     {
       body: JSON.stringify(metadata),
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json; charset=UTF-8",
-        "X-Upload-Content-Length": String(file.bytes.byteLength),
+        "X-Upload-Content-Length": String(file.sizeBytes),
         "X-Upload-Content-Type": file.mimeType
       },
       method: "POST"
@@ -526,24 +554,138 @@ async function insertYouTubeVideo({
     throw classifyGoogleError(payload, "YouTube resumable upload session failed.");
   }
 
-  const response = await fetchWithTransientRetries(uploadUrl, {
-    body: Buffer.from(file.bytes),
-    headers: {
-      "Content-Length": String(file.bytes.byteLength),
-      "Content-Type": file.mimeType
-    },
-    method: "PUT"
-  });
-  const payload = await readGoogleJson<YouTubeVideoInsertResponse>(
-    response,
-    "YouTube upload failed."
-  );
+  const reader = file.body.getReader();
+  let pending = Buffer.alloc(0);
+  let offset = 0;
+  let streamDone = false;
+  let validated = false;
+  let finalPayload: YouTubeVideoInsertResponse | null = null;
 
-  if (!response.ok || payload.error || !payload.id) {
-    throw classifyGoogleError(payload, "YouTube upload failed.");
+  try {
+    while (!finalPayload) {
+      while (!streamDone && pending.byteLength < UPLOAD_CHUNK_BYTES) {
+        const { done, value } = await reader.read();
+        if (done) {
+          streamDone = true;
+          break;
+        }
+        pending = Buffer.concat([pending, Buffer.from(value)]);
+        if (!validated) {
+          const headerError = getVideoHeaderValidationError({
+            prefix: pending,
+            filename: file.filename,
+            mimeType: file.mimeType
+          });
+          // Once we have at least 16 bytes (the threshold the validator uses)
+          // run it and short-circuit on rejection so we don't waste bandwidth.
+          if (pending.byteLength >= 16) {
+            if (headerError) {
+              throw new ClassifiedUploadError(headerError, FailureReason.NOT_VIDEO);
+            }
+            validated = true;
+          }
+        }
+      }
+
+      const isFinalChunk = streamDone;
+      const chunkSize = isFinalChunk
+        ? pending.byteLength
+        : Math.min(UPLOAD_CHUNK_BYTES, pending.byteLength);
+      const chunk = pending.subarray(0, chunkSize);
+      pending = pending.subarray(chunkSize);
+
+      const end = offset + chunkSize - 1;
+      const totalForRange = isFinalChunk ? String(offset + chunkSize) : "*";
+      const response = await uploadChunkWithRetries({
+        url: uploadUrl,
+        chunk,
+        offset,
+        end,
+        totalSize: file.sizeBytes,
+        totalForRange,
+        mimeType: file.mimeType
+      });
+
+      if (response.status === 308) {
+        // Resume Incomplete: server tells us via Range header how far it got.
+        const range = response.headers.get("range");
+        const accepted = parseAcceptedBytes(range);
+        offset = accepted !== null ? accepted + 1 : offset + chunkSize;
+        continue;
+      }
+
+      if (response.ok) {
+        finalPayload = await readGoogleJson<YouTubeVideoInsertResponse>(
+          response,
+          "YouTube upload failed."
+        );
+        if (finalPayload.error || !finalPayload.id) {
+          throw classifyGoogleError(finalPayload, "YouTube upload failed.");
+        }
+        return finalPayload.id;
+      }
+
+      const payload = await readGoogleJson<YouTubeVideoInsertResponse>(
+        response,
+        "YouTube upload failed."
+      );
+      throw classifyGoogleError(payload, "YouTube upload failed.");
+    }
+  } finally {
+    reader.releaseLock();
+    file.body.cancel().catch(() => {});
   }
 
-  return payload.id;
+  // Unreachable: loop returns on terminal status or throws.
+  throw new ClassifiedUploadError("YouTube upload ended without a terminal response.", FailureReason.UNKNOWN);
+}
+
+async function uploadChunkWithRetries({
+  url,
+  chunk,
+  offset,
+  end,
+  totalSize,
+  totalForRange,
+  mimeType
+}: {
+  url: string;
+  chunk: Buffer;
+  offset: number;
+  end: number;
+  totalSize: number;
+  totalForRange: string;
+  mimeType: string;
+}) {
+  void totalSize; // referenced via totalForRange; kept for log clarity at the call site
+  // Chunk PUTs are idempotent under the resumable protocol: the same
+  // Content-Range can be replayed safely. Retries here implement the
+  // documented YouTube resume semantics rather than the prior blanket retry.
+  const body = chunk.buffer.slice(
+    chunk.byteOffset,
+    chunk.byteOffset + chunk.byteLength
+  ) as ArrayBuffer;
+  return fetchWithTransientRetries(
+    url,
+    {
+      body,
+      headers: {
+        "Content-Length": String(chunk.byteLength),
+        "Content-Range": `bytes ${offset}-${end}/${totalForRange}`,
+        "Content-Type": mimeType
+      },
+      method: "PUT"
+    },
+    { retryNonIdempotent: false }
+  );
+}
+
+function parseAcceptedBytes(rangeHeader: string | null): number | null {
+  if (!rangeHeader) return null;
+  const match = /bytes=\d+-(\d+)/.exec(rangeHeader);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
 }
 
 async function addVideoToPlaylist({
@@ -694,19 +836,33 @@ async function readGoogleJson<T>(response: Response, fallbackMessage: string): P
   }
 }
 
-async function fetchWithTransientRetries(input: string | URL, init: RequestInit) {
+// Default-safe retry policy: only retry methods that are idempotent under the
+// HTTP spec (GET, HEAD, PUT, DELETE, OPTIONS). Retrying POST risks duplicate
+// resumable upload sessions and duplicate playlist entries when a 5xx lands
+// after the server already accepted the call (ISSUE-025, ISSUE-045). Callers
+// that know their POST is safe to retry can pass { retryNonIdempotent: true }.
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"]);
+
+async function fetchWithTransientRetries(
+  input: string | URL,
+  init: RequestInit,
+  options: { retryNonIdempotent?: boolean } = {}
+) {
   const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
+  const method = (init.method || "GET").toUpperCase();
+  const canRetry = options.retryNonIdempotent || IDEMPOTENT_METHODS.has(method);
+  const maxAttempts = canRetry ? 3 : 1;
   let lastNetworkError: unknown;
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       const response = await fetch(input, init);
-      if (!retryableStatuses.has(response.status) || attempt === 2) {
+      if (!retryableStatuses.has(response.status) || attempt === maxAttempts - 1) {
         return response;
       }
     } catch (error) {
       lastNetworkError = error;
-      if (attempt === 2) {
+      if (attempt === maxAttempts - 1) {
         throw new ClassifiedUploadError(
           error instanceof Error ? error.message : "Network request failed.",
           FailureReason.NETWORK_TIMEOUT
@@ -730,6 +886,44 @@ function sleep(ms: number) {
 function truncate(value: string) {
   const compactValue = value.replace(/\s+/g, " ").trim();
   return compactValue.length > 180 ? `${compactValue.slice(0, 180)}...` : compactValue;
+}
+
+// Reaper for items that flipped to UPLOADING but never reached a terminal
+// state (process killed mid-upload, function timeout, etc.). Without this,
+// a crashed upload leaves the queue item visibly stuck (ISSUE-024).
+// staleMinutes default is generous enough that legitimate long uploads
+// finish before being reaped.
+export async function reapStaleUploads(staleMinutes = 90) {
+  const cutoff = new Date(Date.now() - staleMinutes * 60_000);
+  const stale = await prisma.queueItem.findMany({
+    where: { status: QueueStatus.UPLOADING, lastActionAt: { lt: cutoff } },
+    select: { id: true, userId: true }
+  });
+  if (!stale.length) {
+    return { reaped: 0 };
+  }
+
+  await prisma.$transaction([
+    prisma.queueItem.updateMany({
+      where: { id: { in: stale.map((item) => item.id) } },
+      data: {
+        failureReason: FailureReason.NETWORK_TIMEOUT,
+        lastActionAt: new Date(),
+        lastError: "Upload exceeded the maximum runtime and was reaped as failed.",
+        status: QueueStatus.FAILED
+      }
+    }),
+    prisma.activityLogEntry.createMany({
+      data: stale.map((item) => ({
+        actorType: "system",
+        message: "Reaped stuck UPLOADING item after exceeding the stale-upload threshold.",
+        queueItemId: item.id,
+        userId: item.userId
+      }))
+    })
+  ]);
+
+  return { reaped: stale.length };
 }
 
 function formatStatus(status: QueueStatus): string {
