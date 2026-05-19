@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { selectDuePipelines } from "@/lib/cron/scheduler";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
-import { safeEqualText } from "@/lib/security/webhook-signature";
+import { authorizeCronRequest } from "@/lib/security/cron-auth";
 import { reapStaleUploads } from "@/lib/upload/youtube-upload";
 
 export const dynamic = "force-dynamic";
@@ -80,26 +80,6 @@ export async function GET(request: NextRequest) {
     skippedNotDue,
     skippedSeedData
   });
-}
-
-function authorizeCronRequest(request: NextRequest):
-  | { ok: true }
-  | { error: string; ok: false; status: number } {
-  const expectedSecret = process.env.CRON_SECRET || process.env.DETECTION_WEBHOOK_SECRET;
-  if (!expectedSecret) {
-    return { error: "MissingCronSecret", ok: false, status: 500 };
-  }
-
-  const authHeader = request.headers.get("authorization");
-  const headerSecret = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  const fallbackHeaderSecret = request.headers.get("x-relayroom-cron-secret") || "";
-  const providedSecret = headerSecret || fallbackHeaderSecret;
-
-  if (!providedSecret || !safeEqualText(providedSecret, expectedSecret)) {
-    return { error: "Unauthorized", ok: false, status: 401 };
-  }
-
-  return { ok: true };
 }
 
 function pipelineLimit(request: NextRequest) {

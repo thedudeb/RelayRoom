@@ -13,7 +13,6 @@ import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 import { decryptToken, encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
-import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
 import {
   describeUnsupportedVideoFile,
   isYouTubeSupportedVideoFile
@@ -255,9 +254,11 @@ export async function runDriveDetectionForPipeline({
       });
       created += 1;
 
-      if (status === QueueStatus.DETECTED) {
-        await uploadAutoQueueItem(queueItem.id, userId);
-      }
+      // Auto-mode uploads now happen out-of-band: the cron upload worker
+      // (/api/cron/process-uploads) drains DETECTED items. Doing the upload
+      // inline here pinned a detection invocation to a single sequential
+      // upload chain and made cron/webhook latency unpredictable at scale
+      // (SPEC §7).
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         // Race: another concurrent detection created this item. Re-fetch and
@@ -424,19 +425,9 @@ async function maybeReprocessExistingUpload({
     })
   ]);
 
-  if (status === QueueStatus.DETECTED) {
-    await uploadAutoQueueItem(existingItem.id, userId);
-  }
-
+  // Auto-mode reprocessing also defers to the upload worker (see comment in
+  // the main detection loop).
   return true;
-}
-
-async function uploadAutoQueueItem(queueItemId: string, userId: string) {
-  try {
-    await uploadQueueItemToYouTube({ queueItemId, trigger: "auto", userId });
-  } catch {
-    // uploadQueueItemToYouTube persists the failed state and attempt history.
-  }
 }
 
 export async function probeDriveFolderForPipeline({
