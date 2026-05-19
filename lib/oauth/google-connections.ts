@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { encryptToken } from "@/lib/security/token-vault";
 
 export type GoogleConnectionKind = "drive" | "youtube";
@@ -92,7 +93,7 @@ export async function startGoogleConnection(kind: GoogleConnectionKind) {
   authorizationUrl.searchParams.set("scope", config.scopes.join(" "));
   authorizationUrl.searchParams.set("state", state);
 
-  console.info(`Starting ${kind} connection for ${user.email}.`);
+  console.info("Starting Google connection.", { kind, userId: user.id });
   return NextResponse.redirect(authorizationUrl);
 }
 
@@ -282,7 +283,7 @@ async function exchangeCodeForTokens(
   const payload = (await response.json()) as GoogleTokenResponse;
 
   if (!response.ok || payload.error) {
-    console.error(`${kind} token exchange failed.`, payload);
+    logGoogleApiError(`${kind} token exchange failed.`, response, payload);
   }
 
   return payload;

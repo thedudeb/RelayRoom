@@ -1,4 +1,5 @@
-import { PipelineStatus } from "@prisma/client";
+import { createHash } from "node:crypto";
+import { PipelineStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { usesSeedTokenPlaceholder } from "@/lib/cron/scheduler";
 import { prisma } from "@/lib/db/prisma";
@@ -37,6 +38,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "MissingPipelineOrSourceFolder" },
       { status: 400 }
+    );
+  }
+
+  const replay = await reserveWebhookEvent({
+    body: rawBody,
+    eventId: payload.eventId,
+    signature: request.headers.get("x-relayroom-signature"),
+    timestamp: request.headers.get("x-relayroom-timestamp")
+  });
+  if (!replay.ok) {
+    return NextResponse.json(
+      {
+        eventId: payload.eventId || null,
+        ignored: true,
+        reason: replay.reason
+      },
+      { status: 202 }
     );
   }
 
@@ -109,6 +127,50 @@ export async function POST(request: NextRequest) {
     skippedSeedData,
     sourceFolderId: payload.sourceFolderId || pipelines[0]?.sourceFolderId || null
   });
+}
+
+async function reserveWebhookEvent({
+  body,
+  eventId,
+  signature,
+  timestamp
+}: {
+  body: string;
+  eventId?: string;
+  signature: string | null;
+  timestamp: string | null;
+}) {
+  const now = new Date();
+  const replayKey = eventId?.trim()
+    ? `event:${eventId.trim()}`
+    : `signature:${hashText(`${timestamp || ""}.${signature || ""}.${body}`)}`;
+
+  try {
+    await prisma.$transaction([
+      prisma.webhookEvent.deleteMany({
+        where: { expiresAt: { lt: now } }
+      }),
+      prisma.webhookEvent.create({
+        data: {
+          eventId: eventId?.trim() || null,
+          expiresAt: new Date(now.getTime() + 10 * 60_000),
+          replayKey,
+          signatureHash: hashText(signature || "")
+        }
+      })
+    ]);
+    return { ok: true as const };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return { ok: false as const, reason: "ReplayDetected" };
+    }
+
+    throw error;
+  }
+}
+
+function hashText(value: string) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
 async function findWebhookPipelines(payload: DetectionWebhookPayload) {

@@ -3,11 +3,17 @@ import { revalidatePath } from "next/cache";
 import { getApiAccess } from "@/lib/auth/account";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
 import { prisma } from "@/lib/db/prisma";
+import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const originError = rejectCrossSiteMutation(request);
+  if (originError) {
+    return originError;
+  }
+
   const access = await getApiAccess(request.nextUrl.searchParams);
   if (!access || access.isDemo) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

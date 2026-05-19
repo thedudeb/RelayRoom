@@ -38,6 +38,7 @@ import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField"
 import { RuleConditionEditor } from "@/components/pipelines/RuleConditionEditor";
 import { RuleBuilderModeToggle } from "@/components/pipelines/RuleBuilderModeToggle";
 import { RuleTester } from "@/components/pipelines/RuleTester";
+import { verifyDriveFolderSelection } from "@/lib/oauth/drive-folder-verification";
 import {
   finalPriorityForIndex,
   reorderRuleIds,
@@ -942,7 +943,6 @@ async function createPipelineAction(formData: FormData) {
   const youtubePlaylistId = getRequiredFormValue(formData, "youtubePlaylistId");
   const youtubePlaylistName = getRequiredFormValue(formData, "youtubePlaylistName");
   const sourceFolderId = getRequiredFormValue(formData, "sourceFolderId");
-  const sourceFolderName = getRequiredFormValue(formData, "sourceFolderName");
   const defaultTitleTemplate =
     getRequiredFormValue(formData, "defaultTitleTemplate") || "{filename}";
   const defaultDescriptionTemplate =
@@ -967,8 +967,7 @@ async function createPipelineAction(formData: FormData) {
     !youtubeConnectionId ||
     !youtubePlaylistId ||
     !youtubePlaylistName ||
-    !sourceFolderId ||
-    !sourceFolderName
+    !sourceFolderId
   ) {
     redirect("/pipelines?error=MissingPipelineFields");
   }
@@ -996,6 +995,20 @@ async function createPipelineAction(formData: FormData) {
     redirect("/pipelines?error=MissingActiveConnections");
   }
 
+  const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!tokenKey) {
+    redirect("/pipelines?error=MissingTokenKey");
+  }
+
+  const verifiedFolder = await verifyDriveFolderSelection({
+    connection: driveConnection,
+    folderId: sourceFolderId,
+    tokenKey
+  });
+  if (!verifiedFolder) {
+    redirect("/pipelines?error=InvalidDriveFolder");
+  }
+
   await prisma.pipeline.create({
     data: {
       defaultDescriptionTemplate,
@@ -1008,8 +1021,8 @@ async function createPipelineAction(formData: FormData) {
       pollingIntervalMinutes,
       privacyStatus,
       processedFromTime: new Date(),
-      sourceFolderId,
-      sourceFolderName,
+      sourceFolderId: verifiedFolder.id,
+      sourceFolderName: verifiedFolder.name,
       status: PipelineStatus.DISABLED,
       userId: access.userId,
       youtubeConnectionId: youtubeConnection.id,
@@ -1055,7 +1068,6 @@ async function updatePipelineAction(formData: FormData) {
   const pipelineId = getRequiredFormValue(formData, "pipelineId");
   const name = getRequiredFormValue(formData, "name");
   const sourceFolderId = getRequiredFormValue(formData, "sourceFolderId");
-  const sourceFolderName = getRequiredFormValue(formData, "sourceFolderName");
   const defaultTitleTemplate =
     getRequiredFormValue(formData, "defaultTitleTemplate") || "{filename}";
   const defaultDescriptionTemplate =
@@ -1071,7 +1083,7 @@ async function updatePipelineAction(formData: FormData) {
     redirect("/pipelines?error=InvalidPollingCadence");
   }
 
-  if (!pipelineId || !name || !sourceFolderId || !sourceFolderName) {
+  if (!pipelineId || !name || !sourceFolderId) {
     redirect("/pipelines?error=MissingPipelineFields");
   }
 
@@ -1083,6 +1095,7 @@ async function updatePipelineAction(formData: FormData) {
     },
     select: {
       privacyStatus: true,
+      driveConnection: true,
       sourceFolderId: true
     }
   });
@@ -1091,7 +1104,21 @@ async function updatePipelineAction(formData: FormData) {
     redirect("/pipelines?error=PipelineNotFound");
   }
 
-  const folderChanged = pipeline.sourceFolderId !== sourceFolderId;
+  const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!tokenKey) {
+    redirect("/pipelines?error=MissingTokenKey");
+  }
+
+  const verifiedFolder = await verifyDriveFolderSelection({
+    connection: pipeline.driveConnection,
+    folderId: sourceFolderId,
+    tokenKey
+  });
+  if (!verifiedFolder) {
+    redirect("/pipelines?error=InvalidDriveFolder");
+  }
+
+  const folderChanged = pipeline.sourceFolderId !== verifiedFolder.id;
   const switchingToPublic =
     pipeline.privacyStatus !== PrivacyStatus.PUBLIC && privacyStatus === PrivacyStatus.PUBLIC;
   if (switchingToPublic && !hasPublicPrivacyConfirmation(formData, name)) {
@@ -1108,8 +1135,8 @@ async function updatePipelineAction(formData: FormData) {
       name,
       pollingIntervalMinutes,
       privacyStatus,
-      sourceFolderId,
-      sourceFolderName,
+      sourceFolderId: verifiedFolder.id,
+      sourceFolderName: verifiedFolder.name,
       ...(folderChanged ? { lastDetectionAt: null, processedFromTime: new Date() } : {})
     }
   });

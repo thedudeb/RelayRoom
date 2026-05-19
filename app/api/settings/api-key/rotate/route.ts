@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
 import { generateApiKey, hashApiKey } from "@/lib/security/api-keys";
+import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 export async function POST(request: NextRequest) {
+  const originError = rejectCrossSiteMutation(request);
+  if (originError) {
+    return originError;
+  }
+
   const access = await getApiAccess(request.nextUrl.searchParams);
   if (!access || access.isDemo) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

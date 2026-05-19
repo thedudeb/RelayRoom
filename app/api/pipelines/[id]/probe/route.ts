@@ -6,11 +6,17 @@ import {
   isYouTubeSupportedVideoFile
 } from "@/lib/detection/youtube-supported-formats";
 import { prisma } from "@/lib/db/prisma";
+import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const originError = rejectCrossSiteMutation(request);
+  if (originError) {
+    return originError;
+  }
+
   const access = await getApiAccess(request.nextUrl.searchParams);
   if (!access || access.isDemo) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

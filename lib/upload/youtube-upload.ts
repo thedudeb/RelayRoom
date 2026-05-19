@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
+import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 import { getVideoContentValidationError } from "./video-file-validation";
 
@@ -343,7 +344,7 @@ async function getUsableGoogleAccessToken({
   );
 
   if (!response.ok || !payload.access_token || payload.error) {
-    console.error(`${serviceName} token refresh failed.`, payload);
+    logGoogleApiError(`${serviceName} token refresh failed.`, response, payload);
     await markConnectionRefreshFailed({
       connectionId: connection.id,
       kind: serviceName === "Drive" ? ConnectionKind.DRIVE : ConnectionKind.YOUTUBE,

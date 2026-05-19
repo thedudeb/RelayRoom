@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import type { DriveFileMetadata, Pipeline } from "@/lib/domain/types";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
+import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
@@ -485,7 +486,7 @@ async function listDriveFolderFiles({
     const payload = (await response.json()) as DriveFilesResponse;
 
     if (!response.ok || payload.error) {
-      console.error("Drive detection list failed.", payload);
+      logGoogleApiError("Drive detection list failed.", response, payload);
       throw new Error("DriveListFailed");
     }
 
@@ -499,7 +500,7 @@ async function listDriveFolderFiles({
   return files;
 }
 
-async function getUsableDriveAccessToken(
+export async function getUsableDriveAccessToken(
   connection: {
     encryptedAccessToken: string | null;
     encryptedRefreshToken: string;
@@ -538,7 +539,7 @@ async function getUsableDriveAccessToken(
   const payload = (await response.json()) as GoogleRefreshResponse;
 
   if (!response.ok || !payload.access_token || payload.error) {
-    console.error("Drive token refresh failed.", payload);
+    logGoogleApiError("Drive token refresh failed.", response, payload);
     await markConnectionRefreshFailed({
       connectionId: connection.id,
       kind: ConnectionKind.DRIVE,
@@ -605,7 +606,7 @@ async function getUsableYouTubeAccessToken(
   const payload = (await response.json()) as GoogleRefreshResponse;
 
   if (!response.ok || !payload.access_token || payload.error) {
-    console.error("YouTube token refresh failed.", payload);
+    logGoogleApiError("YouTube token refresh failed.", response, payload);
     await markConnectionRefreshFailed({
       connectionId: connection.id,
       kind: ConnectionKind.YOUTUBE,
@@ -644,7 +645,7 @@ async function verifyYouTubeVideoExists({
   const payload = (await response.json()) as YouTubeVideosListResponse;
 
   if (!response.ok) {
-    console.error("YouTube duplicate verification failed.", payload);
+    logGoogleApiError("YouTube duplicate verification failed.", response, payload);
     throw new Error("YouTubeVerificationFailed");
   }
 

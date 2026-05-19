@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
+import { logGoogleApiError } from "@/lib/oauth/google-errors";
+import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 
 interface GoogleRefreshResponse {
@@ -42,6 +44,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const originError = rejectCrossSiteMutation(request);
+  if (originError) {
+    return originError;
+  }
+
   const context = await getYouTubeConnectionContext(request);
   if (context instanceof NextResponse) {
     return context;
@@ -75,7 +82,7 @@ export async function POST(request: NextRequest) {
   const payload = (await response.json()) as CreatePlaylistResponse;
 
   if (!response.ok || payload.error || !payload.id) {
-    console.error("YouTube playlist create failed.", payload);
+    logGoogleApiError("YouTube playlist create failed.", response, payload);
     return NextResponse.json({ error: "PlaylistCreateFailed" }, { status: 502 });
   }
 
@@ -153,7 +160,7 @@ async function fetchYouTubePlaylists(accessToken: string) {
     const payload = (await response.json()) as YouTubePlaylistResponse;
 
     if (!response.ok) {
-      console.error("YouTube playlist fetch failed.", payload);
+      logGoogleApiError("YouTube playlist fetch failed.", response, payload);
       return playlists;
     }
 
@@ -208,7 +215,7 @@ async function getUsableYouTubeAccessToken(
   const payload = (await response.json()) as GoogleRefreshResponse;
 
   if (!response.ok || !payload.access_token || payload.error) {
-    console.error("YouTube token refresh failed.", payload);
+    logGoogleApiError("YouTube token refresh failed.", response, payload);
     await markConnectionRefreshFailed({
       connectionId: connection.id,
       kind: ConnectionKind.YOUTUBE,

@@ -4,8 +4,14 @@ import {
   signWebhookPayload,
   verifyWebhookSignature
 } from "@/lib/security/webhook-signature";
+import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 export async function POST(request: NextRequest) {
+  const originError = rejectCrossSiteMutation(request);
+  if (originError) {
+    return originError;
+  }
+
   const access = await getApiAccess(request.nextUrl.searchParams);
   if (!access || access.isDemo) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

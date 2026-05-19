@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
+import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { decryptToken, encryptToken } from "@/lib/security/token-vault";
 
 interface GoogleRefreshResponse {
@@ -102,7 +103,7 @@ async function getUsableDriveAccessToken(
   const payload = (await response.json()) as GoogleRefreshResponse;
 
   if (!response.ok || !payload.access_token || payload.error) {
-    console.error("Drive token refresh failed.", payload);
+    logGoogleApiError("Drive token refresh failed.", response, payload);
     await markConnectionRefreshFailed({
       connectionId: connection.id,
       kind: ConnectionKind.DRIVE,
