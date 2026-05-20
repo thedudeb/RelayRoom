@@ -4006,6 +4006,17 @@ td strong {
   justify-self: end;
 }
 
+.responsive-table tbody tr:first-child .queue-actions [data-tooltip]::after {
+  bottom: auto;
+  top: calc(100% + 8px);
+  transform: translate(-50%, -2px);
+}
+
+.responsive-table tbody tr:first-child .queue-actions [data-tooltip]:hover::after,
+.responsive-table tbody tr:first-child .queue-actions [data-tooltip]:focus-visible::after {
+  transform: translate(-50%, 0);
+}
+
 .route-select {
   max-width: 210px;
   min-height: 38px;
