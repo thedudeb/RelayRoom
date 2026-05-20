@@ -2875,6 +2875,16 @@ td strong {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* The earlier @media block at ~line 1263 also tries to collapse this grid,
+   but the unconditional rule above overrides it. Re-declare here so the
+   later source order wins and inputs stack instead of being truncated at
+   narrow widths. */
+@media (max-width: 700px) {
+  .rule-tester-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .rule-tester-result {
   background: var(--surface);
   border: 1px solid var(--line);
