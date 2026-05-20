@@ -23,11 +23,33 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap"
 });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || "https://relay-room-one.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "RelayRoom",
-  description: "Route Drive recordings to YouTube playlists with observable operations.",
+  description:
+    "Route Google Drive recordings to YouTube playlists with a visual rule builder and observable operations queue.",
+  applicationName: "RelayRoom",
   icons: {
-    icon: "/icon.svg"
+    icon: "/icon.svg",
+    apple: "/icon.svg"
+  },
+  openGraph: {
+    type: "website",
+    siteName: "RelayRoom",
+    title: "RelayRoom — Drive recordings into YouTube playlists, on autopilot",
+    description:
+      "Visual AND/OR rule builder, push-notification + polling detection, streaming uploads, and an operations queue with full recovery flows.",
+    url: siteUrl,
+    locale: "en_US"
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "RelayRoom — Drive recordings into YouTube playlists, on autopilot",
+    description:
+      "Visual rule builder, reliable detection, streaming uploads, and an operations queue with full recovery flows."
   }
 };
 
