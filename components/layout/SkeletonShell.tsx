@@ -1,4 +1,13 @@
-import { CircleHelp, Eye, GitBranch, ListChecks, Moon, PlugZap, Settings } from "lucide-react";
+import {
+  CircleHelp,
+  Eye,
+  GitBranch,
+  ListChecks,
+  Menu,
+  Moon,
+  PlugZap,
+  Settings
+} from "lucide-react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 
 const navItems = [
@@ -19,6 +28,18 @@ export function SkeletonShell({
 }) {
   return (
     <div className="app-shell">
+      {/* Visual placeholder for the AppShell hamburger so it doesn't blink
+          out of existence during route transitions on mobile. Disabled
+          because the route is still loading. */}
+      <button
+        aria-hidden="true"
+        className="mobile-menu-toggle"
+        disabled
+        tabIndex={-1}
+        type="button"
+      >
+        <Menu aria-hidden="true" size={20} />
+      </button>
       <aside className="sidebar">
         <div className="brand">
           <RelayRoomLogo />
