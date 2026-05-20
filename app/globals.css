@@ -5645,7 +5645,8 @@ td strong {
     overflow-x: hidden;
   }
 
-  /* Floating hamburger button — fixed so it stays reachable while scrolling. */
+  /* Floating hamburger button — top-right keeps it clear of the topbar's
+     left-anchored title content. Fixed so it stays reachable while scrolling. */
   .mobile-menu-toggle {
     align-items: center;
     background: var(--surface);
@@ -5657,8 +5658,8 @@ td strong {
     display: flex;
     height: 44px;
     justify-content: center;
-    left: 14px;
     position: fixed;
+    right: 14px;
     top: 14px;
     transition: background var(--dur-fast) var(--ease-out);
     width: 44px;
@@ -5701,13 +5702,10 @@ td strong {
     transform: translateX(0);
   }
 
-  /* Reserve a strip across the top of the main column for the floating
-     hamburger so the topbar's eyebrow + title can't collide with it. */
-  .main {
-    padding-top: 64px;
-  }
+  /* Hamburger sits in the top-right corner. Reserve right-side space in the
+     topbar so the title row doesn't run under it. */
   .topbar {
-    padding-left: 18px;
+    padding-right: 70px;
   }
 
   .brand {
