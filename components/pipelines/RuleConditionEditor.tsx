@@ -748,8 +748,16 @@ function reorderSiblings(root: ConditionGroup, sourceId: string, targetId: strin
     if (sourceIndex !== -1 && targetIndex !== -1) {
       const next = [...group.children];
       const [moved] = next.splice(sourceIndex, 1);
-      const insertIndex = next.findIndex((child) => child.id === targetId);
-      next.splice(insertIndex < 0 ? targetIndex : insertIndex, 0, moved);
+      const targetIndexAfterRemoval = next.findIndex((child) => child.id === targetId);
+      // Drag direction decides "before" vs "after":
+      //   moving DOWN  → drop after target (matches the visual overshoot)
+      //   moving UP    → drop before target
+      // Previously both directions inserted before target, which felt
+      // correct going up but broken going down because removing the source
+      // shifted all later indices by one.
+      const insertAt =
+        sourceIndex < targetIndex ? targetIndexAfterRemoval + 1 : targetIndexAfterRemoval;
+      next.splice(insertAt < 0 ? targetIndex : insertAt, 0, moved);
       return { ...group, children: next };
     }
     return { ...group, children: group.children.map((child) => (child.type === "group" ? visit(child) : child)) };
