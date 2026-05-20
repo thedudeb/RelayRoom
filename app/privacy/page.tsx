@@ -76,6 +76,10 @@ export default function PrivacyPage() {
             For access or data questions, contact the RelayRoom workspace owner.
           </p>
         </section>
+
+        <p className="legal-crosslink">
+          See also: <Link href="/terms">Terms of Service</Link>.
+        </p>
       </article>
     </main>
   );

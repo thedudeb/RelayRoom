@@ -69,6 +69,10 @@ export default function TermsPage() {
             prevent automated processing.
           </p>
         </section>
+
+        <p className="legal-crosslink">
+          See also: <Link href="/privacy">Privacy Policy</Link>.
+        </p>
       </article>
     </main>
   );
