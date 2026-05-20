@@ -5701,12 +5701,13 @@ td strong {
     transform: translateX(0);
   }
 
-  /* Make room for the floating hamburger so the page title isn't covered. */
+  /* Reserve a strip across the top of the main column for the floating
+     hamburger so the topbar's eyebrow + title can't collide with it. */
   .main {
-    padding-top: 0;
+    padding-top: 64px;
   }
   .topbar {
-    padding-left: 70px;
+    padding-left: 18px;
   }
 
   .brand {
