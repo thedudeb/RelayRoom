@@ -611,7 +611,7 @@ function QueueActions({
 
   if (!canManage) {
     return (
-      <div className="actions">
+      <div className="actions queue-actions">
         {detailsButton}
         {item.status === "uploaded" ? (
           <button
@@ -634,7 +634,7 @@ function QueueActions({
 
   if (item.status === "uploaded") {
     return (
-      <div className="actions">
+      <div className="actions queue-actions">
         {detailsButton}
         <button
           className="icon-button"
@@ -657,7 +657,7 @@ function QueueActions({
     );
 
     return (
-      <div className="actions">
+      <div className="actions queue-actions">
         {detailsButton}
         {canRecoverPlaylist ? (
           <select
@@ -735,7 +735,7 @@ function QueueActions({
 
   if (item.status === "needs_approval") {
     return (
-      <div className="actions">
+      <div className="actions queue-actions">
         {detailsButton}
         <button
           className="icon-button"
@@ -777,7 +777,7 @@ function QueueActions({
     );
 
     return (
-      <div className="actions">
+      <div className="actions queue-actions">
         {detailsButton}
         <select
           aria-label={`Route ${item.filename} to playlist`}
@@ -851,7 +851,7 @@ function QueueActions({
 
   if (item.status === "skipped") {
     return (
-      <div className="actions">
+      <div className="actions queue-actions">
         {detailsButton}
         <button
           className="icon-button"
@@ -868,7 +868,7 @@ function QueueActions({
 
   if (item.status === "externally_handled") {
     return (
-      <div className="actions">
+      <div className="actions queue-actions">
         {detailsButton}
         <button
           className="icon-button"

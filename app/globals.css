@@ -3988,6 +3988,24 @@ td strong {
   gap: var(--space-2);
 }
 
+.queue-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 38px);
+  justify-content: end;
+  min-width: 130px;
+  width: max-content;
+}
+
+.queue-actions .icon-button {
+  height: 38px;
+  width: 38px;
+}
+
+.queue-actions .route-select {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
 .route-select {
   max-width: 210px;
   min-height: 38px;
