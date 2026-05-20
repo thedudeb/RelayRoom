@@ -5834,8 +5834,19 @@ td strong {
     padding: var(--space-4);
   }
 
+  /* 2x2 grid at narrow widths so the dashboard headlines fit above the fold
+     instead of monopolizing four full-bleed rows. */
   .metric-grid {
-    grid-template-columns: 1fr;
+    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metric {
+    padding: 12px 14px;
+  }
+
+  .metric strong {
+    font-size: 28px;
   }
 
   .preflight-metrics,
