@@ -153,7 +153,9 @@ function connectionErrorMessage(error: string) {
     MissingRefreshToken:
       "Google did not return a refresh token. Remove RelayRoom from your Google account permissions, then connect again.",
     MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing. Add it before saving OAuth tokens.",
-    TokenExchangeFailed: "Google did not accept the OAuth code. Please try again."
+    TokenExchangeFailed: "Google did not accept the OAuth code. Please try again.",
+    ConnectionCallbackFailed:
+      "Saving the connection failed on the server. Check Vercel logs for the underlying error (often a missing migration or env var)."
   };
 
   return messages[error] || `Connection failed: ${error}`;

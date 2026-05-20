@@ -66,8 +66,12 @@ export async function getQueueItemsForUser(
 
     return items.map((item) => mapQueueItem(item, fallbackOptions));
   } catch (error) {
-    console.warn("Unable to load user queue data.", error);
-    return [];
+    // Surface DB errors instead of silently returning []: an empty result
+    // is indistinguishable from "no data" in the UI, which masks schema
+    // drift / connection failures. The page-level error boundary
+    // (app/error.tsx) renders a real message.
+    console.error("Unable to load user queue data.", error);
+    throw new Error("QueueDataUnavailable");
   }
 }
 
@@ -115,8 +119,8 @@ export async function getConnectionsForUser(
 
     return connections.map(mapConnection);
   } catch (error) {
-    console.warn("Unable to load user connection data.", error);
-    return [];
+    console.error("Unable to load user connection data.", error);
+    throw new Error("ConnectionDataUnavailable");
   }
 }
 
@@ -163,8 +167,8 @@ export async function getPipelinesForUser(
 
     return pipelines.map(mapPipeline);
   } catch (error) {
-    console.warn("Unable to load user pipeline data.", error);
-    return [];
+    console.error("Unable to load user pipeline data.", error);
+    throw new Error("PipelineDataUnavailable");
   }
 }
 
