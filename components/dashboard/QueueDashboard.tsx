@@ -746,9 +746,6 @@ function QueueActions({
         >
           <Play aria-hidden="true" size={16} />
         </button>
-        <button className="icon-button" data-tooltip="Edit and route is coming next" disabled type="button">
-          <Route aria-hidden="true" size={16} />
-        </button>
         <button
           className="icon-button"
           data-tooltip="Mark as already uploaded"
