@@ -244,10 +244,38 @@ export function QueueDashboard({
   return (
     <>
       <section className="metric-grid" aria-label="Queue summary" data-tour="queue-summary">
-        <Metric label="Needs approval" tone="approval" value={activeCounts.approval} />
-        <Metric label="Needs routing" tone="routing" value={activeCounts.routing} />
-        <Metric label="Failed" tone="failed" value={activeCounts.failed} />
-        <Metric label="Uploaded" tone="uploaded" value={activeCounts.uploaded} />
+        <Metric
+          label="Needs approval"
+          tone="approval"
+          value={activeCounts.approval}
+          activeTab={activeTab}
+          onSelect={setActiveTab}
+          tabKey="needs_approval"
+        />
+        <Metric
+          label="Needs routing"
+          tone="routing"
+          value={activeCounts.routing}
+          activeTab={activeTab}
+          onSelect={setActiveTab}
+          tabKey="needs_routing"
+        />
+        <Metric
+          label="Failed"
+          tone="failed"
+          value={activeCounts.failed}
+          activeTab={activeTab}
+          onSelect={setActiveTab}
+          tabKey="failed"
+        />
+        <Metric
+          label="Uploaded"
+          tone="uploaded"
+          value={activeCounts.uploaded}
+          activeTab={activeTab}
+          onSelect={setActiveTab}
+          tabKey="uploaded"
+        />
       </section>
 
       <section className="toolbar" data-tour="queue-filters">
@@ -1018,18 +1046,37 @@ function Detail({
 }
 
 function Metric({
+  activeTab,
   label,
+  onSelect,
+  tabKey,
   tone,
   value
 }: {
+  activeTab: QueueTab;
   label: string;
+  onSelect: (tab: QueueTab) => void;
+  tabKey: QueueTab;
   tone: "approval" | "failed" | "routing" | "uploaded";
   value: number;
 }) {
   const needsAttention =
     (tone === "approval" || tone === "routing" || tone === "failed") && value > 0;
+  const isActive = activeTab === tabKey;
+  // Clicking a card toggles the matching tab on / off — second click on an
+  // already-active card returns to "All" so the user can clear the filter
+  // without hunting for the tab.
   return (
-    <div className="metric" data-attention={needsAttention} data-tone={tone}>
+    <button
+      aria-label={`Filter queue by ${label} (${value})`}
+      aria-pressed={isActive}
+      className="metric"
+      data-active={isActive || undefined}
+      data-attention={needsAttention}
+      data-tone={tone}
+      onClick={() => onSelect(isActive ? "all" : tabKey)}
+      type="button"
+    >
       <span>
         <i aria-hidden="true" />
         {label}
@@ -1037,7 +1084,7 @@ function Metric({
       <strong>
         <CountUp value={value} />
       </strong>
-    </div>
+    </button>
   );
 }
 

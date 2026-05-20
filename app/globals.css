@@ -1155,17 +1155,31 @@ html[data-privacy="on"] input[data-private] {
 .metric {
   --metric-accent: var(--accent);
   --metric-soft: var(--accent-soft);
+  appearance: none;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  font: inherit;
   overflow: hidden;
   padding: var(--space-5);
   position: relative;
+  text-align: left;
+  width: 100%;
   transition:
     border-color var(--dur-base) var(--ease-out),
     box-shadow var(--dur-base) var(--ease-out),
     transform var(--dur-base) var(--ease-out);
+}
+
+.metric[data-active="true"] {
+  border-color: var(--metric-accent);
+  box-shadow:
+    var(--shadow-md),
+    inset 0 0 0 1px color-mix(in srgb, var(--metric-accent) 36%, transparent);
 }
 
 .metric:hover {
