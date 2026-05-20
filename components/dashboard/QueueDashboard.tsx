@@ -15,8 +15,9 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { QueueItem, QueueStatus } from "@/lib/domain/types";
+import type { QueueItem, QueueStatus, RuleTrace } from "@/lib/domain/types";
 import { EmptyState } from "@/components/empty/EmptyState";
+import { RuleTraceList } from "@/components/rules/RuleTraceList";
 import { useToast } from "@/components/toast/ToastContext";
 import { displayWorkspaceUser } from "@/lib/workspace/users";
 
@@ -44,6 +45,13 @@ type QueueDetails = {
     success: boolean;
     youtubeVideoId?: string;
   }>;
+  evaluation?: {
+    matchedRule?: { id: string; name: string };
+    playlist?: { id: string; name: string };
+    ruleTraces: RuleTrace[];
+    title: string;
+    description: string;
+  };
   item: QueueItem;
 };
 
@@ -61,11 +69,18 @@ const tabs: { label: string; status?: QueueStatus }[] = [
 
 export function QueueDashboard({
   currentUserId,
-  items
+  items: itemsProp
 }: {
   currentUserId?: string;
   items: QueueItem[];
 }) {
+  // Local copy of items so demo-mode actions can mutate state visibly without
+  // hitting the server (server-side rejects demo writes). Real users still
+  // round-trip through the API; the local copy refreshes via router.refresh().
+  const [items, setItems] = useState<QueueItem[]>(itemsProp);
+  useEffect(() => {
+    setItems(itemsProp);
+  }, [itemsProp]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const isDemo = searchParams.get("demo") === "true";
@@ -145,6 +160,23 @@ export function QueueDashboard({
     }
 
     setBusyAction({ itemId: item.id, action });
+
+    // In demo mode, simulate the action client-side so reviewers can see the
+    // queue lifecycle without an OAuth-bound write path. Real workspaces
+    // still round-trip the API below.
+    if (isDemo) {
+      const simulated = simulateDemoAction(item, action, actionPayload, youtubeUrl);
+      setItems((prev) =>
+        prev.map((existing) => (existing.id === item.id ? simulated.next : existing))
+      );
+      setBusyAction(null);
+      toast({
+        tone: "success",
+        title: simulated.message,
+        body: "Demo mode — sign in to run this against your own Drive + YouTube."
+      });
+      return;
+    }
 
     try {
       const response = await fetch(`/api/queue/${encodeURIComponent(item.id)}/actions`, {
@@ -892,6 +924,23 @@ function QueueDetailsPanel({
         </div>
       ) : null}
 
+      {details.evaluation ? (
+        <section className="detail-section">
+          <h3>
+            Rule evaluation
+            <span className="detail-section-count">
+              {details.evaluation.ruleTraces.length}
+            </span>
+          </h3>
+          <p className="detail-section-help">
+            {details.evaluation.matchedRule
+              ? `${details.evaluation.matchedRule.name} matched first — routed to ${details.evaluation.playlist?.name || "the matched playlist"}.`
+              : "No rule matched. Each attempted rule is shown below with the per-condition result."}
+          </p>
+          <RuleTraceList traces={details.evaluation.ruleTraces} />
+        </section>
+      ) : null}
+
       <div className="detail-columns">
         <section className="detail-section">
           <h3>
@@ -1109,4 +1158,84 @@ function queueActionErrorMessage(error?: string) {
   };
 
   return messages[error || ""] || error || "Queue action failed.";
+}
+
+// Demo-mode-only client-side simulation of queue actions. Mirrors the server's
+// transition rules well enough for reviewers to walk the dashboard end-to-end
+// without OAuth. Resets when the route refreshes (no persistence).
+function simulateDemoAction(
+  item: QueueItem,
+  action: QueueAction,
+  payload: QueueActionPayload,
+  youtubeUrl?: string | null
+): { next: QueueItem; message: string } {
+  const now = new Date().toISOString();
+  const playlistId = payload.playlistId ?? item.intendedPlaylistId;
+  const playlistName = payload.playlistName ?? item.intendedPlaylistName;
+
+  if (action === "skip") {
+    return {
+      next: { ...item, previousStatus: item.status, status: "skipped", lastActionAt: now },
+      message: `Skipped ${item.filename}.`
+    };
+  }
+  if (action === "restore") {
+    const restoreStatus: QueueStatus =
+      item.previousStatus && ["needs_routing", "needs_approval", "failed"].includes(item.previousStatus)
+        ? (item.previousStatus as QueueStatus)
+        : item.matchedRuleName || item.intendedPlaylistId
+          ? "needs_approval"
+          : "needs_routing";
+    return {
+      next: {
+        ...item,
+        previousStatus: undefined,
+        status: restoreStatus,
+        lastActionAt: now,
+        ...(item.status === "externally_handled"
+          ? { youtubeUrl: undefined, youtubeVideoId: undefined }
+          : {})
+      },
+      message: `Restored ${item.filename} to ${restoreStatus.replaceAll("_", " ")}.`
+    };
+  }
+  if (action === "mark_externally_handled") {
+    return {
+      next: {
+        ...item,
+        previousStatus: item.status,
+        status: "externally_handled",
+        lastActionAt: now,
+        youtubeUrl: youtubeUrl || item.youtubeUrl
+      },
+      message: youtubeUrl ? "Linked to external upload." : "Marked as externally handled."
+    };
+  }
+  if (action === "route") {
+    return {
+      next: {
+        ...item,
+        previousStatus: item.status,
+        status: "needs_approval",
+        intendedPlaylistId: playlistId,
+        intendedPlaylistName: playlistName,
+        matchedRuleName: "Manual route",
+        lastActionAt: now
+      },
+      message: `Routed to ${playlistName || "the selected playlist"}.`
+    };
+  }
+  // upload / approve / retry → optimistic uploaded state with a placeholder URL
+  return {
+    next: {
+      ...item,
+      previousStatus: item.status,
+      status: "uploaded",
+      lastActionAt: now,
+      youtubeUrl: item.youtubeUrl || `https://www.youtube.com/watch?v=demo-${item.id}`,
+      youtubeVideoId: item.youtubeVideoId || `demo-${item.id}`,
+      youtubePlaylistId: playlistId
+    },
+    message: `Uploaded ${item.filename} (simulated).`
+  };
 }

@@ -14,6 +14,7 @@ import {
   ArchivedPipelineControls,
   PipelineStatusControls
 } from "@/components/pipelines/PipelineAsyncActions";
+import { PrivacyPicker } from "@/components/pipelines/PrivacyPicker";
 import { requireAppAccess } from "@/lib/auth/account";
 import {
   getPipelinesForDemo,
@@ -371,26 +372,10 @@ function CreatePipelinePanel({
         </label>
         <YouTubePlaylistPicker disabled={!canCreate} youtubeConnections={youtubeConnections} />
         <DriveFolderPicker disabled={!canCreate} />
-        <label>
-          <span>Upload privacy</span>
-          <select className="select" defaultValue={PrivacyStatus.UNLISTED} disabled={!canCreate} name="privacyStatus">
-            <option value={PrivacyStatus.UNLISTED}>Unlisted</option>
-            <option value={PrivacyStatus.PUBLIC}>Public</option>
-          </select>
-        </label>
-        <label className="public-privacy-confirmation">
-          <span>Public upload confirmation</span>
-          <input
-            className="input"
-            disabled={!canCreate}
-            name="publicPrivacyConfirmationText"
-            placeholder="Type the pipeline name when using Public"
-          />
-          <small className="field-hint">
-            Required only when Upload privacy is Public. Type the pipeline name exactly to confirm
-            public YouTube visibility.
-          </small>
-        </label>
+        <PrivacyPicker
+          defaultValue="UNLISTED"
+          disabled={!canCreate}
+        />
         <label>
           <span>Mode</span>
           <select className="select" defaultValue={PipelineMode.MANUAL_APPROVAL} disabled={!canCreate} name="mode">
@@ -452,25 +437,11 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
           initialFolderId={pipeline.sourceFolderId}
           initialFolderName={pipeline.sourceFolderName}
         />
-        <label>
-          <span>Upload privacy</span>
-          <select className="select" defaultValue={privacyStatus} name="privacyStatus">
-            <option value={PrivacyStatus.UNLISTED}>Unlisted</option>
-            <option value={PrivacyStatus.PUBLIC}>Public</option>
-          </select>
-        </label>
-        <label className="public-privacy-confirmation">
-          <span>Public upload confirmation</span>
-          <input
-            className="input"
-            name="publicPrivacyConfirmationText"
-            placeholder={`Type "${pipeline.name}" when switching to Public`}
-          />
-          <small className="field-hint">
-            Required only when switching this pipeline to Public. Type the pipeline name exactly to
-            confirm public YouTube visibility.
-          </small>
-        </label>
+        <PrivacyPicker
+          defaultValue={privacyStatus === PrivacyStatus.PUBLIC ? "PUBLIC" : "UNLISTED"}
+          destinationChannelName={pipeline.destinationChannelName ?? undefined}
+          fallbackPipelineName={pipeline.name}
+        />
         <label>
           <span>Mode</span>
           <select className="select" defaultValue={mode} name="mode">
