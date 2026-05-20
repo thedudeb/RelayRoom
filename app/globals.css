@@ -2833,10 +2833,12 @@ td strong {
   border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
   border-radius: var(--radius-pill);
   color: var(--accent-ink);
+  flex-shrink: 0;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-snug);
   padding: 3px var(--space-2);
+  white-space: nowrap;
 }
 
 .rule-editor {
@@ -2929,6 +2931,14 @@ td strong {
   gap: var(--space-3);
   grid-template-columns: 220px minmax(0, 1fr);
   padding: var(--space-3);
+}
+
+/* Same cascade fix as rule-tester-grid: the earlier @media block tries to
+   stack this, but the unconditional rule above wins by source order. */
+@media (max-width: 700px) {
+  .rule-trace-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rule-trace-row.matched {
