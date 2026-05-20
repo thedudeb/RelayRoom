@@ -81,10 +81,12 @@ export async function startGoogleConnection(kind: GoogleConnectionKind) {
     httpOnly: true,
     maxAge: 10 * 60,
     path: "/",
-    // Strict prevents third-party top-level navigations from kicking off an
-    // OAuth flow under the current user's identity. The callback runs on our
-    // own origin so Strict still lets the cookie ride along.
-    sameSite: "strict",
+    // Lax — required for OAuth. SameSite=Strict blocks the cookie on
+    // top-level redirects FROM the IdP (Google) back to our callback,
+    // breaking the state-cookie check. Lax still blocks JS-initiated
+    // cross-site sends; the 10-minute maxAge + cryptographically random
+    // state value handle the CSRF surface (RFC 6749 §10.12).
+    sameSite: "lax",
     secure: process.env.NODE_ENV === "production"
   });
 
