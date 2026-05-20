@@ -4006,6 +4006,19 @@ td strong {
   justify-self: end;
 }
 
+.queue-actions [data-tooltip]::after {
+  bottom: auto;
+  left: auto;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translate(2px, -50%);
+}
+
+.queue-actions [data-tooltip]:hover::after,
+.queue-actions [data-tooltip]:focus-visible::after {
+  transform: translate(0, -50%);
+}
+
 .route-select {
   max-width: 210px;
   min-height: 38px;
