@@ -30,6 +30,17 @@ export default async function ConnectionsPage({
     ? await getConnectionsForDemo()
     : await getConnectionsForUser(access.userId, { userId: selectedUserId });
 
+  // The viewer's own active connections, used to relabel the connect buttons
+  // (you can still add a second Drive or YouTube channel — SPEC §4.2 —
+  // so we don't disable the buttons, just signal "you already have one").
+  const ownedActive = (kind: "drive" | "youtube") =>
+    !access.isDemo &&
+    connections.some(
+      (c) => c.kind === kind && c.owner.id === access.userId && c.status === "active"
+    );
+  const hasDrive = ownedActive("drive");
+  const hasYouTube = ownedActive("youtube");
+
   return (
     <AppShell
       title="Connections"
@@ -46,11 +57,19 @@ export default async function ConnectionsPage({
             </>
           ) : (
             <>
-              <Link className="button primary" href="/api/oauth/drive/start">
-                Connect Drive
+              <Link
+                className={hasDrive ? "button" : "button primary"}
+                data-tooltip={hasDrive ? "You already have a Drive connection — add another account" : undefined}
+                href="/api/oauth/drive/start"
+              >
+                {hasDrive ? "Connect another Drive" : "Connect Drive"}
               </Link>
-              <Link className="button" href="/api/oauth/youtube/start">
-                Connect YouTube
+              <Link
+                className="button"
+                data-tooltip={hasYouTube ? "You already have a YouTube connection — add another channel" : undefined}
+                href="/api/oauth/youtube/start"
+              >
+                {hasYouTube ? "Connect another YouTube" : "Connect YouTube"}
               </Link>
             </>
           )}
