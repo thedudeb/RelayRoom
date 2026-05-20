@@ -13,9 +13,11 @@ import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
 
 type QueueActionBody = {
-  action?: "skip" | "restore" | "mark_externally_handled" | "route" | "upload";
+  action?: "skip" | "restore" | "mark_externally_handled" | "route" | "upload" | "edit_route";
   playlistId?: string;
   playlistName?: string;
+  titleOverride?: string;
+  descriptionOverride?: string;
   // When supplied (and playlistId is absent), the route flow creates a new
   // playlist with this title on the pipeline's destination channel before
   // routing. SPEC §4.8 Edit-and-route.
@@ -128,7 +130,7 @@ export async function POST(
   // and-route may pick any playlist on the destination channel or create
   // one inline).
   let resolvedPlaylist: YouTubePlaylistRef | undefined;
-  if (body.action === "route") {
+  if (body.action === "route" || body.action === "edit_route") {
     try {
       resolvedPlaylist = await resolveRoutePlaylist({
         body,
@@ -138,6 +140,38 @@ export async function POST(
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : "PlaylistResolutionFailed" },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (body.action === "edit_route") {
+    try {
+      await prepareEditAndRouteUpload({
+        descriptionOverride: body.descriptionOverride,
+        item,
+        playlist: resolvedPlaylist,
+        titleOverride: body.titleOverride,
+        userId: access.userId
+      });
+
+      const result = await uploadQueueItemToYouTube({
+        queueItemId: id,
+        trigger: "approve",
+        userId: access.userId
+      });
+
+      revalidatePath("/dashboard");
+      revalidatePath("/pipelines");
+      return NextResponse.json({
+        ...result,
+        message: "Edited route and uploaded item."
+      });
+    } catch (error) {
+      revalidatePath("/dashboard");
+      revalidatePath("/pipelines");
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "EditAndRouteFailed" },
         { status: 400 }
       );
     }
@@ -368,6 +402,88 @@ async function getManualRouteRules({
       youtubePlaylistName: true
     }
   });
+}
+
+async function prepareEditAndRouteUpload({
+  descriptionOverride,
+  item,
+  playlist,
+  titleOverride,
+  userId
+}: {
+  descriptionOverride?: string;
+  item: {
+    filename: string;
+    id: string;
+    renderedDescription: string | null;
+    renderedTitle: string | null;
+    status: PrismaQueueStatus;
+  };
+  playlist?: YouTubePlaylistRef;
+  titleOverride?: string;
+  userId: string;
+}) {
+  if (item.status !== PrismaQueueStatus.NEEDS_APPROVAL) {
+    throw new Error(`Edit and route is not allowed from ${formatStatus(item.status)}.`);
+  }
+
+  if (!playlist?.id || !playlist.name) {
+    throw new Error("Choose a playlist or enter a new playlist name.");
+  }
+
+  const title = normalizeVideoTitle(titleOverride ?? item.renderedTitle ?? item.filename);
+  const description = normalizeVideoDescription(descriptionOverride ?? item.renderedDescription ?? "");
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.queueItem.update({
+      where: { id: item.id },
+      data: {
+        failureReason: null,
+        intendedPlaylistId: playlist.id,
+        intendedPlaylistName: playlist.name,
+        lastActionAt: now,
+        lastError: null,
+        matchedRuleId: null,
+        matchedRuleName: "Manual route",
+        renderedDescription: description,
+        renderedTitle: title
+      }
+    }),
+    prisma.activityLogEntry.create({
+      data: {
+        actorType: "user",
+        message: `Edited route to ${playlist.name}.`,
+        metadata: {
+          fromStatus: item.status,
+          playlistId: playlist.id,
+          playlistName: playlist.name,
+          title
+        },
+        queueItemId: item.id,
+        userId
+      }
+    })
+  ]);
+}
+
+function normalizeVideoTitle(value: string) {
+  const title = value.trim();
+  if (!title) {
+    throw new Error("Enter a YouTube title before uploading.");
+  }
+  if (title.length > 100) {
+    throw new Error("YouTube titles must be 100 characters or fewer.");
+  }
+  return title;
+}
+
+function normalizeVideoDescription(value: string) {
+  const description = value.trim();
+  if (description.length > 5000) {
+    throw new Error("YouTube descriptions must be 5000 characters or fewer.");
+  }
+  return description;
 }
 
 function getActionUpdate({

@@ -214,6 +214,8 @@ function mapQueueItem(
     intendedPlaylistId: item.intendedPlaylistId || undefined,
     matchedRuleName: item.matchedRuleName || undefined,
     intendedPlaylistName: item.intendedPlaylistName || undefined,
+    renderedDescription: item.renderedDescription || undefined,
+    renderedTitle: item.renderedTitle || undefined,
     routingOptions: pipelineOptions.length ? pipelineOptions : fallbackOptions,
     youtubeVideoId: item.youtubeVideoId || undefined,
     youtubePlaylistId: item.youtubePlaylistId || undefined,

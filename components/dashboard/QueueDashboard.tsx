@@ -23,11 +23,19 @@ import { displayWorkspaceUser } from "@/lib/workspace/users";
 
 type QueueTab = "all" | QueueStatus;
 type SortMode = "detected_desc" | "filename_asc" | "status_asc" | "last_action_desc";
-type QueueAction = "skip" | "restore" | "mark_externally_handled" | "route" | "upload";
+type QueueAction =
+  | "skip"
+  | "restore"
+  | "mark_externally_handled"
+  | "route"
+  | "upload"
+  | "edit_route";
 type QueueActionPayload = {
   playlistId?: string;
   playlistName?: string;
   createPlaylistName?: string;
+  titleOverride?: string;
+  descriptionOverride?: string;
   youtubeUrl?: string;
 };
 type QueueDetails = {
@@ -98,6 +106,7 @@ export function QueueDashboard({
   );
   const [details, setDetails] = useState<QueueDetails>();
   const [detailsState, setDetailsState] = useState<"idle" | "loading">("idle");
+  const [editRouteItem, setEditRouteItem] = useState<QueueItem>();
 
   const pipelineNames = useMemo(
     () => Array.from(new Set(items.map((item) => item.pipelineName))).sort(),
@@ -406,6 +415,7 @@ export function QueueDashboard({
                 nowMs={relativeNowMs}
                 onAction={runQueueAction}
                 onDetails={openDetails}
+                onEditRoute={setEditRouteItem}
               />
             ))}
           </tbody>
@@ -426,6 +436,17 @@ export function QueueDashboard({
           )
         ) : null}
       </div>
+      {editRouteItem ? (
+        <EditRouteModal
+          busy={busyAction?.itemId === editRouteItem.id}
+          item={editRouteItem}
+          onClose={() => setEditRouteItem(undefined)}
+          onSubmit={(payload) => {
+            runQueueAction(editRouteItem, "edit_route", payload);
+            setEditRouteItem(undefined);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -438,7 +459,8 @@ function QueueRow({
   item,
   nowMs,
   onAction,
-  onDetails
+  onDetails,
+  onEditRoute
 }: {
   busyAction: { itemId: string; action: QueueAction } | null;
   canManage: boolean;
@@ -448,8 +470,11 @@ function QueueRow({
   nowMs: number;
   onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
   onDetails: (item: QueueItem) => void;
+  onEditRoute: (item: QueueItem) => void;
 }) {
-  const isUploading = busyAction?.itemId === item.id && busyAction.action === "upload";
+  const isUploading =
+    busyAction?.itemId === item.id &&
+    (busyAction.action === "upload" || busyAction.action === "edit_route");
 
   return (
     <>
@@ -496,6 +521,7 @@ function QueueRow({
             item={item}
             onAction={onAction}
             onDetails={onDetails}
+            onEditRoute={onEditRoute}
           />
         </td>
       </tr>
@@ -549,7 +575,8 @@ function StatusBadge({
   status: QueueStatus;
 }) {
   const busyLabel =
-    busyAction?.itemId === itemId && busyAction.action === "upload"
+    busyAction?.itemId === itemId &&
+    (busyAction.action === "upload" || busyAction.action === "edit_route")
       ? status === "failed"
         ? "retrying upload"
         : "approving"
@@ -574,18 +601,185 @@ function StatusBadge({
   );
 }
 
+function EditRouteModal({
+  busy,
+  item,
+  onClose,
+  onSubmit
+}: {
+  busy: boolean;
+  item: QueueItem;
+  onClose: () => void;
+  onSubmit: (payload: QueueActionPayload) => void;
+}) {
+  const playlistOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const options = [...(item.routingOptions || [])];
+    if (item.intendedPlaylistId && item.intendedPlaylistName) {
+      options.unshift({ id: item.intendedPlaylistId, name: item.intendedPlaylistName });
+    }
+
+    return options.filter((playlist) => {
+      if (seen.has(playlist.id)) return false;
+      seen.add(playlist.id);
+      return true;
+    });
+  }, [item.intendedPlaylistId, item.intendedPlaylistName, item.routingOptions]);
+  const [playlistValue, setPlaylistValue] = useState(
+    item.intendedPlaylistId || playlistOptions[0]?.id || "__new"
+  );
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+  const [title, setTitle] = useState(item.renderedTitle || filenameWithoutExtension(item.filename));
+  const [description, setDescription] = useState(item.renderedDescription || "");
+
+  useEffect(() => {
+    setPlaylistValue(item.intendedPlaylistId || playlistOptions[0]?.id || "__new");
+    setNewPlaylistName("");
+    setTitle(item.renderedTitle || filenameWithoutExtension(item.filename));
+    setDescription(item.renderedDescription || "");
+  }, [item, playlistOptions]);
+
+  const selectedPlaylist = playlistOptions.find((playlist) => playlist.id === playlistValue);
+  const isCreatingPlaylist = playlistValue === "__new";
+  const canSubmit = title.trim() && (!isCreatingPlaylist || newPlaylistName.trim());
+
+  return (
+    <div
+      className="access-modal-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+      role="presentation"
+    >
+      <form
+        aria-labelledby="edit-route-title"
+        aria-modal="true"
+        className="access-modal edit-route-modal"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!canSubmit) return;
+          onSubmit({
+            ...(isCreatingPlaylist
+              ? { createPlaylistName: newPlaylistName.trim() }
+              : {
+                  playlistId: selectedPlaylist?.id,
+                  playlistName: selectedPlaylist?.name
+                }),
+            descriptionOverride: description,
+            titleOverride: title
+          });
+        }}
+        role="dialog"
+      >
+        <div className="queue-detail-header">
+          <div className="queue-detail-title">
+            <span className="topbar-eyebrow">Edit and route</span>
+            <h2 id="edit-route-title" data-private>{item.filename}</h2>
+          </div>
+          <button
+            aria-label="Close edit and route"
+            className="icon-button"
+            disabled={busy}
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" size={16} />
+          </button>
+        </div>
+
+        <label>
+          <span>Playlist</span>
+          <select
+            className="select"
+            disabled={busy}
+            onChange={(event) => setPlaylistValue(event.target.value)}
+            value={playlistValue}
+          >
+            {playlistOptions.map((playlist) => (
+              <option key={playlist.id} value={playlist.id}>
+                {playlist.name}
+              </option>
+            ))}
+            <option value="__new">Create new playlist</option>
+          </select>
+        </label>
+
+        {isCreatingPlaylist ? (
+          <label>
+            <span>New playlist name</span>
+            <input
+              className="input"
+              disabled={busy}
+              onChange={(event) => setNewPlaylistName(event.target.value)}
+              placeholder="Playlist title"
+              required
+              value={newPlaylistName}
+            />
+          </label>
+        ) : null}
+
+        <label>
+          <span>YouTube title</span>
+          <input
+            className="input"
+            disabled={busy}
+            maxLength={100}
+            onChange={(event) => setTitle(event.target.value)}
+            required
+            value={title}
+          />
+        </label>
+
+        <label>
+          <span>Description</span>
+          <textarea
+            className="textarea"
+            disabled={busy}
+            maxLength={5000}
+            onChange={(event) => setDescription(event.target.value)}
+            rows={5}
+            value={description}
+          />
+        </label>
+
+        <div className="edit-route-preview">
+          <span>Preview</span>
+          <strong data-private>{title.trim() || item.filename}</strong>
+          <p data-private>{description.trim() || "No description."}</p>
+        </div>
+
+        <div className="access-modal-actions">
+          <button className="button" disabled={busy} onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button
+            aria-busy={busy}
+            className="button primary"
+            disabled={busy || !canSubmit}
+            type="submit"
+          >
+            Upload with edits
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function QueueActions({
   busyAction,
   canManage,
   item,
   onAction,
-  onDetails
+  onDetails,
+  onEditRoute
 }: {
   busyAction: { itemId: string; action: QueueAction } | null;
   canManage: boolean;
   item: QueueItem;
   onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
   onDetails: (item: QueueItem) => void;
+  onEditRoute: (item: QueueItem) => void;
 }) {
   const isBusy = busyAction?.itemId === item.id;
   const hasUploadedVideoMissingPlaylist = Boolean(item.youtubeVideoId && !item.youtubePlaylistId);
@@ -745,6 +939,15 @@ function QueueActions({
           type="button"
         >
           <Play aria-hidden="true" size={16} />
+        </button>
+        <button
+          className="icon-button"
+          data-tooltip="Edit and route"
+          disabled={isBusy}
+          onClick={() => onEditRoute(item)}
+          type="button"
+        >
+          <Route aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
@@ -1181,6 +1384,11 @@ function formatBytes(bytes?: number): string {
   return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
+function filenameWithoutExtension(filename: string) {
+  const index = filename.lastIndexOf(".");
+  return index > 0 ? filename.slice(0, index) : filename;
+}
+
 function relativeAge(isoDate: string, nowMs: number): string {
   const diffMs = nowMs - new Date(isoDate).getTime();
   const minutes = Math.max(1, Math.round(diffMs / 60_000));
@@ -1277,6 +1485,25 @@ function simulateDemoAction(
         lastActionAt: now
       },
       message: `Routed to ${playlistName || "the selected playlist"}.`
+    };
+  }
+  if (action === "edit_route") {
+    return {
+      next: {
+        ...item,
+        previousStatus: item.status,
+        status: "uploaded",
+        intendedPlaylistId: playlistId,
+        intendedPlaylistName: playlistName || payload.createPlaylistName,
+        matchedRuleName: "Manual route",
+        renderedDescription: payload.descriptionOverride,
+        renderedTitle: payload.titleOverride,
+        lastActionAt: now,
+        youtubeUrl: item.youtubeUrl || `https://www.youtube.com/watch?v=demo-${item.id}`,
+        youtubeVideoId: item.youtubeVideoId || `demo-${item.id}`,
+        youtubePlaylistId: playlistId
+      },
+      message: `Uploaded ${item.filename} with edited routing (simulated).`
     };
   }
   // upload / approve / retry → optimistic uploaded state with a placeholder URL

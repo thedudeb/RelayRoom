@@ -21,7 +21,7 @@ const access = {
   authMethod: "api_key",
   isDemo: false,
   userId: "owner-user"
-};
+} as const;
 
 describe("read-only API scoping", () => {
   beforeEach(() => {

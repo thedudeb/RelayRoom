@@ -56,6 +56,6 @@ function jsonResponse(body: unknown) {
   } as Response;
 }
 
-function urlForCall(fetchMock: ReturnType<typeof vi.spyOn<typeof globalThis, "fetch">>, index: number) {
+function urlForCall(fetchMock: { mock: { calls: Array<Parameters<typeof fetch>> } }, index: number) {
   return new URL(String(fetchMock.mock.calls[index][0]));
 }

@@ -174,6 +174,8 @@ export interface QueueItem {
   intendedPlaylistId?: string;
   matchedRuleName?: string;
   intendedPlaylistName?: string;
+  renderedTitle?: string;
+  renderedDescription?: string;
   routingOptions?: Playlist[];
   youtubeVideoId?: string;
   youtubePlaylistId?: string;
