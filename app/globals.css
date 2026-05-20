@@ -5684,16 +5684,27 @@ td strong {
 
   .nav a {
     min-height: 44px;
+    /* Give inactive items a subtle container so the active item doesn't
+       look like a single highlighted button floating next to bare text. */
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+    justify-content: center;
   }
 
   .sidebar-utilities {
-    grid-template-columns: 1fr 1fr;
+    /* Three utilities (Privacy / Theme / Tutorial) — give them their own
+       row so no orphan gets pushed to a third line. */
+    grid-template-columns: repeat(3, 1fr);
     margin-top: 0;
   }
 
   .sidebar-utilities .button {
     justify-content: center;
     min-height: 44px;
+    /* Compact label so all three labels fit in the narrow columns. */
+    font-size: 11px;
+    gap: 6px;
+    padding: 0 6px;
   }
 
   .toolbar,
