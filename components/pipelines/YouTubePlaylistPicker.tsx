@@ -68,7 +68,7 @@ export function YouTubePlaylistPicker({
       setStatus(
         firstPlaylist
           ? `Loaded ${items.length} playlist${items.length === 1 ? "" : "s"}.`
-          : "No playlists found. Create one for this pipeline."
+          : "No playlists returned yet. Fresh YouTube channels can take a few minutes to surface — meanwhile, type a name below and click Create."
       );
     } catch (error) {
       setPlaylists([]);
