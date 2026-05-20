@@ -4,7 +4,14 @@ interface YouTubePlaylistResponse {
   error?: { code?: number; message?: string };
   items?: Array<{
     id?: string;
-    snippet?: { title?: string };
+    snippet?: { channelId?: string; title?: string };
+  }>;
+}
+
+interface YouTubeChannelResponse {
+  error?: { code?: number; message?: string };
+  items?: Array<{
+    id?: string;
   }>;
 }
 
@@ -30,23 +37,41 @@ export async function verifyChannelPlaylist({
   accessToken: string;
   playlistId: string;
 }): Promise<YouTubePlaylistRef | null> {
-  const url = new URL("https://www.googleapis.com/youtube/v3/playlists");
-  url.searchParams.set("id", playlistId);
-  url.searchParams.set("mine", "true");
-  url.searchParams.set("part", "snippet");
+  const channelUrl = new URL("https://www.googleapis.com/youtube/v3/channels");
+  channelUrl.searchParams.set("mine", "true");
+  channelUrl.searchParams.set("part", "id");
 
-  const response = await fetch(url, {
+  const channelResponse = await fetch(channelUrl, {
     headers: { Authorization: `Bearer ${accessToken}` }
   });
-  const payload = (await response.json()) as YouTubePlaylistResponse;
+  const channelPayload = (await channelResponse.json()) as YouTubeChannelResponse;
 
-  if (!response.ok || payload.error) {
-    logGoogleApiError("YouTube playlist verify failed.", response, payload);
+  if (!channelResponse.ok || channelPayload.error) {
+    logGoogleApiError("YouTube channel verify failed.", channelResponse, channelPayload);
     return null;
   }
 
-  const match = payload.items?.find((item) => item.id === playlistId);
-  if (!match?.id) {
+  const channelId = channelPayload.items?.find((item) => item.id)?.id;
+  if (!channelId) {
+    return null;
+  }
+
+  const playlistUrl = new URL("https://www.googleapis.com/youtube/v3/playlists");
+  playlistUrl.searchParams.set("id", playlistId);
+  playlistUrl.searchParams.set("part", "snippet");
+
+  const playlistResponse = await fetch(playlistUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  const playlistPayload = (await playlistResponse.json()) as YouTubePlaylistResponse;
+
+  if (!playlistResponse.ok || playlistPayload.error) {
+    logGoogleApiError("YouTube playlist verify failed.", playlistResponse, playlistPayload);
+    return null;
+  }
+
+  const match = playlistPayload.items?.find((item) => item.id === playlistId);
+  if (!match?.id || match.snippet?.channelId !== channelId) {
     return null;
   }
 
