@@ -2144,6 +2144,20 @@ html[data-privacy="on"] input[data-private] {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* Google Picker injects a hard-white .picker-dialog-bg overlay that flashes
+   the whole page bright when the app is in dark mode. Soften it to a
+   neutral scrim that respects the active theme.
+   The picker dialog itself is a Google iframe — we can't restyle its
+   interior, only the backdrop and outer chrome. */
+.picker-dialog-bg {
+  background-color: rgba(8, 13, 28, 0.62) !important;
+  opacity: 1 !important;
+}
+
+.picker-dialog {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
 .form-actions {
   align-items: center;
   border-top: 1px solid var(--line);
