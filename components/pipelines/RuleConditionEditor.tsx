@@ -76,7 +76,7 @@ const PLACEHOLDERS: Record<ConditionField, string> = {
 const HELPER_TEXT: Record<ConditionField, string> = {
   day_of_week: "Use Mon, Tue, Wed, Thu, Fri, Sat, Sun. Commas work for is-one-of.",
   file_type: "Use extensions or MIME-like values. Commas work for is-one-of.",
-  filename: "Plain text. Wildcards use *. Regex must be valid JavaScript.",
+  filename: "Plain text is matched exactly as typed; commas are not split. Use OR rows or regex for multiple keywords.",
   time_of_day: "Use 24-hour HH:mm. Between accepts HH:mm-HH:mm."
 };
 

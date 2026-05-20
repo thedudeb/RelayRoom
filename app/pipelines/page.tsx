@@ -850,7 +850,8 @@ function ConditionInputs({
         />
         {compact ? null : (
           <small className="field-hint">
-            Use commas for “is one of”. Days use Mon, Tue, Wed. Times use HH:mm or HH:mm-HH:mm.
+            Commas create a list only with “is one of”. Filename matches use the exact text
+            entered; use separate OR conditions or regex for multiple filename keywords.
           </small>
         )}
       </label>
