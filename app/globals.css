@@ -4533,7 +4533,9 @@ td strong {
   border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
   border-radius: var(--radius-lg);
   color: var(--danger);
-  display: inline-flex;
+  /* Block-level flex so the eyebrow (also inline-flex) doesn't share the
+     line and end up with its ::before pip wedged next to the icon. */
+  display: flex;
   height: 52px;
   justify-content: center;
   margin-bottom: var(--space-5);
