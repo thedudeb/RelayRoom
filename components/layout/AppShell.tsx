@@ -8,8 +8,10 @@ import {
   GitBranch,
   ListChecks,
   LogOut,
+  Menu,
   PlugZap,
-  Settings
+  Settings,
+  X
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
@@ -46,10 +48,50 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const demoSuffix = isDemo ? "?demo=true" : "";
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Close the drawer whenever the route changes (e.g. user taps a nav item).
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Escape closes the drawer. Body scroll-lock keeps the underlying page from
+  // moving while the drawer is open on iOS.
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="app-shell" data-mobile-menu-open={mobileMenuOpen}>
+      <button
+        aria-controls="app-sidebar"
+        aria-expanded={mobileMenuOpen}
+        aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+        className="mobile-menu-toggle"
+        onClick={() => setMobileMenuOpen((v) => !v)}
+        type="button"
+      >
+        {mobileMenuOpen ? (
+          <X aria-hidden="true" size={20} />
+        ) : (
+          <Menu aria-hidden="true" size={20} />
+        )}
+      </button>
+      <div
+        aria-hidden="true"
+        className="mobile-menu-backdrop"
+        onClick={() => setMobileMenuOpen(false)}
+      />
+      <aside className="sidebar" id="app-sidebar">
         <NavLink className="brand" data-tour="brand" href={`/dashboard${demoSuffix}`}>
           <RelayRoomLogo />
           <span>Drive to YouTube operations</span>

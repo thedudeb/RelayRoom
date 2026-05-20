@@ -5622,14 +5622,79 @@ td strong {
   }
 }
 
+/* Hide the mobile menu controls by default — they only matter at ≤700px. */
+.mobile-menu-toggle,
+.mobile-menu-backdrop {
+  display: none;
+}
+
 @media (max-width: 700px) {
   body {
     overflow-x: hidden;
   }
 
+  /* Floating hamburger button — fixed so it stays reachable while scrolling. */
+  .mobile-menu-toggle {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    height: 44px;
+    justify-content: center;
+    left: 14px;
+    position: fixed;
+    top: 14px;
+    transition: background var(--dur-fast) var(--ease-out);
+    width: 44px;
+    z-index: 50;
+  }
+
+  .mobile-menu-toggle:hover {
+    background: var(--surface-muted);
+  }
+
+  /* Backdrop only renders when the drawer is open. */
+  .app-shell[data-mobile-menu-open="true"] .mobile-menu-backdrop {
+    background: color-mix(in srgb, var(--ink) 40%, transparent);
+    display: block;
+    inset: 0;
+    position: fixed;
+    z-index: 40;
+    animation: dialog-pop var(--dur-fast) var(--ease-out);
+  }
+
+  /* Sidebar becomes an offscreen drawer that slides in. */
   .sidebar {
+    background: var(--surface);
+    box-shadow: var(--shadow-xl);
     gap: 16px;
-    padding: 18px;
+    height: 100dvh;
+    left: 0;
+    max-width: 320px;
+    overflow-y: auto;
+    padding: 64px 18px 18px;
+    position: fixed;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform var(--dur-base) var(--ease-out);
+    width: 86vw;
+    z-index: 45;
+  }
+
+  .app-shell[data-mobile-menu-open="true"] .sidebar {
+    transform: translateX(0);
+  }
+
+  /* Make room for the floating hamburger so the page title isn't covered. */
+  .main {
+    padding-top: 0;
+  }
+  .topbar {
+    padding-left: 70px;
   }
 
   .brand {
