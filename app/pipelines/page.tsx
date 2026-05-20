@@ -39,6 +39,7 @@ import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField"
 import { RuleConditionEditor } from "@/components/pipelines/RuleConditionEditor";
 import { RuleBuilderModeToggle } from "@/components/pipelines/RuleBuilderModeToggle";
 import { RuleTester } from "@/components/pipelines/RuleTester";
+import { ClassicConditionInputs } from "@/components/pipelines/ClassicConditionInputs";
 import { verifyDriveFolderSelection } from "@/lib/oauth/drive-folder-verification";
 import {
   finalPriorityForIndex,
@@ -739,7 +740,7 @@ function ClassicRuleEditor({
           <option value="OR">Any top-level condition can match</option>
         </select>
       </label>
-      <ConditionInputs condition={primaryCondition} required />
+      <ClassicConditionInputs condition={primaryCondition} required />
       <fieldset className="rule-subgroup">
         <legend>Additional condition</legend>
         <label className="checkbox-field">
@@ -750,7 +751,7 @@ function ClassicRuleEditor({
           />
           <span>Use a second top-level condition</span>
         </label>
-        <ConditionInputs condition={secondCondition} prefix="condition2" />
+        <ClassicConditionInputs condition={secondCondition} prefix="condition2" />
       </fieldset>
       <fieldset className="rule-subgroup">
         <legend>Nested group</legend>
@@ -769,7 +770,7 @@ function ClassicRuleEditor({
             <option value="OR">Any nested condition can match</option>
           </select>
         </label>
-        <ConditionInputs condition={nestedPrimaryCondition} prefix="nested1" />
+        <ClassicConditionInputs condition={nestedPrimaryCondition} prefix="nested1" />
         <label className="checkbox-field">
           <input
             defaultChecked={Boolean(nestedSecondCondition)}
@@ -778,92 +779,9 @@ function ClassicRuleEditor({
           />
           <span>Use a second nested condition</span>
         </label>
-        <ConditionInputs condition={nestedSecondCondition} prefix="nested2" />
+        <ClassicConditionInputs condition={nestedSecondCondition} prefix="nested2" />
       </fieldset>
     </fieldset>
-  );
-}
-
-function ConditionInputs({
-  compact = false,
-  condition,
-  prefix = "",
-  required = false
-}: {
-  compact?: boolean;
-  condition?: ConditionLeaf;
-  prefix?: string;
-  required?: boolean;
-}) {
-  const field = condition?.field || "filename";
-
-  return (
-    <>
-      <label>
-        <span>Match field</span>
-        <select className="select" defaultValue={field} name={prefixedFieldName(prefix, "field")}>
-          <option value="filename">Filename</option>
-          <option value="file_type">File type</option>
-          <option value="day_of_week">Day of week</option>
-          <option value="time_of_day">Time of day</option>
-        </select>
-      </label>
-      <label>
-        <span>Operator</span>
-        <select
-          className="select"
-          defaultValue={operatorFormValue(condition)}
-          name={prefixedFieldName(prefix, "operator")}
-        >
-          <optgroup label="Filename">
-            <option value="contains">contains</option>
-            <option value="starts_with">starts with</option>
-            <option value="ends_with">ends with</option>
-            <option value="equals">equals</option>
-            <option value="matches_wildcard">matches wildcard</option>
-            <option value="matches_regex">matches regex</option>
-          </optgroup>
-          <optgroup label="File type">
-            <option value="file_type_equals">equals</option>
-            <option value="file_type_is_one_of">is one of</option>
-          </optgroup>
-          <optgroup label="Day">
-            <option value="day_is">is</option>
-            <option value="day_is_not">is not</option>
-            <option value="day_is_one_of">is one of</option>
-          </optgroup>
-          <optgroup label="Time">
-            <option value="time_between">between</option>
-            <option value="time_before">before</option>
-            <option value="time_after">after</option>
-          </optgroup>
-        </select>
-      </label>
-      <label>
-        <span>Value</span>
-        <input
-          className="input"
-          defaultValue={condition ? ruleValueToInput(condition.value) : ""}
-          name={prefixedFieldName(prefix, "value")}
-          placeholder="Engineering, mp4, Mon, or 09:30"
-          required={required}
-        />
-        {compact ? null : (
-          <small className="field-hint">
-            Commas create a list only with “is one of”. Filename matches use the exact text
-            entered; use separate OR conditions or regex for multiple filename keywords.
-          </small>
-        )}
-      </label>
-      <label className="checkbox-field">
-        <input
-          defaultChecked={condition?.caseSensitive || false}
-          name={prefixedFieldName(prefix, "caseSensitive")}
-          type="checkbox"
-        />
-        <span>Case-sensitive filename matching</span>
-      </label>
-    </>
   );
 }
 
@@ -1449,32 +1367,6 @@ function conditionTreeSummary(group: ConditionGroup) {
     parts.push(`${nestedGroups} nested group${nestedGroups === 1 ? "" : "s"}`);
   }
   return `${parts.join(" with ")}.`;
-}
-
-function ruleValueToInput(value: ConditionLeaf["value"]) {
-  if (Array.isArray(value)) {
-    return value.join(", ");
-  }
-  if (typeof value === "object") {
-    return `${value.start}-${value.end}`;
-  }
-  return String(value);
-}
-
-function operatorFormValue(condition?: ConditionLeaf) {
-  if (!condition) {
-    return "contains";
-  }
-  if (condition.field === "file_type") {
-    return `file_type_${condition.operator}`;
-  }
-  if (condition.field === "day_of_week") {
-    return `day_${condition.operator}`;
-  }
-  if (condition.field === "time_of_day") {
-    return `time_${condition.operator}`;
-  }
-  return condition.operator;
 }
 
 function buildConditionTree(formData: FormData) {
