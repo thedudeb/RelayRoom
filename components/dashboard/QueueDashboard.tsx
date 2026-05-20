@@ -299,63 +299,73 @@ export function QueueDashboard({
           })}
         </div>
         <div className="filter-row">
-          <select
-            className="select"
-            data-private={pipelineFilter !== "all" ? true : undefined}
-            aria-label="Filter by pipeline"
-            onChange={(event) => setPipelineFilter(event.target.value)}
-            value={pipelineFilter}
-          >
-            <option value="all">All pipelines</option>
-            {pipelineNames.map((pipelineName) => (
-              <option key={pipelineName} value={pipelineName}>
-                {pipelineName}
-              </option>
-            ))}
-          </select>
-          <select
-            className="select"
-            aria-label="Sort queue"
-            onChange={(event) => setSortMode(event.target.value as SortMode)}
-            value={sortMode}
-          >
-            <option value="detected_desc">Newest detected first</option>
-            <option value="filename_asc">Filename</option>
-            <option value="status_asc">Status</option>
-            <option value="last_action_desc">Last action</option>
-          </select>
-          <select
-            aria-label="Filter by matched rule"
-            className="select"
-            data-private={ruleFilter !== "all" && ruleFilter !== "__no_rule" ? true : undefined}
-            onChange={(event) => setRuleFilter(event.target.value)}
-            value={ruleFilter}
-          >
-            <option value="all">All rules</option>
-            {hasUnmatchedItems ? <option value="__no_rule">No matched rule</option> : null}
-            {ruleNames.map((ruleName) => (
-              <option key={ruleName} value={ruleName}>
-                {ruleName}
-              </option>
-            ))}
-          </select>
-          <input
-            aria-label="Detected from"
-            className="input filter-date-input"
-            onChange={(event) => setDetectedFrom(event.target.value)}
-            type="date"
-            value={detectedFrom}
-          />
-          <input
-            aria-label="Detected to"
-            className="input filter-date-input"
-            onChange={(event) => setDetectedTo(event.target.value)}
-            type="date"
-            value={detectedTo}
-          />
+          <label className="filter-field">
+            <span>Pipeline</span>
+            <select
+              className="select"
+              data-private={pipelineFilter !== "all" ? true : undefined}
+              onChange={(event) => setPipelineFilter(event.target.value)}
+              value={pipelineFilter}
+            >
+              <option value="all">All pipelines</option>
+              {pipelineNames.map((pipelineName) => (
+                <option key={pipelineName} value={pipelineName}>
+                  {pipelineName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Sort by</span>
+            <select
+              className="select"
+              onChange={(event) => setSortMode(event.target.value as SortMode)}
+              value={sortMode}
+            >
+              <option value="detected_desc">Newest detected first</option>
+              <option value="filename_asc">Filename</option>
+              <option value="status_asc">Status</option>
+              <option value="last_action_desc">Last action</option>
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Matched rule</span>
+            <select
+              className="select"
+              data-private={ruleFilter !== "all" && ruleFilter !== "__no_rule" ? true : undefined}
+              onChange={(event) => setRuleFilter(event.target.value)}
+              value={ruleFilter}
+            >
+              <option value="all">All rules</option>
+              {hasUnmatchedItems ? <option value="__no_rule">No matched rule</option> : null}
+              {ruleNames.map((ruleName) => (
+                <option key={ruleName} value={ruleName}>
+                  {ruleName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Detected from</span>
+            <input
+              className="input filter-date-input"
+              onChange={(event) => setDetectedFrom(event.target.value)}
+              type="date"
+              value={detectedFrom}
+            />
+          </label>
+          <label className="filter-field">
+            <span>Detected to</span>
+            <input
+              className="input filter-date-input"
+              onChange={(event) => setDetectedTo(event.target.value)}
+              type="date"
+              value={detectedTo}
+            />
+          </label>
           {hasAdvancedFilters ? (
             <button
-              className="button ghost compact-button"
+              className="button ghost compact-button filter-clear"
               onClick={() => {
                 setRuleFilter("all");
                 setDetectedFrom("");
