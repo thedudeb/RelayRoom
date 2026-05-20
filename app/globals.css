@@ -5760,12 +5760,30 @@ td strong {
   }
 
   .landing-nav {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: space-between;
   }
 
   .landing-nav nav {
     flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
+  /* Google sign-in is already a primary CTA in the hero below — hide the
+     duplicate in the header on narrow screens so the four nav links fit
+     on one row. */
+  .landing-nav nav > .auth-form,
+  .landing-nav nav > .landing-cta {
+    display: none;
+  }
+
+  .landing-nav nav > a:not(.button) {
+    font-size: 12px;
+    padding: 6px 8px;
   }
 
   .landing-hero {

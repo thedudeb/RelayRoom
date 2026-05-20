@@ -1,5 +1,9 @@
+.DS_Store
 .next
 .claude
+.vercel
+outputs/
+*.xlsx
 node_modules
 dist
 coverage
