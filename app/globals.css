@@ -2295,7 +2295,7 @@ th {
   text-transform: uppercase;
   position: sticky;
   top: 0;
-  z-index: var(--z-base);
+  z-index: 20;
 }
 
 tr:last-child td {
@@ -4004,17 +4004,6 @@ td strong {
 .queue-actions .route-select {
   grid-column: 1 / -1;
   justify-self: end;
-}
-
-.responsive-table tbody tr:first-child .queue-actions [data-tooltip]::after {
-  bottom: auto;
-  top: calc(100% + 8px);
-  transform: translate(-50%, -2px);
-}
-
-.responsive-table tbody tr:first-child .queue-actions [data-tooltip]:hover::after,
-.responsive-table tbody tr:first-child .queue-actions [data-tooltip]:focus-visible::after {
-  transform: translate(-50%, 0);
 }
 
 .route-select {
