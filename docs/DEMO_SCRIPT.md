@@ -153,7 +153,7 @@ This is where reviewers want to see *real* execution.
 7. Wait for detection → status appears as **needs_routing**.
 8. Open the detail view → show the **rule trace** explaining *why* nothing matched (each rule's conditions evaluated to false, with the per-condition breakdown).
 9. From the queue row, click the playlist dropdown → pick any playlist OR click **+ Create new** to make one inline ("Misc Recordings") → click **Route**.
-10. Item moves to **needs_approval** → click **Approve** → upload runs → status becomes **uploaded**.
+10. Item moves to **needs_approval** → either click **Approve** to upload as-is, or use **Edit and route** to change the playlist + override title/description before uploading. Demo both if there's time.
 
 ---
 

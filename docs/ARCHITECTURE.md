@@ -58,7 +58,7 @@ Defined in [`prisma/schema.prisma`](../prisma/schema.prisma).
 | `OAuthConnection` | One per (user, Drive or YouTube channel) | `kind`, `status`, `encryptedAccessToken`, `encryptedRefreshToken`, `expiresAt`, `channelId` for YouTube |
 | `Pipeline` | Source folder → destination channel binding | `mode`, `status`, `processedFromTime` (cold-start watermark), `driveChannelId` + `driveChannelToken` + `driveChannelExpiresAt` (push subscription), `archivedAt` |
 | `Rule` | Ordered routing rule on a pipeline | `priority`, `conditionTree` (JSON), `youtubePlaylistId`, template overrides |
-| `QueueItem` | One row per detected `(pipeline, drive_file)` | `status`, `previousStatus`, `failureReason`, `ruleEvaluationTrace`, `intendedPlaylistId`, `youtubeVideoId` after success, `userId` (for owner-scoped mutations and API key visibility) |
+| `QueueItem` | One row per detected `(pipeline, drive_file)` | `status`, `previousStatus`, `failureReason`, `ruleEvaluationTrace`, `intendedPlaylistId`, `renderedTitle` / `renderedDescription` (operator may override on edit-and-route), `youtubeVideoId` after success, `userId` (for owner-scoped mutations and API key visibility) |
 | `UploadAttempt` | One row per upload try | `attemptNumber`, `failureReason`, `rawError`, `youtubeVideoId` |
 | `ActivityLogEntry` | Append-only audit log per queue item | `actorType`, `message`, `metadata` JSON |
 | `WebhookEvent` | Replay protection for signed webhooks | `replayKey` (unique), `expiresAt` |
