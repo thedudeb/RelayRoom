@@ -58,10 +58,12 @@ interface PickerConfig {
 }
 
 export function DriveFolderPicker({
+  connectionId,
   disabled,
   initialFolderId = "",
   initialFolderName = "Meet Recordings"
 }: {
+  connectionId?: string;
   disabled: boolean;
   initialFolderId?: string;
   initialFolderName?: string;
@@ -78,7 +80,7 @@ export function DriveFolderPicker({
     setStatusTone("info");
 
     try {
-      const [config] = await Promise.all([fetchPickerToken(), loadPickerScript()]);
+      const [config] = await Promise.all([fetchPickerToken(connectionId), loadPickerScript()]);
       const pickerApi = window.google?.picker;
 
       if (!pickerApi) {
@@ -182,8 +184,11 @@ export function DriveFolderPicker({
   );
 }
 
-async function fetchPickerToken(): Promise<PickerConfig> {
-  const response = await fetch("/api/oauth/drive/picker-token", {
+async function fetchPickerToken(connectionId?: string): Promise<PickerConfig> {
+  const url = connectionId
+    ? `/api/oauth/drive/picker-token?connectionId=${encodeURIComponent(connectionId)}`
+    : "/api/oauth/drive/picker-token";
+  const response = await fetch(url, {
     cache: "no-store"
   });
   const payload = (await response.json()) as PickerTokenResponse;

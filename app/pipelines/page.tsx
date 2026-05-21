@@ -34,6 +34,7 @@ import type {
   QueueItem
 } from "@/lib/domain/types";
 import { displayWorkspaceUser, selectedWorkspaceUserId } from "@/lib/workspace/users";
+import { CreateDriveSourceFields } from "@/components/pipelines/CreateDriveSourceFields";
 import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
 import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField";
 import { RuleConditionEditor } from "@/components/pipelines/RuleConditionEditor";
@@ -361,18 +362,8 @@ function CreatePipelinePanel({
             required
           />
         </label>
-        <label>
-          <span>Drive connection</span>
-          <select className="select" data-private disabled={!canCreate} name="driveConnectionId" required>
-            {driveConnections.map((connection) => (
-              <option key={connection.id} value={connection.id}>
-                {connection.label} - {connection.detail}
-              </option>
-            ))}
-          </select>
-        </label>
         <YouTubePlaylistPicker disabled={!canCreate} youtubeConnections={youtubeConnections} />
-        <DriveFolderPicker disabled={!canCreate} />
+        <CreateDriveSourceFields disabled={!canCreate} driveConnections={driveConnections} />
         <PrivacyPicker
           defaultValue="UNLISTED"
           disabled={!canCreate}
@@ -434,6 +425,7 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
           <input className="input" defaultValue={pipeline.name} name="name" required />
         </label>
         <DriveFolderPicker
+          connectionId={pipeline.driveConnectionId}
           disabled={false}
           initialFolderId={pipeline.sourceFolderId}
           initialFolderName={pipeline.sourceFolderName}
