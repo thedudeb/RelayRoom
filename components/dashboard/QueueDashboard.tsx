@@ -7,7 +7,6 @@ import {
   ExternalLink,
   Info,
   Play,
-  Plus,
   RotateCcw,
   Route,
   SkipForward,
@@ -612,7 +611,7 @@ function EditRouteModal({
   onClose: () => void;
   onSubmit: (payload: QueueActionPayload) => void;
 }) {
-  const playlistOptions = useMemo(() => {
+  const initialPlaylistOptions = useMemo(() => {
     const seen = new Set<string>();
     const options = [...(item.routingOptions || [])];
     if (item.intendedPlaylistId && item.intendedPlaylistName) {
@@ -625,19 +624,63 @@ function EditRouteModal({
       return true;
     });
   }, [item.intendedPlaylistId, item.intendedPlaylistName, item.routingOptions]);
+  const [playlistOptions, setPlaylistOptions] = useState(initialPlaylistOptions);
   const [playlistValue, setPlaylistValue] = useState(
-    item.intendedPlaylistId || playlistOptions[0]?.id || "__new"
+    item.intendedPlaylistId || initialPlaylistOptions[0]?.id || "__new"
   );
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [title, setTitle] = useState(item.renderedTitle || filenameWithoutExtension(item.filename));
   const [description, setDescription] = useState(item.renderedDescription || "");
+  const [playlistStatus, setPlaylistStatus] = useState<string | null>(null);
+  const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
 
   useEffect(() => {
-    setPlaylistValue(item.intendedPlaylistId || playlistOptions[0]?.id || "__new");
+    setPlaylistOptions(initialPlaylistOptions);
+    setPlaylistValue(item.intendedPlaylistId || initialPlaylistOptions[0]?.id || "__new");
     setNewPlaylistName("");
     setTitle(item.renderedTitle || filenameWithoutExtension(item.filename));
     setDescription(item.renderedDescription || "");
-  }, [item, playlistOptions]);
+    setPlaylistStatus(null);
+  }, [initialPlaylistOptions, item]);
+
+  useEffect(() => {
+    if (!item.youtubeConnectionId) return;
+    let cancelled = false;
+
+    async function loadPlaylists() {
+      setIsLoadingPlaylists(true);
+      try {
+        const response = await fetch(
+          `/api/oauth/youtube/playlists?connectionId=${encodeURIComponent(item.youtubeConnectionId || "")}`,
+          { cache: "no-store" }
+        );
+        const payload = (await response.json()) as {
+          error?: string;
+          playlists?: Array<{ id: string; title: string }>;
+        };
+        if (!response.ok || payload.error) {
+          throw new Error(payload.error || "PlaylistLoadFailed");
+        }
+        if (cancelled) return;
+        const loaded = (payload.playlists || []).map((playlist) => ({
+          id: playlist.id,
+          name: playlist.title
+        }));
+        setPlaylistOptions((current) => mergePlaylistOptions(current, loaded));
+        setPlaylistValue((current) => (current === "__new" && loaded[0] ? loaded[0].id : current));
+        setPlaylistStatus(null);
+      } catch {
+        if (!cancelled) setPlaylistStatus("Could not load channel playlists. You can still create a new one.");
+      } finally {
+        if (!cancelled) setIsLoadingPlaylists(false);
+      }
+    }
+
+    void loadPlaylists();
+    return () => {
+      cancelled = true;
+    };
+  }, [item.youtubeConnectionId]);
 
   const selectedPlaylist = playlistOptions.find((playlist) => playlist.id === playlistValue);
   const isCreatingPlaylist = playlistValue === "__new";
@@ -702,6 +745,8 @@ function EditRouteModal({
             ))}
             <option value="__new">Create new playlist</option>
           </select>
+          {isLoadingPlaylists ? <small className="field-hint">Loading channel playlists...</small> : null}
+          {playlistStatus ? <small className="field-hint error">{playlistStatus}</small> : null}
         </label>
 
         {isCreatingPlaylist ? (
@@ -972,60 +1017,17 @@ function QueueActions({
   }
 
   if (item.status === "needs_routing") {
-    const selectedPlaylist = item.routingOptions?.find(
-      (playlist) => playlist.id === selectedPlaylistId
-    );
-
     return (
       <div className="actions queue-actions">
         {detailsButton}
-        <select
-          aria-label={`Route ${item.filename} to playlist`}
-          className="select route-select"
-          disabled={isBusy || !item.routingOptions?.length}
-          onChange={(event) => setSelectedPlaylistId(event.target.value)}
-          value={selectedPlaylistId}
-        >
-          {item.routingOptions?.length ? (
-            item.routingOptions.map((playlist) => (
-              <option key={playlist.id} value={playlist.id}>
-                {playlist.name}
-              </option>
-            ))
-          ) : (
-            <option value="">No playlists</option>
-          )}
-        </select>
         <button
           className="icon-button"
-          data-tooltip={selectedPlaylist ? "Route to selected playlist" : "No playlist options"}
-          disabled={isBusy || !selectedPlaylist}
-          onClick={() =>
-            selectedPlaylist &&
-            onAction(item, "route", {
-              playlistId: selectedPlaylist.id,
-              playlistName: selectedPlaylist.name
-            })
-          }
+          data-tooltip="Edit route and upload"
+          disabled={isBusy}
+          onClick={() => onEditRoute(item)}
           type="button"
         >
           <Route aria-hidden="true" size={16} />
-        </button>
-        <button
-          className="icon-button"
-          data-tooltip="Create a new playlist and route this item to it"
-          disabled={isBusy}
-          onClick={() => {
-            const title = window.prompt(
-              "Create a new playlist on the destination channel. Title:"
-            );
-            const trimmed = title?.trim();
-            if (!trimmed) return;
-            onAction(item, "route", { createPlaylistName: trimmed });
-          }}
-          type="button"
-        >
-          <Plus aria-hidden="true" size={16} />
         </button>
         <button
           className="icon-button"
@@ -1420,6 +1422,23 @@ function queueActionErrorMessage(error?: string) {
   };
 
   return messages[error || ""] || error || "Queue action failed.";
+}
+
+function mergePlaylistOptions(
+  ...groups: Array<Array<{ id: string; name: string }>>
+): Array<{ id: string; name: string }> {
+  const seen = new Set<string>();
+  const merged: Array<{ id: string; name: string }> = [];
+
+  for (const group of groups) {
+    for (const option of group) {
+      if (!option.id || seen.has(option.id)) continue;
+      seen.add(option.id);
+      merged.push(option);
+    }
+  }
+
+  return merged;
 }
 
 // Demo-mode-only client-side simulation of queue actions. Mirrors the server's

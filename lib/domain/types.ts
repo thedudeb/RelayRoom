@@ -163,6 +163,7 @@ export interface QueueItem {
   id: string;
   pipelineId: string;
   pipelineName: string;
+  youtubeConnectionId?: string;
   sourceFolderName: string;
   driveFileId: string;
   filename: string;
@@ -172,10 +173,12 @@ export interface QueueItem {
   detectedAt: string;
   status: QueueStatus;
   intendedPlaylistId?: string;
+  matchedRuleId?: string;
   matchedRuleName?: string;
   intendedPlaylistName?: string;
   renderedTitle?: string;
   renderedDescription?: string;
+  ruleEvaluationTrace?: RuleTrace[];
   routingOptions?: Playlist[];
   youtubeVideoId?: string;
   youtubePlaylistId?: string;

@@ -1,4 +1,4 @@
-import { QueueStatus } from "@prisma/client";
+import { FailureReason, QueueStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { authorizeCronRequest } from "@/lib/security/cron-auth";
@@ -35,23 +35,22 @@ export async function GET(request: NextRequest) {
   }> = [];
 
   while (results.length < maxItems && Date.now() - startedAt < timeBudgetMs) {
-    const claimed = await claimNextDetectedItem();
+    const claimed = await claimNextUploadCandidate();
     if (!claimed) {
       break;
     }
 
     try {
-      // The claim transaction already flipped the item to UPLOADING so
-      // uploadQueueItemToYouTube's "auto" gate sees the original DETECTED
-      // status. Restore it momentarily for the trigger check, then let the
-      // upload code drive the rest of the lifecycle.
+      // The claim transaction already flipped the item to UPLOADING for
+      // concurrency control. Restore the original status momentarily for the
+      // trigger guard, then let the upload code drive the rest of the lifecycle.
       await prisma.queueItem.update({
         where: { id: claimed.id },
-        data: { status: QueueStatus.DETECTED }
+        data: { status: claimed.previousStatus }
       });
       await uploadQueueItemToYouTube({
         queueItemId: claimed.id,
-        trigger: "auto",
+        trigger: claimed.trigger,
         userId: claimed.userId
       });
       results.push({ queueItemId: claimed.id, status: "ok" });
@@ -71,29 +70,79 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// Atomically pick the oldest DETECTED item and tentatively flip it to
-// CLAIMING via UPLOADING. Concurrent workers see the status change in their
-// updateMany filter and skip it. The stale-upload reaper from Wave 5 covers
-// the case where a worker crashes mid-flight.
-async function claimNextDetectedItem() {
-  const candidate = await prisma.queueItem.findFirst({
-    where: { status: QueueStatus.DETECTED },
-    orderBy: { detectedAt: "asc" },
-    select: { id: true, status: true, userId: true }
+// Atomically pick upload work. Fresh DETECTED items go first; transient FAILED
+// items become due again based on their accumulated attempt count and
+// lastActionAt timestamp. This gives us queue-level exponential backoff without
+// adding scheduler columns.
+async function claimNextUploadCandidate() {
+  const candidates = await prisma.queueItem.findMany({
+    where: {
+      OR: [
+        { status: QueueStatus.DETECTED },
+        {
+          failureReason: { in: transientFailureReasons },
+          status: QueueStatus.FAILED
+        }
+      ]
+    },
+    orderBy: [{ status: "asc" }, { detectedAt: "asc" }],
+    select: {
+      _count: { select: { attempts: true } },
+      detectedAt: true,
+      failureReason: true,
+      id: true,
+      lastActionAt: true,
+      status: true,
+      userId: true
+    },
+    take: 25
   });
-  if (!candidate) {
-    return null;
-  }
+
+  const candidate = candidates.find((item) => item.status === QueueStatus.DETECTED || isRetryDue(item));
+  if (!candidate) return null;
 
   const claim = await prisma.queueItem.updateMany({
-    where: { id: candidate.id, status: QueueStatus.DETECTED },
+    where: { id: candidate.id, status: candidate.status },
     data: { status: QueueStatus.UPLOADING, lastActionAt: new Date() }
   });
   if (claim.count === 0) {
     return null;
   }
 
-  return { id: candidate.id, userId: candidate.userId };
+  return {
+    id: candidate.id,
+    trigger: candidate.status === QueueStatus.DETECTED ? ("auto" as const) : ("retry" as const),
+    previousStatus: candidate.status,
+    userId: candidate.userId
+  };
+}
+
+const transientFailureReasons: FailureReason[] = [
+  FailureReason.NETWORK_TIMEOUT,
+  FailureReason.RATE_LIMITED
+];
+const MAX_AUTO_RETRY_ATTEMPTS = 4;
+
+function isRetryDue(candidate: {
+  _count: { attempts: number };
+  failureReason: FailureReason | null;
+  lastActionAt: Date;
+  status: QueueStatus;
+}) {
+  if (
+    candidate.status !== QueueStatus.FAILED ||
+    !candidate.failureReason ||
+    !transientFailureReasons.includes(candidate.failureReason)
+  ) {
+    return false;
+  }
+
+  if (candidate._count.attempts >= MAX_AUTO_RETRY_ATTEMPTS) {
+    return false;
+  }
+
+  const delayMinutes = Math.min(60, 2 ** Math.max(0, candidate._count.attempts - 1));
+  return Date.now() - candidate.lastActionAt.getTime() >= delayMinutes * 60_000;
 }
 
 function parsePositiveNumber(value: string | null, fallback: number) {

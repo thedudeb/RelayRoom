@@ -423,7 +423,10 @@ async function prepareEditAndRouteUpload({
   titleOverride?: string;
   userId: string;
 }) {
-  if (item.status !== PrismaQueueStatus.NEEDS_APPROVAL) {
+  if (
+    item.status !== PrismaQueueStatus.NEEDS_APPROVAL &&
+    item.status !== PrismaQueueStatus.NEEDS_ROUTING
+  ) {
     throw new Error(`Edit and route is not allowed from ${formatStatus(item.status)}.`);
   }
 
@@ -446,14 +449,19 @@ async function prepareEditAndRouteUpload({
         lastError: null,
         matchedRuleId: null,
         matchedRuleName: "Manual route",
+        previousStatus: item.status,
         renderedDescription: description,
-        renderedTitle: title
+        renderedTitle: title,
+        status: PrismaQueueStatus.NEEDS_APPROVAL
       }
     }),
     prisma.activityLogEntry.create({
       data: {
         actorType: "user",
-        message: `Edited route to ${playlist.name}.`,
+        message:
+          item.status === PrismaQueueStatus.NEEDS_ROUTING
+            ? `Edited route to ${playlist.name} and queued upload.`
+            : `Edited route to ${playlist.name}.`,
         metadata: {
           fromStatus: item.status,
           playlistId: playlist.id,

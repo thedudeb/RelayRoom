@@ -197,12 +197,51 @@ export async function runDriveDetectionForPipeline({
     }
 
     if (!isYouTubeSupportedVideoFile({ filename: file.name, mimeType: file.mimeType })) {
-      ignored += 1;
-      ignoredFiles.push({
-        filename: file.name,
-        mimeType: file.mimeType,
-        reason: describeUnsupportedVideoFile({ filename: file.name, mimeType: file.mimeType })
-      });
+      const reason = describeUnsupportedVideoFile({ filename: file.name, mimeType: file.mimeType });
+      try {
+        const now = new Date();
+        const queueItem = await prisma.queueItem.create({
+          data: {
+            detectedAt: now,
+            driveCreatedTime: new Date(file.createdTime),
+            driveFileId: file.id,
+            failureReason: FailureReason.NOT_VIDEO,
+            filename: file.name,
+            lastActionAt: now,
+            lastError: `Skipped automatically: ${reason}`,
+            mimeType: file.mimeType,
+            pipelineId: pipeline.id,
+            ruleEvaluationTrace: [],
+            sizeBytes: file.size ? BigInt(file.size) : undefined,
+            status: QueueStatus.SKIPPED,
+            userId
+          },
+          select: { id: true }
+        });
+        await prisma.activityLogEntry.create({
+          data: {
+            actorType: "system",
+            message: "Skipped unsupported Drive file before upload.",
+            metadata: { failureReason: FailureReason.NOT_VIDEO, reason },
+            queueItemId: queueItem.id,
+            userId
+          }
+        });
+        existingByDriveFileId.set(file.id, {
+          driveFileId: file.id,
+          id: queueItem.id,
+          status: QueueStatus.SKIPPED,
+          youtubeVideoId: null
+        });
+        created += 1;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          skippedExisting += 1;
+          continue;
+        }
+
+        throw error;
+      }
       continue;
     }
 

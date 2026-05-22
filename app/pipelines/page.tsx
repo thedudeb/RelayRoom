@@ -39,9 +39,12 @@ import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
 import { PollingCadenceField } from "@/components/pipelines/PollingCadenceField";
 import { RuleConditionEditor } from "@/components/pipelines/RuleConditionEditor";
 import { RuleBuilderModeToggle } from "@/components/pipelines/RuleBuilderModeToggle";
+import { RulePlaylistSelect } from "@/components/pipelines/RulePlaylistSelect";
 import { RuleTester } from "@/components/pipelines/RuleTester";
 import { ClassicConditionInputs } from "@/components/pipelines/ClassicConditionInputs";
 import { verifyDriveFolderSelection } from "@/lib/oauth/drive-folder-verification";
+import { getUsableYouTubeAccessToken } from "@/lib/detection/drive-detection";
+import { verifyChannelPlaylist } from "@/lib/oauth/youtube-playlists";
 import {
   finalPriorityForIndex,
   reorderRuleIds,
@@ -537,6 +540,7 @@ function RuleManager({
                   defaultPlaylistValue={playlistValue}
                   defaultTitleTemplate={rule.titleTemplate || ""}
                   playlistOptions={playlistOptions}
+                  youtubeConnectionId={pipeline.youtubeConnectionId}
                 />
                 <div className="form-actions">
                   <button className="button primary" type="submit">
@@ -609,13 +613,14 @@ function RuleManager({
                 }
                 defaultTitleTemplate=""
                 playlistOptions={playlistOptions}
+                youtubeConnectionId={pipeline.youtubeConnectionId}
               />
               <div className="form-actions">
-                <button className="button primary" disabled={playlistOptions.length === 0} type="submit">
+                <button className="button primary" type="submit">
                   Add rule
                 </button>
                 {playlistOptions.length === 0 ? (
-                  <span className="muted">Create or select a playlist before adding rules.</span>
+                  <span className="muted">Load or create a playlist before adding rules.</span>
                 ) : null}
               </div>
             </form>
@@ -632,7 +637,8 @@ function RuleFields({
   defaultName,
   defaultPlaylistValue,
   defaultTitleTemplate,
-  playlistOptions
+  playlistOptions,
+  youtubeConnectionId
 }: {
   conditions?: ConditionGroup;
   defaultDescriptionTemplate: string;
@@ -640,6 +646,7 @@ function RuleFields({
   defaultPlaylistValue?: string;
   defaultTitleTemplate: string;
   playlistOptions: { id: string; name: string }[];
+  youtubeConnectionId: string;
 }) {
   const primaryCondition = conditions ? conditionChildAt(conditions, 0) : undefined;
   const secondCondition = conditions ? conditionChildAt(conditions, 1) : undefined;
@@ -653,21 +660,11 @@ function RuleFields({
         <span>Rule name</span>
         <input className="input" defaultValue={defaultName} name="ruleName" required />
       </label>
-      <label>
-        <span>Route to playlist</span>
-        <select
-          className="select"
-          defaultValue={defaultPlaylistValue}
-          name="playlist"
-          required
-        >
-          {playlistOptions.map((playlist) => (
-            <option key={playlist.id} value={playlistOptionValue(playlist.id, playlist.name)}>
-              {playlist.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <RulePlaylistSelect
+        connectionId={youtubeConnectionId}
+        defaultValue={defaultPlaylistValue}
+        initialOptions={playlistOptions}
+      />
       <RuleBuilderModeToggle
         visual={<RuleConditionEditor initial={conditions} />}
         classic={
@@ -1065,23 +1062,12 @@ async function createRuleAction(formData: FormData) {
     redirect("/pipelines?error=PipelineNotFound");
   }
 
-  const knownPlaylists = await prisma.rule.findMany({
-    where: {
-      pipeline: {
-        archivedAt: null,
-        userId: access.userId,
-        youtubeConnectionId: pipeline.youtubeConnectionId
-      }
-    },
-    select: {
-      youtubePlaylistId: true,
-      youtubePlaylistName: true
-    }
+  const verifiedPlaylist = await verifyRulePlaylist({
+    playlistId: playlist.id,
+    userId: access.userId,
+    youtubeConnectionId: pipeline.youtubeConnectionId
   });
-  const playlistIsKnown = knownPlaylists.some(
-    (rule) => rule.youtubePlaylistId === playlist.id && rule.youtubePlaylistName === playlist.name
-  );
-  if (!playlistIsKnown) {
+  if (!verifiedPlaylist) {
     redirect("/pipelines?error=MissingRuleFields");
   }
 
@@ -1096,8 +1082,8 @@ async function createRuleAction(formData: FormData) {
       priority: nextPriority,
       titleTemplateOverride,
       descriptionTemplateOverride,
-      youtubePlaylistId: playlist.id,
-      youtubePlaylistName: playlist.name
+      youtubePlaylistId: verifiedPlaylist.id,
+      youtubePlaylistName: verifiedPlaylist.name
     }
   });
 
@@ -1143,25 +1129,12 @@ async function updateRuleAction(formData: FormData) {
     redirect("/pipelines?error=RuleNotFound");
   }
 
-  const knownPlaylists = await prisma.rule.findMany({
-    where: {
-      pipeline: {
-        archivedAt: null,
-        userId: access.userId,
-        youtubeConnectionId: rule.pipeline.youtubeConnectionId
-      }
-    },
-    select: {
-      youtubePlaylistId: true,
-      youtubePlaylistName: true
-    }
+  const verifiedPlaylist = await verifyRulePlaylist({
+    playlistId: playlist.id,
+    userId: access.userId,
+    youtubeConnectionId: rule.pipeline.youtubeConnectionId
   });
-  const playlistIsKnown = knownPlaylists.some(
-    (candidate) =>
-      candidate.youtubePlaylistId === playlist.id &&
-      candidate.youtubePlaylistName === playlist.name
-  );
-  if (!playlistIsKnown) {
+  if (!verifiedPlaylist) {
     redirect("/pipelines?error=MissingRuleFields");
   }
 
@@ -1172,13 +1145,51 @@ async function updateRuleAction(formData: FormData) {
       descriptionTemplateOverride,
       name: ruleName,
       titleTemplateOverride,
-      youtubePlaylistId: playlist.id,
-      youtubePlaylistName: playlist.name
+      youtubePlaylistId: verifiedPlaylist.id,
+      youtubePlaylistName: verifiedPlaylist.name
     }
   });
 
   revalidatePath("/pipelines");
   redirect("/pipelines?ruleUpdated=true");
+}
+
+async function verifyRulePlaylist({
+  playlistId,
+  userId,
+  youtubeConnectionId
+}: {
+  playlistId: string;
+  userId: string;
+  youtubeConnectionId: string;
+}) {
+  const connection = await prisma.oAuthConnection.findFirst({
+    where: {
+      id: youtubeConnectionId,
+      kind: ConnectionKind.YOUTUBE,
+      status: ConnectionStatus.ACTIVE,
+      userId
+    },
+    select: {
+      encryptedAccessToken: true,
+      encryptedRefreshToken: true,
+      expiresAt: true,
+      id: true,
+      kind: true,
+      status: true
+    }
+  });
+  const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+  if (!connection || !tokenKey) {
+    return null;
+  }
+
+  const accessToken = await getUsableYouTubeAccessToken(connection, tokenKey);
+  if (!accessToken) {
+    return null;
+  }
+
+  return verifyChannelPlaylist({ accessToken, playlistId });
 }
 
 async function moveRuleAction(formData: FormData) {

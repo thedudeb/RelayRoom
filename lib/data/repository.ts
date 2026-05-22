@@ -1,5 +1,12 @@
 import type { Prisma } from "@prisma/client";
-import type { ConnectionSummary, Pipeline, QueueItem, RoutingRule, UserSummary } from "@/lib/domain/types";
+import type {
+  ConnectionSummary,
+  Pipeline,
+  QueueItem,
+  RoutingRule,
+  RuleTrace,
+  UserSummary
+} from "@/lib/domain/types";
 import { demoConnections, demoPipelines, demoQueueItems } from "@/lib/data/seed";
 import { hasDatabaseUrl, prisma } from "@/lib/db/prisma";
 
@@ -202,6 +209,7 @@ function mapQueueItem(
     id: item.id,
     pipelineId: item.pipelineId,
     pipelineName: item.pipeline.name,
+    youtubeConnectionId: item.pipeline.youtubeConnectionId,
     sourceFolderName: item.pipeline.sourceFolderName,
     driveFileId: item.driveFileId,
     filename: item.filename,
@@ -212,10 +220,14 @@ function mapQueueItem(
     status: item.status.toLowerCase() as QueueItem["status"],
     previousStatus: item.previousStatus?.toLowerCase() as QueueItem["previousStatus"],
     intendedPlaylistId: item.intendedPlaylistId || undefined,
+    matchedRuleId: item.matchedRuleId || undefined,
     matchedRuleName: item.matchedRuleName || undefined,
     intendedPlaylistName: item.intendedPlaylistName || undefined,
     renderedDescription: item.renderedDescription || undefined,
     renderedTitle: item.renderedTitle || undefined,
+    ruleEvaluationTrace: Array.isArray(item.ruleEvaluationTrace)
+      ? (item.ruleEvaluationTrace as unknown as RuleTrace[])
+      : undefined,
     routingOptions: pipelineOptions.length ? pipelineOptions : fallbackOptions,
     youtubeVideoId: item.youtubeVideoId || undefined,
     youtubePlaylistId: item.youtubePlaylistId || undefined,

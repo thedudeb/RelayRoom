@@ -78,7 +78,6 @@ export function PrivacyPicker({
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modalOpen]);
 
   return (

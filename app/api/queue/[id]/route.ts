@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiAccess } from "@/lib/auth/account";
-import { demoTimezone } from "@/lib/data/seed";
 import {
-  getPipelinesForDemo,
-  getPipelinesForUser,
   getQueueItemsForDemo,
   getQueueItemsForUser
 } from "@/lib/data/repository";
 import { prisma } from "@/lib/db/prisma";
-import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
+import type { QueueItem } from "@/lib/domain/types";
 
 export async function GET(
   request: NextRequest,
@@ -24,33 +21,15 @@ export async function GET(
   const ownerFilter =
     !access.isDemo && access.authMethod === "api_key" ? { userId: access.userId } : undefined;
 
-  const [queueItems, pipelines] = access.isDemo
-    ? await Promise.all([getQueueItemsForDemo(), getPipelinesForDemo()])
-    : await Promise.all([
-        getQueueItemsForUser(access.userId, ownerFilter),
-        getPipelinesForUser(access.userId, ownerFilter)
-      ]);
+  const queueItems = access.isDemo
+    ? await getQueueItemsForDemo()
+    : await getQueueItemsForUser(access.userId, ownerFilter);
   const item = queueItems.find((queueItem) => queueItem.id === id);
   if (!item) {
     return NextResponse.json({ error: "Queue item not found." }, { status: 404 });
   }
 
-  const pipeline = pipelines.find((candidate) => candidate.id === item.pipelineId);
-  const timezone = access.isDemo ? demoTimezone : await getQueueOwnerTimezone(item.owner.id);
-  const evaluation = pipeline
-    ? evaluatePipelineRules(
-        pipeline,
-        {
-          id: item.driveFileId,
-          filename: item.filename,
-          mimeType: item.mimeType,
-          sizeBytes: item.sizeBytes,
-          createdTime: item.driveCreatedTime,
-          sourceFolderId: pipeline.sourceFolderId
-        },
-        timezone
-    )
-    : undefined;
+  const evaluation = persistedEvaluationForItem(item);
   const details = access.isDemo ? getDemoQueueDetails(item) : await getQueueDetails(id, ownerFilter);
 
   return NextResponse.json({
@@ -114,15 +93,6 @@ async function getQueueDetails(queueItemId: string, ownerFilter?: { userId: stri
   };
 }
 
-async function getQueueOwnerTimezone(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { timezone: true }
-  });
-
-  return user?.timezone || "UTC";
-}
-
 function getDemoQueueDetails(item: Awaited<ReturnType<typeof getQueueItemsForDemo>>[number]) {
   const attempts =
     item.status === "failed"
@@ -167,5 +137,25 @@ function getDemoQueueDetails(item: Awaited<ReturnType<typeof getQueueItemsForDem
       }
     ],
     attempts
+  };
+}
+
+function persistedEvaluationForItem(item: QueueItem) {
+  if (!item.ruleEvaluationTrace) {
+    return undefined;
+  }
+
+  return {
+    description: item.renderedDescription || "",
+    matchedRule:
+      item.matchedRuleId && item.matchedRuleName
+        ? { id: item.matchedRuleId, name: item.matchedRuleName }
+        : undefined,
+    playlist:
+      item.intendedPlaylistId && item.intendedPlaylistName
+        ? { id: item.intendedPlaylistId, name: item.intendedPlaylistName }
+        : undefined,
+    ruleTraces: item.ruleEvaluationTrace,
+    title: item.renderedTitle || item.filename
   };
 }
