@@ -1,13 +1,17 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, HelpCircle, X } from "lucide-react";
-import { usePathname } from "next/navigation";
+import type { Route } from "next";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+type TutorialPageKey = "dashboard" | "pipelines" | "connections" | "settings";
+
 interface TutorialStep {
   body: string;
+  page?: TutorialPageKey;
   selector?: string;
   title: string;
 }
@@ -35,19 +39,22 @@ const globalSteps: TutorialStep[] = [
   }
 ];
 
-const pageSteps: Record<string, TutorialStep[]> = {
+const pageSteps: Record<TutorialPageKey, TutorialStep[]> = {
   dashboard: [
     {
+      page: "dashboard",
       selector: '[data-tour="queue-summary"]',
       title: "Queue summary",
       body: "These cards show the live shape of the queue: approvals waiting, items needing routing, failures, and completed uploads."
     },
     {
+      page: "dashboard",
       selector: '[data-tour="queue-filters"]',
       title: "Filters",
       body: "Use the status tabs and dropdowns to narrow the queue by state, pipeline, or sort order."
     },
     {
+      page: "dashboard",
       selector: '[data-tour="queue-table"]',
       title: "Queue actions",
       body: "Each row has action buttons for details, approve/upload, route, open YouTube, retry, skip, or restore depending on the item state."
@@ -55,21 +62,25 @@ const pageSteps: Record<string, TutorialStep[]> = {
   ],
   pipelines: [
     {
+      page: "pipelines",
       selector: '[data-tour="pipeline-owner-filter"]',
       title: "Pipeline owner filter",
       body: "Switch between all workspace pipelines, your pipelines, and another user's pipelines without changing ownership."
     },
     {
+      page: "pipelines",
       selector: '[data-tour="new-pipeline"]',
       title: "New pipeline",
       body: "Create a watched-folder automation by selecting Drive, YouTube, playlist, privacy, cadence, and title/description templates."
     },
     {
+      page: "pipelines",
       selector: '[data-tour="routing-rules"]',
       title: "Routing rules",
       body: "Rules run top to bottom. The first matching rule assigns playlist, title, description, and upload path."
     },
     {
+      page: "pipelines",
       selector: '[data-tour="pipeline-actions"]',
       title: "Pipeline controls",
       body: "Enable, disable, run detection, check Drive, duplicate, archive, or restore a pipeline from its controls."
@@ -77,16 +88,19 @@ const pageSteps: Record<string, TutorialStep[]> = {
   ],
   connections: [
     {
+      page: "connections",
       selector: '[data-tour="connection-actions"]',
       title: "Connect accounts",
       body: "Connect Drive and YouTube separately. RelayRoom can use different Google accounts for source folders and upload destinations."
     },
     {
+      page: "connections",
       selector: '[data-tour="workspace-user-filter"]',
       title: "User filter",
       body: "Allowed users can see workspace connections, and this filter narrows the view by owner."
     },
     {
+      page: "connections",
       selector: '[data-tour="connection-table"]',
       title: "Connection table",
       body: "This table shows connected accounts, scopes, status, where each grant is used, and owner-scoped reconnect/disconnect controls."
@@ -94,16 +108,19 @@ const pageSteps: Record<string, TutorialStep[]> = {
   ],
   settings: [
     {
+      page: "settings",
       selector: '[data-tour="readiness-panel"]',
       title: "Readiness",
       body: "Readiness checks make missing production configuration visible before a connection, cron, or upload flow surprises you."
     },
     {
+      page: "settings",
       selector: '[data-tour="api-key-panel"]',
       title: "Read-only API key",
       body: "Generate a hashed bearer token for read-only queue and pipeline API access. The raw key is only shown once."
     },
     {
+      page: "settings",
       selector: '[data-tour="owner-controls"]',
       title: "Owner controls",
       body: "The owner can enable, disable, or remove allowed users while keeping workspace data visible to the team."
@@ -113,17 +130,21 @@ const pageSteps: Record<string, TutorialStep[]> = {
 
 export function TutorialMode() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const pageKey = pageKeyForPath(pathname);
-  const steps = useMemo(
-    () => [...globalSteps, ...(pageSteps[pageKey] || [])],
-    [pageKey]
-  );
+  const demoSuffix = searchParams.get("demo") === "true" ? "?demo=true" : "";
+  const steps = useMemo(() => allTutorialSteps(), []);
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  const [targetMissing, setTargetMissing] = useState(false);
   const pointerHandledAt = useRef(0);
   const currentStep = steps[index] || steps[0];
+  const stepPageMismatch = Boolean(currentStep?.page && currentStep.page !== pageKey);
+  const stepPath = currentStep?.page ? pathForPage(currentStep.page) : undefined;
+  const waitingForTarget = open && Boolean(currentStep?.selector) && (stepPageMismatch || targetMissing);
 
   useEffect(() => {
     setMounted(true);
@@ -141,14 +162,16 @@ export function TutorialMode() {
   }, [open]);
 
   useEffect(() => {
-    if (!open || !currentStep?.selector) {
+    if (!open || !currentStep?.selector || stepPageMismatch) {
       setTargetRect(null);
+      setTargetMissing(false);
       return;
     }
 
     function updateRect() {
       const target = document.querySelector(currentStep.selector || "");
       setTargetRect(target ? target.getBoundingClientRect() : null);
+      setTargetMissing(!target);
     }
 
     updateRect();
@@ -158,7 +181,7 @@ export function TutorialMode() {
       window.removeEventListener("resize", updateRect);
       window.removeEventListener("scroll", updateRect, true);
     };
-  }, [currentStep, open]);
+  }, [currentStep, open, stepPageMismatch]);
 
   function goToStep(nextIndex: number) {
     setIndex(Math.min(Math.max(nextIndex, 0), steps.length - 1));
@@ -214,6 +237,26 @@ export function TutorialMode() {
         </div>
         <h2>{currentStep.title}</h2>
         <p>{currentStep.body}</p>
+        {waitingForTarget ? (
+          <div className="tutorial-waiting" role="status">
+            <strong>{stepPageMismatch ? `Go to ${labelForPage(currentStep.page)}` : "Waiting for this section"}</strong>
+            <span>
+              {stepPageMismatch
+                ? `This step lives on the ${labelForPage(currentStep.page)} tab. Open that tab to continue.`
+                : "This step is on the current page, but its target is not visible yet. Open the relevant section or adjust the current view, and the highlight will appear here."}
+            </span>
+            {stepPageMismatch && stepPath ? (
+              <button
+                className="button"
+                onClick={handleClickAction(() => router.push(`${stepPath}${demoSuffix}` as Route))}
+                onPointerUp={handlePointerAction(() => router.push(`${stepPath}${demoSuffix}` as Route))}
+                type="button"
+              >
+                Open {labelForPage(currentStep.page)}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <div className="tutorial-progress" aria-hidden="true">
           <span style={{ width: `${((index + 1) / steps.length) * 100}%` }} />
         </div>
@@ -294,9 +337,38 @@ function tutorialCardStyle(rect: DOMRect | null): CSSProperties {
   };
 }
 
+function allTutorialSteps() {
+  return [
+    ...globalSteps,
+    ...pageSteps.dashboard,
+    ...pageSteps.pipelines,
+    ...pageSteps.connections,
+    ...pageSteps.settings
+  ];
+}
+
 function pageKeyForPath(pathname: string) {
   if (pathname.startsWith("/pipelines")) return "pipelines";
   if (pathname.startsWith("/connections")) return "connections";
   if (pathname.startsWith("/settings")) return "settings";
   return "dashboard";
+}
+
+function pathForPage(page: TutorialPageKey) {
+  return {
+    connections: "/connections",
+    dashboard: "/dashboard",
+    pipelines: "/pipelines",
+    settings: "/settings"
+  }[page];
+}
+
+function labelForPage(page?: TutorialPageKey) {
+  if (!page) return "this tab";
+  return {
+    connections: "Connections",
+    dashboard: "Queue",
+    pipelines: "Pipelines",
+    settings: "Settings"
+  }[page];
 }
