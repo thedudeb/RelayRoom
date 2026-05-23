@@ -49,9 +49,11 @@ export function AppShell({
   const pathname = usePathname();
   const demoSuffix = isDemo ? "?demo=true" : "";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
 
   // Close the drawer whenever the route changes (e.g. user taps a nav item).
   useEffect(() => {
+    setPendingPath(null);
     setMobileMenuOpen(false);
   }, [pathname]);
 
@@ -100,12 +102,14 @@ export function AppShell({
         <nav className="nav" aria-label="Primary navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const active = pathname.startsWith(item.href);
+            const activePath = pendingPath || pathname;
+            const active = activePath.startsWith(item.href);
             return (
               <NavLink
                 aria-current={active ? "page" : undefined}
                 key={item.href}
                 href={`${item.href}${demoSuffix}`}
+                onClick={() => setPendingPath(item.href)}
                 data-active={active}
                 data-tour={`nav-${item.label.toLowerCase()}`}
               >
