@@ -124,9 +124,13 @@ export default async function ConnectionsPage({
                 </td>
                 <td data-label="Status">
                   <span
+                    aria-label={connectionStatusTooltip(connection)}
                     className={`badge ${
                       connection.status === "active" ? "uploaded" : "failed"
-                    }`}
+                    } status-tooltip`}
+                    data-tooltip={connectionStatusTooltip(connection)}
+                    tabIndex={0}
+                    title={connectionStatusTooltip(connection)}
                   >
                     {connection.status}
                   </span>
@@ -161,6 +165,35 @@ export default async function ConnectionsPage({
       </div>
     </AppShell>
   );
+}
+
+function connectionStatusTooltip(connection: {
+  errorMessage?: string;
+  expiresAt?: string;
+  status: "active" | "expired" | "errored";
+}) {
+  if (connection.status === "errored") {
+    return connection.errorMessage
+      ? `Errored: ${connection.errorMessage}`
+      : "Errored. Reconnect this account to resume dependent pipelines.";
+  }
+
+  if (connection.status === "expired") {
+    return connection.expiresAt
+      ? `Expired ${formatConnectionDate(connection.expiresAt)}. Reconnect this account to refresh access.`
+      : "Expired. Reconnect this account to refresh access.";
+  }
+
+  return connection.expiresAt
+    ? `Active. Current access token expires ${formatConnectionDate(connection.expiresAt)} and refreshes silently.`
+    : "Active. RelayRoom can use this connection.";
+}
+
+function formatConnectionDate(isoDate: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(isoDate));
 }
 
 function connectionErrorMessage(error: string) {

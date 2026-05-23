@@ -1827,6 +1827,13 @@ html[data-privacy="on"] input[data-private] {
   transform: translate(-50%, 0);
 }
 
+[data-tooltip].status-tooltip::after {
+  max-width: 280px;
+  text-align: left;
+  white-space: normal;
+  width: max-content;
+}
+
 .select,
 .input,
 .textarea {

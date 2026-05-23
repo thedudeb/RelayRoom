@@ -198,6 +198,8 @@ export interface ConnectionSummary {
   accountEmail: string;
   status: ConnectionStatus;
   connectedAt: string;
+  errorMessage?: string;
+  expiresAt?: string;
   scopes: string[];
   usedByPipelines: string[];
   owner: UserSummary;

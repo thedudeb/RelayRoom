@@ -28,6 +28,7 @@ export const demoConnections: ConnectionSummary[] = [
     owner: demoOwner,
     status: "expired",
     connectedAt: "2026-04-28T10:30:00.000Z",
+    expiresAt: "2026-05-12T10:30:00.000Z",
     scopes: ["drive.readonly"],
     usedByPipelines: []
   },

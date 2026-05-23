@@ -313,6 +313,8 @@ function mapConnection(connection: ConnectionWithPipelines): ConnectionSummary {
     accountEmail: connection.accountEmail,
     status: connection.status.toLowerCase() as ConnectionSummary["status"],
     connectedAt: connection.connectedAt.toISOString(),
+    errorMessage: connection.errorMessage || undefined,
+    expiresAt: connection.expiresAt?.toISOString(),
     scopes: connection.scopes,
     usedByPipelines,
     owner: mapUser(connection.user)
