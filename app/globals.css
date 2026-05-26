@@ -4087,6 +4087,7 @@ td strong {
   border: 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  display: inline-flex;
   font: inherit;
   margin: 0;
   padding: 0;
@@ -4101,6 +4102,19 @@ td strong {
 .status-trigger:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+.status-cell {
+  align-items: flex-start;
+  display: inline-grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.status-reason {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.25;
 }
 
 .queue-detail-row td {

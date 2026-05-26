@@ -498,16 +498,20 @@ function QueueRow({
           {relativeAge(item.detectedAt, nowMs)}
         </td>
         <td data-label="Status">
-          <button
-            aria-expanded={Boolean(details)}
-            className="status-trigger"
-            onClick={() => onDetails(item)}
-            title="View queue details"
-            type="button"
-          >
-            <StatusBadge busyAction={busyAction} itemId={item.id} status={item.status} />
-          </button>
-          {item.failureReason ? <div className="muted">{item.failureReason}</div> : null}
+          <div className="status-cell">
+            <button
+              aria-expanded={Boolean(details)}
+              className="status-trigger"
+              onClick={() => onDetails(item)}
+              title="View queue details"
+              type="button"
+            >
+              <StatusBadge busyAction={busyAction} itemId={item.id} status={item.status} />
+            </button>
+            {item.failureReason ? (
+              <span className="status-reason">{item.failureReason.replaceAll("_", " ")}</span>
+            ) : null}
+          </div>
         </td>
         <td data-label="Playlist">
           <PlaylistCell item={item} />
