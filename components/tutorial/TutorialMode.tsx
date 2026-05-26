@@ -188,9 +188,23 @@ export function TutorialMode() {
       return;
     }
 
+    let animationFrame = 0;
+    let scrolledToTarget = false;
+
     function updateRect() {
       const target = document.querySelector(currentStep.selector || "");
-      setTargetRect(target ? target.getBoundingClientRect() : null);
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        if (!scrolledToTarget && !isRectComfortablyVisible(rect)) {
+          scrolledToTarget = true;
+          target.scrollIntoView({ block: "center", inline: "nearest" });
+          animationFrame = window.requestAnimationFrame(updateRect);
+          return;
+        }
+        setTargetRect(rect);
+      } else {
+        setTargetRect(null);
+      }
       setTargetMissing(!target);
     }
 
@@ -198,6 +212,7 @@ export function TutorialMode() {
     window.addEventListener("resize", updateRect);
     window.addEventListener("scroll", updateRect, true);
     return () => {
+      window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", updateRect);
       window.removeEventListener("scroll", updateRect, true);
     };
@@ -351,16 +366,28 @@ function tutorialCardStyle(rect: DOMRect | null): CSSProperties {
   }
 
   const cardWidth = Math.min(360, window.innerWidth - 32);
-  const left = Math.min(Math.max(rect.left, 16), window.innerWidth - cardWidth - 16);
+  const cardHeight = Math.min(360, window.innerHeight - 32);
+  const left = clamp(rect.left, 16, Math.max(16, window.innerWidth - cardWidth - 16));
   const below = rect.bottom + 18;
-  const above = rect.top - 260;
-  const top = below < window.innerHeight - 240 ? below : Math.max(16, above);
+  const above = rect.top - cardHeight - 18;
+  const preferredTop = below + cardHeight <= window.innerHeight - 16 ? below : above;
+  const top = clamp(preferredTop, 16, Math.max(16, window.innerHeight - cardHeight - 16));
 
   return {
     left,
+    maxHeight: "calc(100vh - 32px)",
+    overflowY: "auto",
     top,
     width: cardWidth
   };
+}
+
+function isRectComfortablyVisible(rect: DOMRect) {
+  return rect.top >= 72 && rect.bottom <= window.innerHeight - 72;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function allTutorialSteps() {

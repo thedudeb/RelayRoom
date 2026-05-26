@@ -305,7 +305,7 @@ export default async function PipelinesPage({
           ) : null}
         </section>
         <aside className="stack">
-          <div className="panel">
+          <div className="panel" data-tour="routing-rules">
             <h2>Routing rules</h2>
             <p className="muted">
               Rules run from lowest priority number to highest. The first matching rule assigns
@@ -419,7 +419,7 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
     pipeline.privacyStatus === "public" ? PrivacyStatus.PUBLIC : PrivacyStatus.UNLISTED;
 
   return (
-    <details className="edit-panel" data-tour="routing-rules">
+    <details className="edit-panel">
       <summary>Edit pipeline</summary>
       <form action={updatePipelineAction} className="form-grid">
         <input name="pipelineId" type="hidden" value={pipeline.id} />
@@ -513,7 +513,7 @@ function RuleManager({
   const defaultPlaylist = playlistOptions[0];
 
   return (
-    <details className="edit-panel">
+    <details className="edit-panel" data-tour="routing-rules">
       <summary>Routing rules</summary>
       <div className="rule-editor">
         <RuleTester pipeline={pipeline} />
