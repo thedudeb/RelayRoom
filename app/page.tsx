@@ -76,7 +76,7 @@ export default async function Home({
         eyebrow: "Access restricted",
         title: "This Google account is not on the RelayRoom allowlist.",
         body:
-          "Ask the RelayRoom owner to add your email to `AUTH_ALLOWED_EMAILS`, or use the approved Google account for this workspace."
+          "Ask the RelayRoom owner to add your email to `AUTH_ALLOWED_EMAILS`, add your Workspace domain to `AUTH_ALLOWED_DOMAINS`, or use the approved Google account for this workspace."
       }
     : showSignInRequired
       ? {

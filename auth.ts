@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/prisma";
+import { hasConfiguredSignInAllowlist, isAllowedSignInIdentity } from "@/lib/auth/signin-allowlist";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -44,8 +45,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return "/?error=AccessDenied";
       }
 
-      const allowedEmails = getAllowedSignInEmails();
-      if (allowedEmails.size === 0) {
+      if (!hasConfiguredSignInAllowlist()) {
         // Fail closed: an empty allowlist must never grant access. Dev convenience requires
         // explicit opt-in via AUTH_ALLOW_ANY=true and non-production NODE_ENV.
         if (process.env.NODE_ENV !== "production" && process.env.AUTH_ALLOW_ANY === "true") {
@@ -54,7 +54,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return "/?error=AccessDenied";
       }
 
-      return allowedEmails.has(email.toLowerCase()) || "/?error=AccessDenied";
+      const hostedDomain = typeof profile?.hd === "string" ? profile.hd : undefined;
+      return isAllowedSignInIdentity({ email, hostedDomain }) || "/?error=AccessDenied";
     }
   },
   events: {
@@ -73,16 +74,3 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }
   }
 });
-
-function getAllowedSignInEmails() {
-  const configuredEmails = [
-    process.env.INITIAL_ADMIN_EMAIL,
-    ...(process.env.AUTH_ALLOWED_EMAILS || "").split(",")
-  ];
-
-  return new Set(
-    configuredEmails
-      .map((email) => email?.trim().toLowerCase())
-      .filter((email): email is string => Boolean(email))
-  );
-}
