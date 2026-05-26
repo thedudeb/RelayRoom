@@ -81,16 +81,19 @@ export function QueueDashboard({
   currentUserId?: string;
   items: QueueItem[];
 }) {
-  // Local copy of items so demo-mode actions can mutate state visibly without
-  // hitting the server (server-side rejects demo writes). Real users still
-  // round-trip through the API; the local copy refreshes via router.refresh().
-  const [items, setItems] = useState<QueueItem[]>(itemsProp);
-  useEffect(() => {
-    setItems(itemsProp);
-  }, [itemsProp]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const isDemo = searchParams.get("demo") === "true";
+  // Demo actions need a local copy because the server rejects demo writes. Real
+  // workspaces must render directly from server props so owner-filter changes
+  // don't flash stale counts before the prop-sync effect runs.
+  const [demoItems, setDemoItems] = useState<QueueItem[]>(itemsProp);
+  useEffect(() => {
+    if (isDemo) {
+      setDemoItems(itemsProp);
+    }
+  }, [isDemo, itemsProp]);
+  const items = isDemo ? demoItems : itemsProp;
   const [nowMs, setNowMs] = useState(() => Date.now());
   const relativeNowMs = isDemo ? demoNow : nowMs;
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
@@ -174,7 +177,7 @@ export function QueueDashboard({
     // still round-trip the API below.
     if (isDemo) {
       const simulated = simulateDemoAction(item, action, actionPayload, youtubeUrl);
-      setItems((prev) =>
+      setDemoItems((prev) =>
         prev.map((existing) => (existing.id === item.id ? simulated.next : existing))
       );
       setBusyAction(null);
