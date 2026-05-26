@@ -18,6 +18,10 @@ import type { QueueItem, QueueStatus, RuleTrace } from "@/lib/domain/types";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { RuleTraceList } from "@/components/rules/RuleTraceList";
 import { useToast } from "@/components/toast/ToastContext";
+import {
+  workspaceOwnerFilterChangeEvent,
+  type WorkspaceOwnerFilterChangeDetail
+} from "@/lib/workspace/owner-filter-events";
 import { displayWorkspaceUser } from "@/lib/workspace/users";
 
 type QueueTab = "all" | QueueStatus;
@@ -76,14 +80,43 @@ const tabs: { label: string; status?: QueueStatus }[] = [
 
 export function QueueDashboard({
   currentUserId,
-  items: itemsProp
+  items: itemsProp,
+  selectedOwnerUserId
 }: {
   currentUserId?: string;
   items: QueueItem[];
+  selectedOwnerUserId?: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isDemo = searchParams.get("demo") === "true";
+  const requestedOwnerUserId = searchParams.get("userId") || undefined;
+  const allOwnerItemsRef = useRef<QueueItem[]>(itemsProp);
+  const [pendingOwnerFilter, setPendingOwnerFilter] = useState<{ userId?: string } | null>(null);
+
+  useEffect(() => {
+    function onOwnerFilterChange(event: Event) {
+      setPendingOwnerFilter({
+        userId: (event as CustomEvent<WorkspaceOwnerFilterChangeDetail>).detail.userId
+      });
+    }
+
+    window.addEventListener(workspaceOwnerFilterChangeEvent, onOwnerFilterChange);
+    return () => window.removeEventListener(workspaceOwnerFilterChangeEvent, onOwnerFilterChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isDemo && !selectedOwnerUserId) {
+      allOwnerItemsRef.current = itemsProp;
+    }
+  }, [isDemo, itemsProp, selectedOwnerUserId]);
+
+  useEffect(() => {
+    if (pendingOwnerFilter && selectedOwnerUserId === pendingOwnerFilter.userId) {
+      setPendingOwnerFilter(null);
+    }
+  }, [pendingOwnerFilter, selectedOwnerUserId]);
+
   // Demo actions need a local copy because the server rejects demo writes. Real
   // workspaces must render directly from server props so owner-filter changes
   // don't flash stale counts before the prop-sync effect runs.
@@ -93,7 +126,28 @@ export function QueueDashboard({
       setDemoItems(itemsProp);
     }
   }, [isDemo, itemsProp]);
-  const items = isDemo ? demoItems : itemsProp;
+
+  const activePendingOwnerFilter =
+    pendingOwnerFilter && selectedOwnerUserId !== pendingOwnerFilter.userId
+      ? pendingOwnerFilter
+      : null;
+  const optimisticOwnerUserId = activePendingOwnerFilter?.userId || requestedOwnerUserId;
+  const optimisticSourceItems =
+    activePendingOwnerFilter && allOwnerItemsRef.current.length > 0
+      ? allOwnerItemsRef.current
+      : itemsProp;
+  const canOptimisticallyFilterFromAllOwners =
+    !isDemo &&
+    !selectedOwnerUserId &&
+    Boolean(optimisticOwnerUserId) &&
+    optimisticSourceItems.some((item) => item.owner.id === optimisticOwnerUserId);
+  const items = isDemo
+    ? demoItems
+    : activePendingOwnerFilter && !activePendingOwnerFilter.userId
+      ? allOwnerItemsRef.current
+    : canOptimisticallyFilterFromAllOwners
+      ? optimisticSourceItems.filter((item) => item.owner.id === optimisticOwnerUserId)
+      : itemsProp;
   const [nowMs, setNowMs] = useState(() => Date.now());
   const relativeNowMs = isDemo ? demoNow : nowMs;
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
@@ -154,7 +208,7 @@ export function QueueDashboard({
     setNowMs(Date.now());
     const intervalId = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(intervalId);
-  }, [isDemo, items]);
+  }, [isDemo]);
 
   async function runQueueAction(
     item: QueueItem,
@@ -1300,49 +1354,9 @@ function Metric({
         <i aria-hidden="true" />
         {label}
       </span>
-      <strong>
-        <CountUp value={value} />
-      </strong>
+      <strong>{value}</strong>
     </button>
   );
-}
-
-function CountUp({ duration = 700, value }: { duration?: number; value: number }) {
-  const [display, setDisplay] = useState(value);
-  const latestValue = useRef(value);
-
-  useEffect(() => {
-    latestValue.current = value;
-    if (typeof window === "undefined") {
-      setDisplay(value);
-      return;
-    }
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setDisplay(value);
-      return;
-    }
-
-    let frame = 0;
-    const start = performance.now();
-    const from = display;
-
-    function tick(now: number) {
-      const elapsed = now - start;
-      const progress = Math.min(1, elapsed / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(Math.round(from + (latestValue.current - from) * eased));
-      if (progress < 1) {
-        frame = requestAnimationFrame(tick);
-      }
-    }
-
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-    // display is intentionally sampled at animation start.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [duration, value]);
-
-  return <>{display}</>;
 }
 
 function count(items: QueueItem[], status: QueueStatus): number {

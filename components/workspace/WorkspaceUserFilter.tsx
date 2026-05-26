@@ -2,7 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
+import { useEffect, useState } from "react";
 import type { UserSummary } from "@/lib/domain/types";
+import { announceWorkspaceOwnerFilterChange } from "@/lib/workspace/owner-filter-events";
 import { workspaceUserOptionLabel } from "@/lib/workspace/users";
 
 export function WorkspaceUserFilter({
@@ -21,17 +23,32 @@ export function WorkspaceUserFilter({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [pendingSelectedUserId, setPendingSelectedUserId] = useState<string | undefined | null>(
+    null
+  );
 
-  if (users.length < 2) {
-    return null;
-  }
+  const effectiveSelectedUserId =
+    pendingSelectedUserId !== null ? pendingSelectedUserId : selectedUserId;
 
   const currentUser = users.find((user) => user.id === currentUserId);
   const otherUsers = currentUser
     ? users.filter((user) => user.id !== currentUser.id)
     : users;
 
+  useEffect(() => {
+    if (pendingSelectedUserId !== null && selectedUserId === pendingSelectedUserId) {
+      setPendingSelectedUserId(null);
+    }
+  }, [pendingSelectedUserId, selectedUserId]);
+
+  if (users.length < 2) {
+    return null;
+  }
+
   function navigateToUser(userId?: string) {
+    setPendingSelectedUserId(userId);
+    announceWorkspaceOwnerFilterChange(userId);
+
     const nextParams = new URLSearchParams(searchParams.toString());
     if (userId) {
       nextParams.set("userId", userId);
@@ -44,14 +61,16 @@ export function WorkspaceUserFilter({
   }
 
   const selectedOtherUserId =
-    selectedUserId && selectedUserId !== currentUser?.id ? selectedUserId : "";
+    effectiveSelectedUserId && effectiveSelectedUserId !== currentUser?.id
+      ? effectiveSelectedUserId
+      : "";
 
   return (
     <div className="compact-filter" aria-label={title} data-tour="workspace-user-filter">
       <span>{title}</span>
       <div className="compact-filter-actions">
         <button
-          className={!selectedUserId ? "button primary" : "button"}
+          className={!effectiveSelectedUserId ? "button primary" : "button"}
           onClick={() => navigateToUser()}
           type="button"
         >
@@ -59,7 +78,7 @@ export function WorkspaceUserFilter({
         </button>
         {currentUser ? (
           <button
-            className={selectedUserId === currentUser.id ? "button primary" : "button"}
+            className={effectiveSelectedUserId === currentUser.id ? "button primary" : "button"}
             onClick={() => navigateToUser(currentUser.id)}
             type="button"
           >

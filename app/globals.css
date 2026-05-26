@@ -1441,21 +1441,33 @@ html[data-privacy="on"] input[data-private] {
   margin-bottom: var(--space-4);
 }
 
+.toolbar[data-tour="queue-filters"] {
+  align-items: stretch;
+  display: grid;
+  justify-content: stretch;
+  width: 100%;
+}
+
+.toolbar[data-tour="queue-filters"] .tabs {
+  justify-self: start;
+  max-width: 100%;
+}
+
 .filter-row {
   align-items: flex-end;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(128px, 1fr));
   gap: var(--space-3);
   padding: var(--space-3);
+  width: 100%;
 }
 
 .filter-field {
   display: flex;
-  flex: 1 1 160px;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
@@ -1479,8 +1491,9 @@ html[data-privacy="on"] input[data-private] {
   border-color: transparent;
   box-shadow: none;
   min-height: 32px;
-  min-width: 160px;
+  min-width: 0;
   padding-block: 0;
+  width: 100%;
 }
 
 .filter-row .select:hover {
@@ -1497,9 +1510,10 @@ html[data-privacy="on"] input[data-private] {
   background-color: transparent;
   border-color: transparent;
   box-shadow: none;
-  max-width: 150px;
+  max-width: none;
   min-height: 32px;
   padding-block: 0;
+  width: 100%;
 }
 
 .filter-row .filter-date-input:hover {

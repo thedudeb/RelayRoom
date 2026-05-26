@@ -16,6 +16,8 @@ interface TutorialStep {
   title: string;
 }
 
+const tutorialSessionKey = "relayroom:tutorial";
+
 const globalSteps: TutorialStep[] = [
   {
     selector: '[data-tour="nav-queue"]',
@@ -137,6 +139,7 @@ export function TutorialMode() {
   const steps = useMemo(() => allTutorialSteps(), []);
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [targetMissing, setTargetMissing] = useState(false);
@@ -145,10 +148,27 @@ export function TutorialMode() {
   const stepPageMismatch = Boolean(currentStep?.page && currentStep.page !== pageKey);
   const stepPath = currentStep?.page ? pathForPage(currentStep.page) : undefined;
   const waitingForTarget = open && Boolean(currentStep?.selector) && (stepPageMismatch || targetMissing);
+  const nextBlocked = stepPageMismatch;
 
   useEffect(() => {
+    const stored = restoreTutorialSession();
+    if (stored) {
+      setIndex(Math.min(Math.max(stored.index, 0), steps.length - 1));
+      setOpen(true);
+    }
+    setHydrated(true);
     setMounted(true);
-  }, []);
+  }, [steps.length]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (open) {
+      window.sessionStorage.setItem(tutorialSessionKey, JSON.stringify({ index }));
+      return;
+    }
+
+    window.sessionStorage.removeItem(tutorialSessionKey);
+  }, [hydrated, index, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -202,6 +222,10 @@ export function TutorialMode() {
   }
 
   function nextStep() {
+    if (nextBlocked) {
+      return;
+    }
+
     if (index === steps.length - 1) {
       setOpen(false);
       return;
@@ -248,8 +272,8 @@ export function TutorialMode() {
             {stepPageMismatch && stepPath ? (
               <button
                 className="button"
-                onClick={handleClickAction(() => router.push(`${stepPath}${demoSuffix}` as Route))}
-                onPointerUp={handlePointerAction(() => router.push(`${stepPath}${demoSuffix}` as Route))}
+                onClick={handleClickAction(() => navigateToStepPage(stepPath, demoSuffix, router.push))}
+                onPointerUp={handlePointerAction(() => navigateToStepPage(stepPath, demoSuffix, router.push))}
                 type="button"
               >
                 Open {labelForPage(currentStep.page)}
@@ -273,8 +297,10 @@ export function TutorialMode() {
           </button>
           <button
             className="button primary"
+            disabled={nextBlocked}
             onClick={handleClickAction(nextStep)}
             onPointerUp={handlePointerAction(nextStep)}
+            title={nextBlocked ? `Open ${labelForPage(currentStep.page)} to continue` : undefined}
             type="button"
           >
             {index === steps.length - 1 ? "Done" : "Next"}
@@ -371,4 +397,25 @@ function labelForPage(page?: TutorialPageKey) {
     pipelines: "Pipelines",
     settings: "Settings"
   }[page];
+}
+
+function navigateToStepPage(
+  stepPath: string | undefined,
+  demoSuffix: string,
+  push: (href: Route) => void
+) {
+  if (!stepPath) return;
+  push(`${stepPath}${demoSuffix}` as Route);
+}
+
+function restoreTutorialSession() {
+  try {
+    const stored = window.sessionStorage.getItem(tutorialSessionKey);
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored) as { index?: unknown };
+    return typeof parsed.index === "number" ? { index: parsed.index } : null;
+  } catch {
+    return null;
+  }
 }

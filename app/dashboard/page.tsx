@@ -36,7 +36,11 @@ export default async function DashboardPage({
         title="Queue owner"
         users={workspaceUsers}
       />
-      <QueueDashboard currentUserId={access.isDemo ? undefined : access.userId} items={queueItems} />
+      <QueueDashboard
+        currentUserId={access.isDemo ? undefined : access.userId}
+        items={queueItems}
+        selectedOwnerUserId={selectedUserId}
+      />
     </AppShell>
   );
 }
