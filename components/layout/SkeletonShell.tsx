@@ -11,17 +11,19 @@ import {
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 
 const navItems = [
-  { label: "Queue", icon: ListChecks },
-  { label: "Pipelines", icon: GitBranch },
-  { label: "Connections", icon: PlugZap },
-  { label: "Settings", icon: Settings }
+  { href: "/dashboard", label: "Queue", icon: ListChecks },
+  { href: "/pipelines", label: "Pipelines", icon: GitBranch },
+  { href: "/connections", label: "Connections", icon: PlugZap },
+  { href: "/settings", label: "Settings", icon: Settings }
 ] as const;
 
 export function SkeletonShell({
+  activeHref,
   titleWidth = 240,
   subtitleWidth = 360,
   children
 }: {
+  activeHref?: (typeof navItems)[number]["href"];
   titleWidth?: number;
   subtitleWidth?: number;
   children: React.ReactNode;
@@ -50,7 +52,12 @@ export function SkeletonShell({
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
-              <a key={item.label} aria-disabled="true">
+              <a
+                key={item.href}
+                aria-current={activeHref === item.href ? "page" : undefined}
+                aria-disabled="true"
+                data-active={activeHref === item.href}
+              >
                 <Icon aria-hidden="true" size={18} />
                 {item.label}
               </a>

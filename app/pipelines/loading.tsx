@@ -2,7 +2,7 @@ import { SkeletonShell } from "@/components/layout/SkeletonShell";
 
 export default function PipelinesLoading() {
   return (
-    <SkeletonShell titleWidth={180} subtitleWidth={420}>
+    <SkeletonShell activeHref="/pipelines" titleWidth={180} subtitleWidth={420}>
       <div className="split" aria-hidden="true">
         <section className="stack">
           <span className="skeleton skeleton-panel" />

@@ -2,6 +2,7 @@
 
 import Link, { type LinkProps } from "next/link";
 import { useRouter } from "next/navigation";
+import { flushSync } from "react-dom";
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from "react";
 
 type NavLinkProps = LinkProps<string> &
@@ -13,7 +14,9 @@ export function NavLink({ children, onClick, ...rest }: NavLinkProps) {
   const router = useRouter();
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    onClick?.(event);
+    flushSync(() => {
+      onClick?.(event);
+    });
     if (event.defaultPrevented) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (event.button !== 0) return;

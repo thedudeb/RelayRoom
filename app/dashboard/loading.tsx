@@ -2,7 +2,7 @@ import { SkeletonShell } from "@/components/layout/SkeletonShell";
 
 export default function DashboardLoading() {
   return (
-    <SkeletonShell titleWidth={260} subtitleWidth={460}>
+    <SkeletonShell activeHref="/dashboard" titleWidth={260} subtitleWidth={460}>
       <div className="metric-grid" aria-hidden="true">
         <span className="skeleton skeleton-card" />
         <span className="skeleton skeleton-card" />
