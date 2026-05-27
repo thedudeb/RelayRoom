@@ -1256,10 +1256,8 @@ function QueueDetailsPanel({
             <div className="attempt-list">
               {attempts.map((attempt) => (
                 <div className="attempt-item" key={attempt.attemptNumber}>
-                  <span className="attempt-index" aria-hidden="true">
-                    {attempt.attemptNumber}
-                  </span>
                   <div className="attempt-content">
+                    <span className="attempt-label">Attempt {attempt.attemptNumber}</span>
                     <div>
                       <strong>{attempt.success ? "Succeeded" : "Failed"}</strong>
                       <span>
