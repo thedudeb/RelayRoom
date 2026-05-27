@@ -140,15 +140,15 @@ export function DriveFolderPicker({
       <label>
         <span>Drive folder</span>
         <div className="picker-row">
-          <input
-            className="input"
+          <input name="sourceFolderName" type="hidden" value={folderName} />
+          <div
+            aria-disabled={disabled}
+            aria-label="Selected Drive folder"
+            className="input readonly-display"
             data-private
-            disabled={disabled}
-            name="sourceFolderName"
-            readOnly
-            required
-            value={folderName}
-          />
+          >
+            {folderName}
+          </div>
           <button
             className="button"
             disabled={disabled || isOpening}
@@ -164,16 +164,15 @@ export function DriveFolderPicker({
       </label>
       <label>
         <span>Drive folder ID</span>
-        <input
-          className="input"
+        <input name="sourceFolderId" type="hidden" value={folderId} />
+        <div
+          aria-disabled={disabled}
+          aria-label="Selected Drive folder ID"
+          className="input readonly-display"
           data-private
-          disabled={disabled}
-          name="sourceFolderId"
-          placeholder="Choose a folder with Picker"
-          readOnly
-          required
-          value={folderId}
-        />
+        >
+          {folderId || <span className="readonly-display-placeholder">Choose a folder with Picker</span>}
+        </div>
         {status ? (
           <small className={`field-hint ${statusTone}`}>{status}</small>
         ) : (

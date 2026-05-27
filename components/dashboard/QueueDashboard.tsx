@@ -18,6 +18,7 @@ import type { QueueItem, QueueStatus, RuleTrace } from "@/lib/domain/types";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { RuleTraceList } from "@/components/rules/RuleTraceList";
 import { useToast } from "@/components/toast/ToastContext";
+import { FloatingTooltip } from "@/components/ui/FloatingTooltip";
 import {
   workspaceOwnerFilterChangeEvent,
   type WorkspaceOwnerFilterChangeDetail
@@ -444,7 +445,7 @@ export function QueueDashboard({
         </div>
       </section>
 
-      <div className="table-wrap responsive-table-wrap" data-tour="queue-table">
+      <div className="table-wrap responsive-table-wrap tooltip-overflow-wrap" data-tour="queue-table">
         <table className="responsive-table">
           <thead>
             <tr>
@@ -553,15 +554,16 @@ function QueueRow({
         </td>
         <td data-label="Status">
           <div className="status-cell">
-            <button
-              aria-expanded={Boolean(details)}
-              className="status-trigger"
-              onClick={() => onDetails(item)}
-              title="View queue details"
-              type="button"
-            >
-              <StatusBadge busyAction={busyAction} itemId={item.id} status={item.status} />
-            </button>
+            <FloatingTooltip label="View queue details">
+              <button
+                aria-expanded={Boolean(details)}
+                className="status-trigger"
+                onClick={() => onDetails(item)}
+                type="button"
+              >
+                <StatusBadge busyAction={busyAction} itemId={item.id} status={item.status} />
+              </button>
+            </FloatingTooltip>
             {item.failureReason ? (
               <span className="status-reason">{item.failureReason.replaceAll("_", " ")}</span>
             ) : null}

@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { ConnectionActions } from "@/components/connections/ConnectionActions";
 import { WorkspaceUserFilter } from "@/components/workspace/WorkspaceUserFilter";
+import { FloatingTooltip } from "@/components/ui/FloatingTooltip";
 import { requireAppAccess } from "@/lib/auth/account";
 import {
   getConnectionsForDemo,
@@ -97,7 +98,7 @@ export default async function ConnectionsPage({
         title="Connection owner"
         users={workspaceUsers}
       />
-      <div className="table-wrap responsive-table-wrap" data-tour="connection-table">
+      <div className="table-wrap responsive-table-wrap tooltip-overflow-wrap" data-tour="connection-table">
         <table className="responsive-table">
           <thead>
             <tr>
@@ -123,17 +124,17 @@ export default async function ConnectionsPage({
                   <div className="muted" data-private>{connection.owner.email}</div>
                 </td>
                 <td data-label="Status">
-                  <span
-                    aria-label={connectionStatusTooltip(connection)}
-                    className={`badge ${
-                      connection.status === "active" ? "uploaded" : "failed"
-                    } status-tooltip`}
-                    data-tooltip={connectionStatusTooltip(connection)}
-                    tabIndex={0}
-                    title={connectionStatusTooltip(connection)}
-                  >
-                    {connection.status}
-                  </span>
+                  <FloatingTooltip label={connectionStatusTooltip(connection)}>
+                    <span
+                      aria-label={connectionStatusTooltip(connection)}
+                      className={`badge ${
+                        connection.status === "active" ? "uploaded" : "failed"
+                      }`}
+                      tabIndex={0}
+                    >
+                      {connection.status}
+                    </span>
+                  </FloatingTooltip>
                 </td>
                 <td data-label="Scopes">{connection.scopes.join(", ")}</td>
                 <td data-label="Used by">
