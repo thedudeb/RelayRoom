@@ -1,3 +1,8 @@
+// Allowlist mirroring the video formats YouTube accepts for upload. A file is
+// considered uploadable if EITHER its extension OR its MIME type matches, since
+// Drive metadata is inconsistent — some files arrive with a generic/missing
+// MIME type but a clear extension, and vice versa.
+
 const SUPPORTED_VIDEO_EXTENSIONS = new Set([
   "3gp",
   "3gpp",
@@ -35,6 +40,7 @@ const SUPPORTED_VIDEO_MIME_TYPES = new Set([
   "application/vnd.ms-asf"
 ]);
 
+/** True when the file's extension or MIME type is on YouTube's upload allowlist. */
 export function isYouTubeSupportedVideoFile({
   filename,
   mimeType
@@ -56,6 +62,9 @@ export function isYouTubeSupportedVideoFile({
   return false;
 }
 
+// Produces a human-readable reason a file was rejected, for surfacing in the
+// queue's failure detail. Checks extension first, then MIME type, then a
+// generic fallback when neither signal is present at all.
 export function describeUnsupportedVideoFile({
   filename,
   mimeType
@@ -77,11 +86,14 @@ export function describeUnsupportedVideoFile({
   return "Missing a supported video extension or MIME type.";
 }
 
+/** Lowercased final extension of a filename, or undefined when there isn't one. */
 export function getFileExtension(filename?: string | null) {
   if (!filename) {
     return undefined;
   }
 
+  // Match the run of characters after the last dot, excluding path separators
+  // so a dot in a directory name can't be mistaken for an extension.
   const match = /\.([^.\/\\]+)$/.exec(filename.trim());
   return match?.[1]?.toLowerCase();
 }

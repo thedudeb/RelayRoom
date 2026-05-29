@@ -19,6 +19,11 @@ interface PlaylistResponse {
   playlists?: PlaylistOption[];
 }
 
+// Destination picker in the create-pipeline form: choose a YouTube connection,
+// lazily load its playlists, and either pick one or create a new one — all
+// against the /api/oauth/youtube/playlists endpoint. The chosen playlist id +
+// name are written to hidden inputs so they submit with the form. Playlists load
+// on demand (not eagerly) because the call costs YouTube API quota.
 export function YouTubePlaylistPicker({
   disabled,
   youtubeConnections
@@ -89,6 +94,8 @@ export function YouTubePlaylistPicker({
       return;
     }
 
+    // Reuse a locally-known playlist with the same name instead of hitting the
+    // API (the server enforces the same idempotency, but this avoids the call).
     const existingPlaylist = playlists.find(
       (playlist) => playlist.title.trim().toLowerCase() === title.toLowerCase()
     );
@@ -222,6 +229,8 @@ export function YouTubePlaylistPicker({
   );
 }
 
+// Maps the playlist API's error codes to friendly messages, with a generic
+// fallback for anything unrecognized.
 function playlistErrorMessage(error?: string) {
   const messages: Record<string, string> = {
     MissingPlaylistTitle: "Enter a playlist name first.",

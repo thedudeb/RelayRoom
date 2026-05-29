@@ -7,11 +7,21 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+// Guided product tour. A single ordered list of steps (global nav steps first,
+// then per-page steps) walks the user through the app. Each step can target a
+// DOM element via a `data-tour` selector, which is spotlighted with a floating
+// card. Steps that live on another page prompt the user to navigate there before
+// continuing. Progress is persisted in sessionStorage so the tour survives the
+// page navigations it asks the user to make.
+
 type TutorialPageKey = "dashboard" | "pipelines" | "connections" | "settings";
 
 interface TutorialStep {
   body: string;
+  // The page this step's target lives on; if it differs from the current page,
+  // the tour pauses and offers a link to navigate there.
   page?: TutorialPageKey;
+  // CSS selector (a data-tour attribute) for the element to spotlight.
   selector?: string;
   title: string;
 }
@@ -150,6 +160,9 @@ export function TutorialMode() {
   const waitingForTarget = open && Boolean(currentStep?.selector) && (stepPageMismatch || targetMissing);
   const nextBlocked = stepPageMismatch;
 
+  // On mount, resume an in-progress tour from sessionStorage (it may have been
+  // started before a navigation). `mounted` also gates the portal so it only
+  // renders client-side.
   useEffect(() => {
     const stored = restoreTutorialSession();
     if (stored) {
@@ -160,6 +173,9 @@ export function TutorialMode() {
     setMounted(true);
   }, [steps.length]);
 
+  // Persist progress while the tour is open; clear it when closed. Gated on
+  // `hydrated` so the initial mount doesn't clobber a stored session before it's
+  // been read.
   useEffect(() => {
     if (!hydrated) return;
     if (open) {
@@ -181,6 +197,10 @@ export function TutorialMode() {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [open]);
 
+  // Track the spotlight target's position. Re-measures on scroll/resize so the
+  // highlight and card stay glued to the element, and scrolls it into view once
+  // if it's off-screen. `targetMissing` flags when the selector matches nothing
+  // yet (e.g. a collapsed section), which the card surfaces as a "waiting" hint.
   useEffect(() => {
     if (!open || !currentStep?.selector || stepPageMismatch) {
       setTargetRect(null);
@@ -195,6 +215,8 @@ export function TutorialMode() {
       const target = document.querySelector(currentStep.selector || "");
       if (target) {
         const rect = target.getBoundingClientRect();
+        // Scroll the target into view at most once, then re-measure on the next
+        // frame after the scroll settles.
         if (!scrolledToTarget && !isRectComfortablyVisible(rect)) {
           scrolledToTarget = true;
           target.scrollIntoView({ block: "center", inline: "nearest" });
@@ -222,6 +244,11 @@ export function TutorialMode() {
     setIndex(Math.min(Math.max(nextIndex, 0), steps.length - 1));
   }
 
+  // The nav buttons listen on both onPointerUp and onClick so they feel
+  // responsive on touch yet still work for keyboard/synthetic clicks. These two
+  // wrappers de-dupe the pair: pointerUp records a timestamp, and the click
+  // handler ignores a click that lands within 350ms of it (the browser's
+  // pointer→click echo) so the action doesn't fire twice.
   function handlePointerAction(action: () => void) {
     return () => {
       pointerHandledAt.current = Date.now();
@@ -345,6 +372,8 @@ export function TutorialMode() {
   );
 }
 
+// Renders the highlight ring around the target element, inflated 8px on each
+// side so the element isn't flush against the cutout.
 function Spotlight({ rect }: { rect: DOMRect }) {
   return (
     <div
@@ -360,6 +389,10 @@ function Spotlight({ rect }: { rect: DOMRect }) {
   );
 }
 
+// Positions the tutorial card relative to its target: prefer just below the
+// element, flip above when there isn't room, and clamp within a 16px viewport
+// margin so the card is never cut off. Returns {} (centered via CSS) when there's
+// no target.
 function tutorialCardStyle(rect: DOMRect | null): CSSProperties {
   if (!rect) {
     return {};
@@ -382,6 +415,8 @@ function tutorialCardStyle(rect: DOMRect | null): CSSProperties {
   };
 }
 
+// True when the element sits clear of the top/bottom 72px (where fixed headers
+// or the card might cover it), so we only auto-scroll when it's actually cramped.
 function isRectComfortablyVisible(rect: DOMRect) {
   return rect.top >= 72 && rect.bottom <= window.innerHeight - 72;
 }
@@ -390,6 +425,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+// Flattens the global + per-page steps into the single ordered tour sequence.
 function allTutorialSteps() {
   return [
     ...globalSteps,
@@ -400,6 +436,7 @@ function allTutorialSteps() {
   ];
 }
 
+// Maps the current pathname to a tutorial page key (defaulting to dashboard).
 function pageKeyForPath(pathname: string) {
   if (pathname.startsWith("/pipelines")) return "pipelines";
   if (pathname.startsWith("/connections")) return "connections";
@@ -435,6 +472,8 @@ function navigateToStepPage(
   push(`${stepPath}${demoSuffix}` as Route);
 }
 
+// Reads the persisted tour position, tolerating missing/corrupt storage by
+// returning null (no resume).
 function restoreTutorialSession() {
   try {
     const stored = window.sessionStorage.getItem(tutorialSessionKey);

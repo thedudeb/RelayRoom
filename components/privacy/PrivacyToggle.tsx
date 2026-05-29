@@ -3,9 +3,16 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 
+// Toggles "privacy mode", which blurs/masks sensitive values (anything marked
+// data-private) so the app can be screenshotted or demoed safely. State is
+// mirrored onto <html data-privacy> for CSS to act on and persisted in
+// localStorage; the inline script in layout.tsx applies it before first paint to
+// avoid a flash.
 export function PrivacyToggle({ compact = false }: { compact?: boolean }) {
   const [isPrivate, setIsPrivate] = useState(false);
 
+  // Hydrate from localStorage on mount. Starts false to match the server render,
+  // then syncs to the stored preference (avoids a hydration mismatch).
   useEffect(() => {
     const stored = window.localStorage.getItem("privacyMode") === "on";
     setIsPrivate(stored);

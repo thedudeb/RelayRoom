@@ -19,6 +19,12 @@ import { RoutingDemo } from "@/components/landing/RoutingDemo";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { signIn } from "@/auth";
 
+// Public marketing landing page (the app's "/" route). Mostly static JSX; the
+// dynamic parts are the Google sign-in server action and an optional auth-error
+// modal driven by the ?error query param.
+
+// Sample data for the static hero/product mockups — illustrative only, not real
+// queue rows.
 const heroRows = [
   {
     file: "Engineering Standup 2026-05-13.mp4",
@@ -47,6 +53,9 @@ const workflow = [
   { label: "Recover issues", detail: "Approve, retry, route, skip, or mark handled." }
 ];
 
+// Server action for the "Log in with Google" button. `prompt: select_account`
+// forces Google's account chooser so a user signed into multiple accounts can
+// pick the approved one rather than being silently logged in with the wrong one.
 async function signInWithGoogle() {
   "use server";
   await signIn("google", { redirectTo: "/dashboard" }, { prompt: "select_account" });
@@ -69,6 +78,8 @@ export default async function Home({
   searchParams?: Promise<{ error?: string }>;
 }) {
   const params = await searchParams;
+  // Auth redirects land back here with an ?error code; translate the two we
+  // expect into a modal explaining what happened and what to do next.
   const showAccessDenied = params?.error === "AccessDenied";
   const showSignInRequired = params?.error === "SignInRequired";
   const authDialog = showAccessDenied

@@ -9,6 +9,9 @@ interface ConnectionOption {
   detail: string;
 }
 
+// Drive source inputs for the create-pipeline form: a connection picker paired
+// with a folder picker. Tracks the chosen connection in state so the folder
+// picker below always browses the currently-selected account's Drive.
 export function CreateDriveSourceFields({
   disabled,
   driveConnections

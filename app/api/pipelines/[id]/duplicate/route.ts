@@ -5,10 +5,14 @@ import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
+// Clones an existing pipeline (with all its rules) as a new "Copy of ..."
+// pipeline. The copy starts DISABLED with a fresh processed-from watermark so it
+// doesn't immediately reprocess the source folder's backlog.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Mutation guard chain: no cross-site calls, no demo (read-only) users.
   const originError = rejectCrossSiteMutation(request);
   if (originError) {
     return originError;
@@ -61,6 +65,8 @@ export async function POST(
     return NextResponse.json({ error: "PipelineNotFound" }, { status: 404 });
   }
 
+  // Recreate the pipeline and its rules in one nested create. Connection ids and
+  // folder selection carry over; status/name/watermark are deliberately reset.
   const duplicate = await prisma.pipeline.create({
     data: {
       defaultDescriptionTemplate: source.defaultDescriptionTemplate,

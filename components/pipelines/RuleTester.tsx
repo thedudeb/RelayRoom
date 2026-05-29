@@ -11,6 +11,10 @@ interface TraceSummary {
   matched: boolean;
 }
 
+// Interactive "what would route?" sandbox in the rule editor. Lets the user type
+// a hypothetical file and runs the real evaluatePipelineRules engine on it
+// client-side — no server round-trip — showing the matched rule and a per-node
+// trace. Time-based rules are evaluated in the browser's timezone.
 export function RuleTester({ pipeline }: { pipeline: Pipeline }) {
   const [filename, setFilename] = useState("Engineering Standup 2026-05-13.mp4");
   const [mimeType, setMimeType] = useState("video/mp4");
@@ -18,6 +22,9 @@ export function RuleTester({ pipeline }: { pipeline: Pipeline }) {
   const [sizeMb, setSizeMb] = useState("24");
   const timezone = useMemo(() => browserTimezone(), []);
 
+  // Recompute the routing result whenever any sample input changes. Builds a
+  // synthetic DriveFileMetadata and falls back to sane values for blank/invalid
+  // inputs so the engine never sees garbage.
   const result = useMemo(() => {
     const created = new Date(createdTime);
     const file: DriveFileMetadata = {
@@ -146,6 +153,9 @@ function RuleTraceRow({ trace }: { trace: RuleTrace }) {
   );
 }
 
+// Flattens the recursive evaluation trace into a flat list of per-condition
+// summary chips for display. The `path` accumulates node indices to keep React
+// keys unique across the tree.
 function flattenTrace(trace: EvaluationTrace, path = "root"): TraceSummary[] {
   if (trace.type === "condition") {
     return [
@@ -177,6 +187,7 @@ function extensionFromFilename(filename: string) {
   return /\.([^.\/\\]+)$/.exec(filename.trim())?.[1]?.toLowerCase();
 }
 
+// Best-effort IANA timezone of the browser, defaulting to UTC if unavailable.
 function browserTimezone() {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -185,6 +196,9 @@ function browserTimezone() {
   }
 }
 
+// Formats a Date as the local "YYYY-MM-DDTHH:mm" string a datetime-local input
+// expects. Subtracts the timezone offset first so toISOString (which is UTC)
+// yields local wall-clock time rather than shifting it.
 function localDateTimeValue(date: Date) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);

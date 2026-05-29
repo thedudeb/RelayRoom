@@ -1,5 +1,11 @@
 import type { QueueStatus } from "@/lib/domain/types";
 
+// State machine for a queued upload. A queue item moves through statuses
+// (detected → needs_routing/needs_approval → uploading → uploaded/failed, plus
+// skipped/externally_handled side states) only via the explicit transitions
+// declared below. Centralizing the rules here keeps the API, UI, and workers
+// from inventing illegal jumps.
+
 export type QueueAction =
   | "evaluate_rules"
   | "approve"
@@ -14,6 +20,8 @@ export type QueueAction =
   | "mark_externally_handled"
   | "verify_duplicate";
 
+// Allowed (status, action) → next-status edges. A status missing an action
+// means that action is illegal from there.
 const transitions: Record<QueueStatus, Partial<Record<QueueAction, QueueStatus>>> = {
   detected: {
     evaluate_rules: "needs_routing",
@@ -50,6 +58,13 @@ const transitions: Record<QueueStatus, Partial<Record<QueueAction, QueueStatus>>
   }
 };
 
+/**
+ * Resolves the next status for an action, throwing if the transition is illegal.
+ * `restore` is special-cased: it takes an explicit target (where the item was
+ * before being skipped/externally-handled) but that target is constrained to
+ * the "actionable" statuses so a restore can't drop an item straight back into
+ * uploading or uploaded.
+ */
 export function nextQueueStatus(
   current: QueueStatus,
   action: QueueAction,
@@ -70,6 +85,7 @@ export function nextQueueStatus(
   return next;
 }
 
+/** Lists the actions currently valid from a status — drives which buttons the UI shows. */
 export function actionsForStatus(status: QueueStatus): QueueAction[] {
   return Object.keys(transitions[status]) as QueueAction[];
 }

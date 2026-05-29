@@ -9,6 +9,10 @@ import {
 } from "@/lib/data/repository";
 import { selectedWorkspaceUserId } from "@/lib/workspace/users";
 
+// Server component for the operations queue. Resolves access (real user vs.
+// demo), loads the queue — optionally filtered to a chosen workspace owner — and
+// renders it inside the app shell. The ?userId/?demo search params drive both
+// the owner filter and demo mode.
 export default async function DashboardPage({
   searchParams
 }: {
@@ -16,7 +20,9 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
+  // Demo mode has no real workspace, so skip the owner filter entirely.
   const workspaceUsers = access.isDemo ? [] : await getWorkspaceUsers();
+  // Validate the requested owner against the real list (ignores stale ids).
   const selectedUserId = selectedWorkspaceUserId(params?.userId, workspaceUsers);
   const queueItems = access.isDemo
     ? await getQueueItemsForDemo()

@@ -57,12 +57,22 @@ import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+// Pipelines management page. This single file holds the server component that
+// renders the list/edit UI plus all the server actions behind its forms
+// (create/update/archive pipelines, CRUD + reorder rules) and the form-parsing
+// helpers that turn raw FormData into validated domain objects. Co-locating the
+// actions with the page keeps each form's contract in one place.
+
 interface ConnectionOption {
   id: string;
   label: string;
   detail: string;
 }
 
+// Server component entry point. Resolves access, loads the user's (or demo's)
+// pipelines + queue + connection options, and renders everything inside the app
+// shell. The many ?-params are post-action redirect flags that drive the
+// success/error notices at the top of the page.
 export default async function PipelinesPage({
   searchParams
 }: {
@@ -213,6 +223,8 @@ export default async function PipelinesPage({
           )}
           {pipelines.map((pipeline) => (
             <div className="panel" key={pipeline.id}>
+              {/* Only the pipeline's creator (and never in demo mode) may edit,
+                  run detection, or change status — others get a read-only view. */}
               {(() => {
                 const canManagePipeline = !access.isDemo && pipeline.owner.id === access.userId;
 
@@ -318,6 +330,8 @@ export default async function PipelinesPage({
   );
 }
 
+// Builds a /pipelines URL that preserves the current demo flag, owner filter,
+// and active/archived view when navigating between the two view tabs.
 function pipelinesViewHref({
   isDemo,
   selectedUserId,
@@ -335,6 +349,9 @@ function pipelinesViewHref({
   return (query ? `/pipelines?${query}` : "/pipelines") as Route;
 }
 
+// The "new pipeline" form. Disabled (read-only) unless the user has at least one
+// active Drive *and* one active YouTube connection, since a pipeline needs both
+// endpoints to function.
 function CreatePipelinePanel({
   driveConnections,
   isDemo,
@@ -399,12 +416,16 @@ function CreatePipelinePanel({
   );
 }
 
+// Reuses the queue-status badge palette for pipeline status so colors stay
+// consistent: enabled→green (uploaded), errored→red (failed), disabled→amber.
 function pipelineStatusBadgeClass(status: Pipeline["status"]) {
   if (status === "enabled") return "uploaded";
   if (status === "errored") return "failed";
   return "needs_routing";
 }
 
+// Count of this pipeline's queue items that need operator attention — the
+// "N waiting" pill on each pipeline card.
 function waitingCount(queueItems: QueueItem[], pipelineId: string): number {
   return queueItems.filter(
     (item) =>
@@ -413,6 +434,8 @@ function waitingCount(queueItems: QueueItem[], pipelineId: string): number {
   ).length;
 }
 
+// Collapsible edit form for an existing pipeline. Maps the app-layer string
+// enums back to Prisma enums for the form controls' default values.
 function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
   const mode = pipeline.mode === "manual_approval" ? PipelineMode.MANUAL_APPROVAL : PipelineMode.AUTO;
   const privacyStatus =
@@ -463,6 +486,9 @@ function EditPipelinePanel({ pipeline }: { pipeline: Pipeline }) {
   );
 }
 
+// Shared title/description template inputs used by both the create and edit
+// forms. Templates support {filename}/{date}/{rule_name}/etc. placeholders that
+// the upload step interpolates per file.
 function TemplateFields({
   descriptionDefault,
   disabled = false,
@@ -503,6 +529,10 @@ function TemplateFields({
   );
 }
 
+// Renders the full rule list for a pipeline: a live rule tester, per-rule edit
+// forms, priority reorder controls (Top/Up/Down/Bottom, each its own form
+// posting to moveRuleAction), delete, and an add-rule form. The Up/Top buttons
+// disable on the first rule and Down/Bottom on the last.
 function RuleManager({
   pipeline,
   playlistOptions
@@ -631,6 +661,11 @@ function RuleManager({
   );
 }
 
+// The shared body of both the create- and edit-rule forms: name, playlist
+// target, the condition editor (offered in a visual builder or a "classic" flat
+// form), and optional per-rule template overrides. Pre-extracts the first two
+// top-level conditions and first nested group so the classic editor can render
+// existing rules into its fixed set of inputs.
 function RuleFields({
   conditions,
   defaultDescriptionTemplate,
@@ -704,6 +739,11 @@ function RuleFields({
   );
 }
 
+// Non-visual fallback rule editor: a fixed-shape form covering a root group of
+// up to two conditions plus one optional nested group of up to two conditions.
+// This is intentionally less expressive than the visual builder — it's the
+// progressive-enhancement path that works without client JS. buildConditionTree
+// parses these named fields back into a ConditionGroup.
 function ClassicRuleEditor({
   conditions,
   nestedGroup,
@@ -774,6 +814,9 @@ function ClassicRuleEditor({
   );
 }
 
+// Loads the user's active Drive and YouTube connections, split into the two
+// option lists the create form needs. YouTube options prefer the channel name
+// over the raw connection label so the dropdown shows recognizable channels.
 async function getPipelineConnectionOptions(userId: string) {
   const connections = await prisma.oAuthConnection.findMany({
     where: {
@@ -808,6 +851,10 @@ async function getPipelineConnectionOptions(userId: string) {
   };
 }
 
+// Server action: validate the new-pipeline form and create the pipeline plus a
+// catch-all "Default route" rule. Validation failures redirect back with an
+// ?error code rather than throwing, so the page can show a friendly notice. The
+// pipeline is created DISABLED so the user reviews it before detection starts.
 async function createPipelineAction(formData: FormData) {
   "use server";
 
@@ -832,6 +879,9 @@ async function createPipelineAction(formData: FormData) {
     PrivacyStatus.PUBLIC,
     PrivacyStatus.UNLISTED
   ]);
+  // Public uploads are irreversible-ish and high-stakes, so require an explicit
+  // typed confirmation (the user must re-type the pipeline name) before allowing
+  // PUBLIC privacy.
   if (privacyStatus === PrivacyStatus.PUBLIC && !hasPublicPrivacyConfirmation(formData, name)) {
     redirect("/pipelines?error=PublicPrivacyConfirmationRequired");
   }
@@ -879,6 +929,8 @@ async function createPipelineAction(formData: FormData) {
     redirect("/pipelines?error=MissingTokenKey");
   }
 
+  // Confirm the folder actually exists and is reachable via this connection
+  // before persisting, so we don't create a pipeline that can never detect.
   const verifiedFolder = await verifyDriveFolderSelection({
     connection: driveConnection,
     folderId: sourceFolderId,
@@ -905,6 +957,9 @@ async function createPipelineAction(formData: FormData) {
       status: PipelineStatus.DISABLED,
       userId: access.userId,
       youtubeConnectionId: youtubeConnection.id,
+      // Seed a catch-all rule (filename matches `.*`) so a brand-new pipeline
+      // routes every detected file to the chosen playlist out of the box; the
+      // user can refine or add higher-priority rules afterward.
       rules: {
         create: {
           conditionTree: {
@@ -936,6 +991,10 @@ async function createPipelineAction(formData: FormData) {
   redirect("/pipelines?created=true");
 }
 
+// Server action: update an existing pipeline's settings. Mirrors the create
+// validation, but only prompts for public-privacy confirmation when actually
+// switching INTO public (not when it was already public), and clears any prior
+// errorMessage on a successful save.
 async function updatePipelineAction(formData: FormData) {
   "use server";
 
@@ -997,6 +1056,9 @@ async function updatePipelineAction(formData: FormData) {
     redirect("/pipelines?error=InvalidDriveFolder");
   }
 
+  // If the watched folder changed, reset the watermark and last-detection time
+  // so the new folder is treated as a fresh cold start rather than replaying or
+  // skipping based on the old folder's history (see the folderChanged block below).
   const folderChanged = pipeline.sourceFolderId !== verifiedFolder.id;
   const switchingToPublic =
     pipeline.privacyStatus !== PrivacyStatus.PUBLIC && privacyStatus === PrivacyStatus.PUBLIC;
@@ -1024,6 +1086,9 @@ async function updatePipelineAction(formData: FormData) {
   redirect("/pipelines?updated=true");
 }
 
+// Server action: add a routing rule to a pipeline. The new rule is appended at
+// the end (max existing priority + 1) and its target playlist is verified
+// against the live YouTube channel before saving.
 async function createRuleAction(formData: FormData) {
   "use server";
 
@@ -1071,6 +1136,7 @@ async function createRuleAction(formData: FormData) {
     redirect("/pipelines?error=MissingRuleFields");
   }
 
+  // Append after the current lowest-priority (highest-number) rule.
   const nextPriority =
     pipeline.rules.reduce((max, rule) => Math.max(max, rule.priority), 0) + 1;
 
@@ -1091,6 +1157,9 @@ async function createRuleAction(formData: FormData) {
   redirect("/pipelines?ruleCreated=true");
 }
 
+// Server action: edit an existing rule's name, conditions, playlist, and
+// template overrides. Scoped to rules on the caller's own, non-archived
+// pipelines, and re-verifies the playlist before saving.
 async function updateRuleAction(formData: FormData) {
   "use server";
 
@@ -1154,6 +1223,9 @@ async function updateRuleAction(formData: FormData) {
   redirect("/pipelines?ruleUpdated=true");
 }
 
+// Confirms a rule's target playlist still exists on the pipeline's YouTube
+// channel (using a freshly-refreshed access token) before a rule is saved, so
+// routing can't point at a deleted playlist. Returns null on any failure.
 async function verifyRulePlaylist({
   playlistId,
   userId,
@@ -1192,6 +1264,9 @@ async function verifyRulePlaylist({
   return verifyChannelPlaylist({ accessToken, playlistId });
 }
 
+// Server action: reorder a rule (up/down/top/bottom) within its pipeline. Uses
+// the two-pass priority rewrite (see rule-ordering.ts) to avoid colliding on the
+// unique (pipeline, priority) constraint mid-update.
 async function moveRuleAction(formData: FormData) {
   "use server";
 
@@ -1256,6 +1331,9 @@ async function moveRuleAction(formData: FormData) {
   redirect("/pipelines?ruleUpdated=true");
 }
 
+// Server action: delete a rule and re-pack the survivors' priorities to a
+// contiguous 1..N. Refuses to delete the last rule, since a pipeline with no
+// rules could never route a file.
 async function deleteRuleAction(formData: FormData) {
   "use server";
 
@@ -1295,6 +1373,9 @@ async function deleteRuleAction(formData: FormData) {
 
   const remainingRules = rules.filter((candidate) => candidate.id !== ruleId);
 
+  // Delete + renumber in one transaction. Deleting the row first frees its
+  // priority, so reassigning the rest to 1..N can't collide on the unique
+  // (pipeline, priority) constraint.
   await prisma.$transaction([
     prisma.rule.delete({ where: { id: ruleId } }),
     ...remainingRules.map((candidate, index) =>
@@ -1309,6 +1390,11 @@ async function deleteRuleAction(formData: FormData) {
   redirect("/pipelines?ruleDeleted=true");
 }
 
+// --- Form parsing helpers -------------------------------------------------
+// The server actions above never trust raw FormData; these helpers coerce and
+// validate it. getEnumValue in particular falls back to the first allowed value
+// rather than erroring, so a tampered/missing select can't inject a bad enum.
+
 function getRequiredFormValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
@@ -1318,11 +1404,16 @@ function optionalFormValue(formData: FormData, key: string) {
   return value.length ? value : null;
 }
 
+// Returns the submitted value only if it's one of the allowed values, else the
+// first allowed value as a safe default.
 function getEnumValue<T extends string>(formData: FormData, key: string, values: readonly T[]) {
   const value = String(formData.get(key) || "");
   return values.includes(value as T) ? (value as T) : values[0];
 }
 
+// Gathers the distinct playlists already referenced by any rule on pipelines
+// that share this YouTube connection — used to pre-populate the rule playlist
+// dropdown with known-good options.
 function playlistOptionsForConnection(pipelines: Pipeline[], youtubeConnectionId: string) {
   const seen = new Set<string>();
   return pipelines
@@ -1338,6 +1429,9 @@ function playlistOptionsForConnection(pipelines: Pipeline[], youtubeConnectionId
     });
 }
 
+// A <select> option carries only one value, but a playlist needs both id and
+// name. Pack them into one "id::name" string (URL-encoded so a "::" inside a
+// name can't break parsing) and unpack it on submit with parsePlaylistValue.
 function playlistOptionValue(id: string, name: string) {
   return `${encodeURIComponent(id)}::${encodeURIComponent(name)}`;
 }
@@ -1354,6 +1448,11 @@ function parsePlaylistValue(value: string) {
   };
 }
 
+// --- Condition tree helpers -----------------------------------------------
+// Bridge between the stored ConditionGroup tree and the flat "classic" form,
+// which only exposes the first couple of leaf conditions and the first nested
+// group. These extractors pull those out for rendering existing rules.
+
 function conditionChildAt(group: ConditionGroup, index: number): ConditionLeaf | undefined {
   return group.children.filter((child): child is ConditionLeaf => child.type === "condition")[index];
 }
@@ -1362,6 +1461,7 @@ function firstNestedGroup(group: ConditionGroup): ConditionGroup | undefined {
   return group.children.find((child): child is ConditionGroup => child.type === "group");
 }
 
+// One-line human summary of a rule's condition tree, shown on each rule card.
 function conditionTreeSummary(group: ConditionGroup) {
   const directConditions = group.children.filter((child) => child.type === "condition").length;
   const nestedGroups = group.children.filter((child) => child.type === "group").length;
@@ -1372,6 +1472,13 @@ function conditionTreeSummary(group: ConditionGroup) {
   return `${parts.join(" with ")}.`;
 }
 
+// Reconstructs a rule's ConditionGroup from a submitted form. Two input paths:
+//   1. The visual builder posts the whole tree as JSON in `conditionTree` — we
+//      parse and sanitize it.
+//   2. The classic form posts discrete fields — we assemble a root group with up
+//      to two conditions plus one optional nested group from them.
+// Returns undefined if anything is missing/invalid, which the actions treat as a
+// validation failure.
 function buildConditionTree(formData: FormData) {
   const submittedTree = getRequiredFormValue(formData, "conditionTree");
   if (submittedTree) {
@@ -1430,6 +1537,9 @@ function buildConditionTree(formData: FormData) {
   };
 }
 
+// Validates an untrusted (JSON-parsed) group node, recursively. Caps nesting at
+// depth 2 so a malicious/huge payload can't blow the stack or store an
+// unrenderable tree, and drops any group that ends up with no valid children.
 function sanitizeConditionGroup(input: unknown, depth = 0): ConditionGroup | undefined {
   if (!isRecord(input) || input.type !== "group") {
     return undefined;
@@ -1463,6 +1573,9 @@ function sanitizeConditionGroup(input: unknown, depth = 0): ConditionGroup | und
   };
 }
 
+// Validates a single untrusted condition leaf: the field must be known, the
+// operator is normalized to one valid for that field, and the value is coerced
+// to the shape that operator expects. caseSensitive is only honored for filename.
 function sanitizeConditionLeaf(input: Record<string, unknown>): ConditionLeaf | undefined {
   const field = isConditionField(input.field) ? input.field : undefined;
   if (!field) {
@@ -1485,6 +1598,9 @@ function sanitizeConditionLeaf(input: Record<string, unknown>): ConditionLeaf | 
   };
 }
 
+// Coerces a condition's value to match its operator: `is_one_of` → non-empty
+// string array, `between` → {start,end} time range, everything else → a single
+// trimmed string. Returns undefined when the value is empty/malformed.
 function sanitizeConditionValue(operator: ConditionOperator, rawValue: unknown): ConditionLeaf["value"] | undefined {
   if (operator === "is_one_of") {
     const values = (Array.isArray(rawValue) ? rawValue : String(rawValue || "").split(","))
@@ -1512,6 +1628,9 @@ function sanitizeConditionValue(operator: ConditionOperator, rawValue: unknown):
   return value ? value : undefined;
 }
 
+// Builds one condition leaf from the classic form's discrete fields. The
+// `prefix` namespaces the field names (e.g. "condition2", "nested1") so multiple
+// conditions can coexist in a single flat form.
 function parseConditionFromForm(formData: FormData, prefix = ""): ConditionLeaf | undefined {
   const field = getEnumValue<ConditionField>(formData, prefixedFieldName(prefix, "field"), [
     "filename",
@@ -1550,10 +1669,16 @@ function isConditionField(value: unknown): value is ConditionField {
   );
 }
 
+// Combines a prefix and key into a camelCase field name, e.g. ("nested1",
+// "operator") → "nested1Operator". No prefix returns the key unchanged.
 function prefixedFieldName(prefix: string, key: string) {
   return prefix ? `${prefix}${key[0].toUpperCase()}${key.slice(1)}` : key;
 }
 
+// Maps a submitted operator to a valid one for the given field. The classic
+// form namespaces operators by field (e.g. "file_type_equals") to keep its
+// <select> values unique, so strip that prefix first, then fall back to the
+// field's first allowed operator if the result isn't valid for this field.
 function normalizeOperator(field: ConditionField, rawOperator: string): ConditionOperator {
   const withoutPrefix = rawOperator
     .replace(/^file_type_/, "")
@@ -1572,6 +1697,9 @@ function normalizeOperator(field: ConditionField, rawOperator: string): Conditio
     : allowed[field][0];
 }
 
+// Parses a single classic-form string into the value shape its operator needs:
+// comma-split list for `is_one_of`, a {start,end} pair (split on "-" or ",") for
+// `between`, or the raw string otherwise.
 function conditionValue(operator: ConditionOperator, value: string) {
   if (operator === "is_one_of") {
     return value
@@ -1588,11 +1716,16 @@ function conditionValue(operator: ConditionOperator, value: string) {
   return value;
 }
 
+// Type-to-confirm guard for public uploads: the user must re-type the pipeline
+// name exactly, proving the public-privacy choice was deliberate.
 function hasPublicPrivacyConfirmation(formData: FormData, pipelineName: string) {
   const confirmation = String(formData.get("publicPrivacyConfirmationText") || "").trim();
   return confirmation === pipelineName.trim();
 }
 
+// Resolves the polling cadence from either a preset or a custom HH:MM value, in
+// minutes. Enforces a 5-minute floor and 1-week (10080-min) ceiling; returns
+// null on anything out of range so the action can reject it.
 function parsePollingIntervalMinutes(formData: FormData) {
   const preset = String(formData.get("pollingIntervalPreset") || "15");
   const rawMinutes =
@@ -1605,6 +1738,8 @@ function parsePollingIntervalMinutes(formData: FormData) {
   return Math.floor(rawMinutes);
 }
 
+// Parses a custom "HH:MM" cadence into total minutes; NaN if it doesn't match
+// the strict HH:MM shape (so the range check above rejects it).
 function parseCustomCadence(value: FormDataEntryValue | null) {
   const rawValue = String(value || "").trim();
   const match = rawValue.match(/^([0-9]{1,3}):([0-5][0-9])$/);
@@ -1615,6 +1750,9 @@ function parseCustomCadence(value: FormDataEntryValue | null) {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+// Maps the ?error redirect codes produced by the server actions to friendly
+// notice text. Unknown codes fall through to a generic message that still
+// includes the raw code for debugging.
 function pipelineErrorMessage(error: string) {
   const messages: Record<string, string> = {
     DemoReadOnly: "Demo mode is read-only. Log in to create your own pipeline.",

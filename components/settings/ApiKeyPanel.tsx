@@ -10,6 +10,9 @@ interface ApiKeyPanelProps {
   } | null;
 }
 
+// Settings panel for the read-only API key. Generates or rotates the key via the
+// rotate endpoint and displays the plaintext once (it's only ever returned at
+// creation time — see the rotate route), prompting the user to store it.
 export function ApiKeyPanel({ activeKey }: ApiKeyPanelProps) {
   const [generatedKey, setGeneratedKey] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -17,6 +20,8 @@ export function ApiKeyPanel({ activeKey }: ApiKeyPanelProps) {
   const [isRotating, setIsRotating] = useState(false);
 
   async function rotateKey() {
+    // Rotating invalidates the old key, breaking any scripts still using it — so
+    // confirm first, but only when there's an existing key to break.
     if (
       activeKey &&
       !window.confirm(

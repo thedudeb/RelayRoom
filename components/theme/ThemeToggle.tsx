@@ -5,9 +5,14 @@ import { useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
+// Light/dark theme switch. Like PrivacyToggle, it drives a <html data-theme>
+// attribute and persists to localStorage, with layout.tsx applying the value
+// pre-paint to prevent a theme flash.
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const [theme, setTheme] = useState<Theme>("light");
 
+  // On mount, resolve the effective theme: explicit stored choice wins,
+  // otherwise fall back to the OS color-scheme preference.
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;

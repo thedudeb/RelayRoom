@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 
+// Reusable empty-state block (icon + title + optional body/action) shown when a
+// list has no rows. The `illustration` prop picks one of the inline SVGs below
+// so the art matches the context (queue, filter results, pipelines, connections).
+
 type Illustration = "queue" | "filter" | "pipeline" | "connection";
 
 export function EmptyState({
@@ -25,6 +29,8 @@ export function EmptyState({
   );
 }
 
+// Dispatches to the matching inline SVG; defaults to the queue art. The SVGs use
+// currentColor so they inherit the surrounding text color (theme-aware).
 function EmptyIllustration({ kind }: { kind: Illustration }) {
   switch (kind) {
     case "filter":

@@ -4,6 +4,14 @@ import { Archive, CircleStop, Copy, Play, RotateCcw, Search } from "lucide-react
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+// Client-side action buttons for a pipeline card. Each component POSTs to a
+// pipeline API route, shows an inline success/error notice, and calls
+// router.refresh() so the server-rendered card reflects the new state. They all
+// share a single `busyAction` so only one request runs (and one spinner shows)
+// at a time, and route destructive actions (disable/archive/restore) through a
+// confirm() first. The three exports cover active pipelines, the enable/manage
+// control cluster, and archived pipelines respectively.
+
 type ActionState =
   | {
       message: string;
@@ -25,6 +33,7 @@ interface ActionResponse {
   skippedExisting?: number;
 }
 
+// Detection + Drive-check buttons shown on an active pipeline (no status change).
 export function PipelineAsyncActions({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
   const [state, setState] = useState<ActionState>();
@@ -99,6 +108,10 @@ export function PipelineAsyncActions({ pipelineId }: { pipelineId: string }) {
   );
 }
 
+// Full control cluster for a managed pipeline: enable/disable toggle plus
+// detect, Drive-check, duplicate, and archive. Tracks `status` locally for
+// instant button-label feedback (alongside the router.refresh()). Detection and
+// Drive-check are only offered while enabled.
 export function PipelineStatusControls({
   initialStatus,
   pipelineId
@@ -311,6 +324,8 @@ export function PipelineStatusControls({
   );
 }
 
+// Restore button shown on archived pipelines; brings the pipeline back disabled
+// so the user can review it before re-enabling detection.
 export function ArchivedPipelineControls({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
   const [state, setState] = useState<ActionState>();
@@ -365,6 +380,9 @@ export function ArchivedPipelineControls({ pipelineId }: { pipelineId: string })
   );
 }
 
+// Shared fetch wrapper for all the pipeline actions: POSTs JSON (if a body is
+// given), parses the response, and throws a friendly message on a non-OK
+// response or an error field — so callers only handle success vs. thrown error.
 async function postAction(
   url: string,
   body?: Record<string, string>,
@@ -384,6 +402,7 @@ async function postAction(
   return payload;
 }
 
+// Maps pipeline action error codes to friendly messages.
 function pipelineErrorMessage(error?: string) {
   const messages: Record<string, string> = {
     DriveListFailed: "Google Drive could not list files in this folder.",
@@ -400,6 +419,8 @@ function pipelineErrorMessage(error?: string) {
   return messages[error || ""] || `Pipeline action failed: ${error || "Unknown error"}`;
 }
 
+// Builds the verbose detection-result summary (created / skipped / pre-watermark
+// excluded / ignored counts, plus a preview of up to 3 ignored files with reasons).
 function formatDetectionMessage(payload: ActionResponse) {
   const created = payload.created || 0;
   const skippedExisting = payload.skippedExisting || 0;

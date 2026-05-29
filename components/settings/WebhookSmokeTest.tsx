@@ -13,6 +13,9 @@ interface WebhookSmokeResponse {
   };
 }
 
+// Settings control that triggers the server-side webhook HMAC self-test (see
+// app/api/settings/webhook-smoke) and shows the signed sample on success, giving
+// integrators a copyable example of the expected signature headers.
 export function WebhookSmokeTest({ disabled = false }: { disabled?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<WebhookSmokeResponse | null>(null);

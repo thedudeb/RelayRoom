@@ -7,6 +7,10 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import type { QueueItem } from "@/lib/domain/types";
 
+// Detail view for a single queue item: the item itself, its persisted rule
+// evaluation (if any), and its activity log + upload attempts. Serves both real
+// users and the signed-out demo, which synthesizes plausible detail from the
+// static seed item.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,6 +22,8 @@ export async function GET(
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
+  // API-key callers are scoped to their own data. Session users already see only
+  // their workspace via the repository, so no extra owner filter is needed.
   const ownerFilter =
     !access.isDemo && access.authMethod === "api_key" ? { userId: access.userId } : undefined;
 
@@ -39,6 +45,10 @@ export async function GET(
   });
 }
 
+// Loads the recent activity log and upload attempts for a real queue item.
+// Both queries are bounded (take 12 / 8) since this feeds a detail panel, not an
+// audit export, and the owner filter is folded into the relation `where` so an
+// API-key user can't read another user's history.
 async function getQueueDetails(queueItemId: string, ownerFilter?: { userId: string }) {
   const [activityLog, attempts] = await Promise.all([
     prisma.activityLogEntry.findMany({
@@ -93,6 +103,9 @@ async function getQueueDetails(queueItemId: string, ownerFilter?: { userId: stri
   };
 }
 
+// Synthesizes activity log + attempts for the demo, since there's no DB to read
+// from. Failed/uploaded items get a single matching attempt; everything else
+// gets none, mirroring what a real run would have produced.
 function getDemoQueueDetails(item: Awaited<ReturnType<typeof getQueueItemsForDemo>>[number]) {
   const attempts =
     item.status === "failed"
@@ -140,6 +153,9 @@ function getDemoQueueDetails(item: Awaited<ReturnType<typeof getQueueItemsForDem
   };
 }
 
+// Reshapes the item's stored routing decision into the evaluation payload the
+// detail UI expects. Returns undefined when the item was never evaluated (e.g.
+// still in `detected`), so the UI can hide the routing section entirely.
 function persistedEvaluationForItem(item: QueueItem) {
   if (!item.ruleEvaluationTrace) {
     return undefined;

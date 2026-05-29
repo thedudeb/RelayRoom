@@ -7,12 +7,19 @@ import { renewDriveWatchSubscriptions } from "@/lib/drive/renewal";
 import { authorizeCronRequest } from "@/lib/security/cron-auth";
 import { reapStaleUploads } from "@/lib/upload/youtube-upload";
 
+// Detection cron entry point. Invoked on a schedule (Vercel Cron) to poll every
+// enabled pipeline's Drive folder for new files and enqueue them. Each tick also
+// performs housekeeping: reaping stale in-flight uploads and renewing Drive
+// push-notification watches before they expire.
+
+// force-dynamic: never cache — this must run fresh on every cron invocation.
 export const dynamic = "force-dynamic";
 
 const DEFAULT_PIPELINE_LIMIT = 20;
 const MAX_PIPELINE_LIMIT = 50;
 
 export async function GET(request: NextRequest) {
+  // Reject anything without the shared cron secret before touching the DB.
   const auth = authorizeCronRequest(request);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -20,6 +27,7 @@ export async function GET(request: NextRequest) {
 
   const now = new Date();
   const limit = pipelineLimit(request);
+  // Housekeeping that runs every tick regardless of which pipelines are due.
   const reapResult = await reapStaleUploads();
   const renewalResult = await renewDriveWatchSubscriptions({
     webhookUrl:
@@ -42,6 +50,9 @@ export async function GET(request: NextRequest) {
     selectDuePipelines(pipelines, now, limit);
   const results = [];
 
+  // Run pipelines sequentially rather than in parallel to keep load on the
+  // Google APIs predictable and stay within per-tick quota. One pipeline's
+  // failure is isolated and recorded; it doesn't abort the rest.
   for (const pipeline of duePipelines) {
     try {
       const result = await runDriveDetectionForPipeline({
@@ -68,6 +79,8 @@ export async function GET(request: NextRequest) {
         status: "failed"
       });
 
+      // Persist the failure on the pipeline so it surfaces in the UI rather
+      // than being lost when this response is discarded.
       await prisma.pipeline.update({
         data: { errorMessage: message },
         where: { id: pipeline.id }
@@ -75,6 +88,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Echo back a per-pipeline + aggregate summary; the cron platform logs this
+  // body, making it the primary observability surface for detection runs.
   return NextResponse.json({
     checkedAt: now.toISOString(),
     due: duePipelines.length,
@@ -89,6 +104,8 @@ export async function GET(request: NextRequest) {
   });
 }
 
+// Parses an optional ?limit override, clamping to [1, MAX] and falling back to
+// the default on garbage input so the per-tick batch size is always sane.
 function pipelineLimit(request: NextRequest) {
   const limit = Number(request.nextUrl.searchParams.get("limit") || DEFAULT_PIPELINE_LIMIT);
 

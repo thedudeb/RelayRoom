@@ -4,6 +4,12 @@ import Script from "next/script";
 import { ToastProvider } from "@/components/toast/ToastContext";
 import "./globals.css";
 
+// Root layout: loads the brand fonts, declares site-wide SEO/OpenGraph metadata,
+// and wraps every page in the toast provider. Applied to all routes by Next.js.
+
+// Each font is exposed as a CSS variable (rather than a class) so the design
+// system can reference them from globals.css; `display: "swap"` avoids invisible
+// text while the webfont loads.
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans-loaded",
@@ -65,6 +71,13 @@ export default function RootLayout({
       className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable}`}
     >
       <body>
+        {/*
+          Apply the theme (and privacy-blur mode) from localStorage before the
+          page paints. Running this beforeInteractive avoids a flash of the wrong
+          theme on load; suppressHydrationWarning above is required because this
+          mutates <html> outside of React. The empty catch tolerates storage
+          being unavailable (e.g. privacy-restricted browsers).
+        */}
         <Script id="theme-init" strategy="beforeInteractive">
           {`
             try {

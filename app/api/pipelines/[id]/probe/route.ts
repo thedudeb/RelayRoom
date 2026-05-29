@@ -8,10 +8,15 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
+// Diagnostic "dry run" for a pipeline's Drive source: lists what Drive currently
+// returns and builds a human-readable summary (sample files, which would be
+// ignored as non-video, and the current watermark) without enqueuing anything.
+// Used by the pipeline editor's "test Drive connection" affordance.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Mutation guard chain: no cross-site calls, no demo (read-only) users.
   const originError = rejectCrossSiteMutation(request);
   if (originError) {
     return originError;
@@ -40,6 +45,8 @@ export async function POST(
       pipelineId: id,
       userId: pipeline.userId
     });
+    // Summaries are capped (first 5 files, first 3 ignored) to keep the message
+    // glanceable; the full file list is still returned in `files` for the UI.
     const fileSummary =
       result.files.length > 0
         ? result.files

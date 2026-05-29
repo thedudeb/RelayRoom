@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+// Searchable timezone combobox for settings. The selected value is mirrored into
+// a hidden input named "timezone" so it submits with the surrounding form. The
+// full timezone list comes from Intl.supportedValuesOf when available, with a
+// hand-curated fallback for older runtimes; `commonTimezones` float to the top.
+
 const commonTimezones = [
   "UTC",
   "America/Halifax",
@@ -61,10 +66,14 @@ export function TimezonePicker({
   const commonMatches = filteredTimezones.filter((timezone) => commonTimezones.includes(timezone));
   const otherMatches = filteredTimezones.filter((timezone) => !commonTimezones.includes(timezone));
 
+  // Detect the browser timezone on mount (client-only) to offer a one-click
+  // "use my timezone" shortcut.
   useEffect(() => {
     setBrowserTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || null);
   }, []);
 
+  // Close the popover on an outside click or Escape — standard dismissable-popup
+  // behavior.
   useEffect(() => {
     function closeOnOutsideClick(event: MouseEvent) {
       if (!pickerRef.current?.contains(event.target as Node)) {
@@ -189,6 +198,9 @@ function TimezoneGroup({
   );
 }
 
+// Builds the de-duplicated, sorted timezone list. Always includes the current
+// and browser timezones (so a saved value off the standard list still appears),
+// and sorts common zones first, then alphabetically.
 function supportedTimezones(currentTimezone: string, browserTimezone: string | null) {
   const timezones =
     typeof Intl.supportedValuesOf === "function"
@@ -216,6 +228,7 @@ function filterTimezones(timezones: string[], query: string) {
   );
 }
 
+// Turns an IANA id like "America/New_York" into a readable "New York · America".
 function formatTimezoneLabel(timezone: string) {
   const parts = timezone.split("/");
   const city = parts[parts.length - 1]?.replaceAll("_", " ") || timezone;
@@ -223,6 +236,9 @@ function formatTimezoneLabel(timezone: string) {
   return `${city} · ${region}`;
 }
 
+// Normalizes a string for fuzzy search: lowercase and collapse separators
+// (_ / . -) and whitespace to single spaces, so "america/new_york" matches a
+// "new york" query.
 function normalizeTimezone(value: string) {
   return value.toLowerCase().replace(/[_/.-]/g, " ").replace(/\s+/g, " ").trim();
 }

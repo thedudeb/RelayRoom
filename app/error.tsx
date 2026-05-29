@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import { ErrorState } from "@/components/empty/ErrorState";
 
+// Next.js route-level error boundary. Catches render/runtime errors thrown by
+// pages in this segment and shows the recoverable ErrorState; `reset` retries
+// the failed render. Must be a client component (error boundaries are client-only).
 export default function RouteError({
   error,
   reset

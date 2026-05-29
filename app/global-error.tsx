@@ -4,6 +4,9 @@ import { useEffect } from "react";
 import { ErrorState } from "@/components/empty/ErrorState";
 import "./globals.css";
 
+// Last-resort error boundary for failures in the root layout itself. Because it
+// replaces the whole document when the normal layout can't render, it must
+// supply its own <html>/<body>. Only ever shown in production builds.
 export default function GlobalError({
   error,
   reset

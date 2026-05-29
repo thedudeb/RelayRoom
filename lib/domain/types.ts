@@ -1,3 +1,11 @@
+// Application-layer domain vocabulary. These string-literal unions are the
+// shapes the UI and business logic speak in; they intentionally mirror but stay
+// decoupled from the Prisma DB enums (which are SCREAMING_CASE) so persistence
+// changes don't ripple straight into the front end. The repository layer maps
+// between the two.
+
+// --- Status / kind enums --------------------------------------------------
+
 export type ConnectionStatus = "active" | "expired" | "errored";
 export type ConnectionKind = "drive" | "youtube";
 export type PipelineMode = "auto" | "manual_approval";
@@ -26,6 +34,10 @@ export type FailureReason =
   | "validation_error"
   | "unknown";
 
+// --- Rule conditions ------------------------------------------------------
+// A pipeline's routing rules are trees of condition nodes. Each field type has
+// its own set of valid operators; the unions below enumerate those pairings.
+
 export type ConditionField = "filename" | "file_type" | "day_of_week" | "time_of_day";
 
 export type FilenameOperator =
@@ -47,6 +59,8 @@ export type ConditionOperator =
 
 export type DayOfWeek = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
 
+// A condition node is either a group (AND/OR of children) or a leaf (a single
+// field/operator/value test) — a recursive boolean expression tree.
 export type ConditionNode = ConditionGroup | ConditionLeaf;
 
 export interface ConditionGroup {
@@ -70,6 +84,8 @@ export interface TimeRange {
   end: string;
 }
 
+// --- Core entities --------------------------------------------------------
+
 export interface Playlist {
   id: string;
   name: string;
@@ -91,6 +107,9 @@ export interface RoutingRule {
   descriptionTemplate?: string;
 }
 
+// A pipeline ties a Drive source folder to a YouTube destination, with rules
+// that decide each detected file's playlist/title/description. `mode` selects
+// fully automatic routing vs. a manual-approval gate.
 export interface Pipeline {
   id: string;
   name: string;
@@ -121,6 +140,11 @@ export interface DriveFileMetadata {
   createdTime: string;
   sourceFolderId: string;
 }
+
+// --- Evaluation traces ----------------------------------------------------
+// When rules are evaluated, each node records whether it matched and why. The
+// trace mirrors the condition tree so the UI's rule tester can show, node by
+// node, exactly how a routing decision was reached.
 
 export interface ConditionTrace {
   nodeId: string;
@@ -159,6 +183,10 @@ export interface RoutingResult {
   ruleTraces: RuleTrace[];
 }
 
+// A single detected Drive file as it moves through the upload queue. Carries
+// the routing decision (intended playlist, rendered title/description, matched
+// rule + trace), the YouTube result once uploaded, and failure detail on error.
+// `previousStatus` supports the skip/restore flow in the queue state machine.
 export interface QueueItem {
   id: string;
   pipelineId: string;
@@ -191,6 +219,9 @@ export interface QueueItem {
   owner: UserSummary;
 }
 
+// A connected Google account (Drive or YouTube) as shown on the connections
+// page, including which pipelines depend on it so the UI can warn before
+// disconnecting.
 export interface ConnectionSummary {
   id: string;
   kind: ConnectionKind;

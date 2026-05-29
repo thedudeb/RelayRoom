@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { Copy, RotateCcw } from "lucide-react";
 
+// Recoverable error display used by the route/global error boundaries. Shows a
+// retry button (when the boundary provides `reset` via onReset), a safe link
+// home, and a copy-to-clipboard button for the error message/digest to ease bug
+// reports.
 export function ErrorState({
   title = "This route hit a dead end.",
   body = "Something failed while loading. You can retry, or jump back to a known good page.",
@@ -21,6 +25,7 @@ export function ErrorState({
   const [copied, setCopied] = useState(false);
   const detail = error?.message || error?.digest;
 
+  // Copy the error detail and briefly flip the label to "Copied" as feedback.
   function copyDetail() {
     if (!detail) return;
     navigator.clipboard.writeText(detail).then(() => {

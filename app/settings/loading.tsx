@@ -1,5 +1,6 @@
 import { SkeletonShell } from "@/components/layout/SkeletonShell";
 
+// Loading placeholder for the settings page, mirroring its stacked panels.
 export default function SettingsLoading() {
   return (
     <SkeletonShell activeHref="/settings" titleWidth={180} subtitleWidth={420}>

@@ -1,5 +1,13 @@
 import type { ConnectionSummary, Pipeline, QueueItem } from "@/lib/domain/types";
 
+// Static demo dataset rendered when there's no database (or for a signed-out
+// preview). It populates the connections, pipelines, and queue views with a
+// realistic, self-consistent scenario — every queue item is flagged
+// `isSeedData` so the UI can label it and the app never tries to act on it.
+// The records are deliberately cross-referenced (pipeline names match
+// connections' `usedByPipelines`, queue items point at real pipeline ids) so
+// the demo behaves like a coherent workspace rather than disconnected rows.
+
 export const demoTimezone = "America/Halifax";
 
 const demoOwner = {

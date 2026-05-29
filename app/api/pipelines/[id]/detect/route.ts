@@ -5,10 +5,15 @@ import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
 import { prisma } from "@/lib/db/prisma";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
+// Manual "check for new files now" trigger for a single pipeline, bypassing the
+// polling schedule. Runs the same detection routine the cron uses, then
+// revalidates the pages that display queue results.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Standard mutation guard chain: block cross-site calls, require a real
+  // (non-demo) authenticated user — demo mode is read-only.
   const originError = rejectCrossSiteMutation(request);
   if (originError) {
     return originError;
@@ -25,6 +30,8 @@ export async function POST(
   }
 
   try {
+    // Scope the lookup to the caller's own, non-archived pipelines so one user
+    // can't trigger detection on another's pipeline (or a 404 leaking existence).
     const pipeline = await prisma.pipeline.findFirst({
       where: { archivedAt: null, id, userId: access.userId },
       select: { userId: true }

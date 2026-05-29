@@ -11,6 +11,9 @@ type AccessModalProps = {
   body: string;
 };
 
+// Dialog shown on the landing page when an auth attempt is rejected (see the
+// ?error handling in app/page.tsx). Closing it strips the ?error from the URL by
+// replacing history with "/", so a refresh doesn't re-open it.
 export function AccessModal({ eyebrow, title, body }: AccessModalProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(true);
@@ -20,12 +23,16 @@ export function AccessModal({ eyebrow, title, body }: AccessModalProps) {
     router.replace("/");
   }
 
+  // Backdrop click closes only when the click is on the backdrop itself, not
+  // bubbled up from the dialog content.
   function closeFromBackdrop(event: MouseEvent<HTMLDivElement>) {
     if (event.target === event.currentTarget) {
       closeModal();
     }
   }
 
+  // Close on Escape. (No dependency array: the listener is re-bound each render,
+  // which is harmless here and keeps closeModal's closure current.)
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {

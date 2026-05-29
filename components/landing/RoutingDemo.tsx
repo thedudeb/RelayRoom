@@ -3,6 +3,10 @@
 import { CheckCircle2, FileVideo, FolderTree, Youtube } from "lucide-react";
 import { useEffect, useState } from "react";
 
+// Decorative, auto-playing animation on the landing page that illustrates the
+// Drive → rules → YouTube flow. Purely cosmetic (aria-hidden); it cycles through
+// a few canned scenarios, advancing through four phases per scenario.
+
 type Scenario = {
   file: string;
   matchIndex: number;
@@ -39,12 +43,17 @@ export function RoutingDemo() {
   const [scenarioIndex, setScenarioIndex] = useState(0);
   const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0);
 
+  // Drive the phase animation for the current scenario, then advance to the next.
+  // Re-runs whenever scenarioIndex changes, forming a self-perpetuating loop.
   useEffect(() => {
+    // Honor reduced-motion: jump straight to the final (fully-routed) phase and
+    // don't animate or auto-advance.
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setPhase(3);
       return;
     }
 
+    // `cancelled` guards against the timers firing after unmount / re-run.
     let cancelled = false;
     const timers = [
       window.setTimeout(() => !cancelled && setPhase(1), 1100),

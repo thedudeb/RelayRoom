@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 
+// Static, public privacy policy page. Required for the Google OAuth consent
+// screen / API verification, which mandates a reachable privacy URL. Pure
+// content — no data fetching or auth.
 export const metadata: Metadata = {
   title: "Privacy Policy | RelayRoom",
   description: "How RelayRoom handles Google Drive, YouTube, and account data."

@@ -9,6 +9,10 @@ interface DisconnectResponse {
   error?: string;
 }
 
+// Per-connection Reconnect / Disconnect controls on the connections page.
+// Disconnect is a destructive, hard-to-undo action (revokes the Google grant and
+// pauses dependent pipelines), so it's gated behind a confirm() and reports
+// inline success/error. Non-managers see a read-only label instead.
 export function ConnectionActions({
   canManage,
   connectionId,
@@ -26,6 +30,7 @@ export function ConnectionActions({
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   async function disconnect() {
+    // Confirm first — this revokes access at Google and can't be silently undone.
     if (
       !window.confirm(
         `Disconnect ${label}? RelayRoom will revoke this Google grant and pause pipelines that depend on it.`
@@ -49,6 +54,7 @@ export function ConnectionActions({
 
       setTone("success");
       setMessage("Connection disconnected. Dependent pipelines were paused.");
+      // Refresh the server component so the connection's status updates in place.
       router.refresh();
     } catch (error) {
       setTone("danger");

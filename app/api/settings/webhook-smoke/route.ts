@@ -6,7 +6,12 @@ import {
 } from "@/lib/security/webhook-signature";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
+// Self-test for the detection webhook HMAC scheme: signs a sample payload and
+// immediately verifies it with the same secret, proving the signing/verification
+// round-trip works and giving integrators a concrete example of the header
+// pattern to replicate. Does not call any external endpoint.
 export async function POST(request: NextRequest) {
+  // Mutation guard chain: no cross-site calls, no demo (read-only) users.
   const originError = rejectCrossSiteMutation(request);
   if (originError) {
     return originError;

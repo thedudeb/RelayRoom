@@ -3,6 +3,12 @@
 import { useMemo, useState } from "react";
 import type { ConditionField, ConditionLeaf } from "@/lib/domain/types";
 
+// The field/operator/value inputs for one condition in the "classic" rule form.
+// Operator <option> values are namespaced per field (e.g. "file_type_equals",
+// "day_is") so they're globally unique within the form; normalizeOperator on the
+// server strips that prefix back off. The field names are prefixed (condition2,
+// nested1, ...) so several of these can coexist in one form.
+
 type ClassicOperatorOption = {
   label: string;
   value: string;
@@ -66,8 +72,13 @@ export function ClassicConditionInputs({
   prefix?: string;
   required?: boolean;
 }) {
+  // Track the chosen field so the operator list and hints update reactively.
   const [field, setField] = useState<ConditionField>(condition?.field || "filename");
   const operators = OPERATOR_OPTIONS[field];
+  // Pick the editing condition's operator if it's valid for the current field,
+  // else default to the field's first operator. The operator <select> below is
+  // keyed on `${prefix}-${field}` so it remounts (resetting its value) when the
+  // field changes, since a stale operator from another field wouldn't apply.
   const initialOperator = useMemo(() => {
     const value = operatorFormValue(condition);
     return operators.some((operator) => operator.value === value) ? value : operators[0].value;
@@ -134,6 +145,8 @@ function prefixedFieldName(prefix: string, key: string) {
   return prefix ? `${prefix}${key[0].toUpperCase()}${key.slice(1)}` : key;
 }
 
+// Renders a stored condition value back into the single text input: list →
+// comma-joined, time range → "start-end", scalar → string.
 function ruleValueToInput(value: ConditionLeaf["value"]) {
   if (Array.isArray(value)) {
     return value.join(", ");
@@ -144,6 +157,8 @@ function ruleValueToInput(value: ConditionLeaf["value"]) {
   return String(value);
 }
 
+// Reconstructs the namespaced operator <option> value from a stored condition,
+// matching the per-field prefixes used in OPERATOR_OPTIONS.
 function operatorFormValue(condition?: ConditionLeaf) {
   if (!condition) {
     return "contains";

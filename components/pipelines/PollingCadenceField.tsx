@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 
+// Polling-cadence input: a preset dropdown plus a "Custom HH:MM" escape hatch.
+// The form submits raw minutes via the preset, or an HH:MM string when custom;
+// parsePollingIntervalMinutes in the pipelines action interprets both.
+
 const PRESET_OPTIONS = [
   { label: "Every 15 minutes", value: "15" },
   { label: "Every 30 minutes", value: "30" },
@@ -23,6 +27,8 @@ export function PollingCadenceField({
   hint: string;
   initialMinutes?: number;
 }) {
+  // If the saved interval matches a preset, select it; otherwise start in custom
+  // mode pre-filled with the equivalent HH:MM.
   const initialValue = String(initialMinutes);
   const hasPreset = PRESET_OPTIONS.some((option) => option.value === initialValue);
   const [selectedValue, setSelectedValue] = useState(hasPreset ? initialValue : CUSTOM_VALUE);
@@ -65,6 +71,8 @@ export function PollingCadenceField({
   );
 }
 
+// Formats minutes as HH:MM for the custom input, flooring at the 5-minute
+// minimum and defaulting to 15 on invalid input.
 function minutesToTime(minutes: number) {
   const safeMinutes = Number.isFinite(minutes) ? Math.max(Math.floor(minutes), 5) : 15;
   const hours = Math.floor(safeMinutes / 60);

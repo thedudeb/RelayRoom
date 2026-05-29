@@ -7,6 +7,11 @@ import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { rejectCrossSiteMutation, rejectCrossSiteRead } from "@/lib/security/request-guard";
 import { decryptToken, encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
 
+// Backs the playlist picker on a YouTube connection: GET lists the signed-in
+// user's playlists, POST finds-or-creates one by title. Both run with the
+// connection's OAuth token, refreshing it on demand. Cross-site requests are
+// rejected up front since these act on behalf of the logged-in user.
+
 interface GoogleRefreshResponse {
   access_token?: string;
   error?: string;
@@ -65,6 +70,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "MissingPlaylistTitle" }, { status: 400 });
   }
 
+  // Idempotency: if a playlist with this title already exists, reuse it instead
+  // of creating a duplicate (YouTube allows multiple playlists with the same
+  // name, which would confuse routing).
   const existingPlaylist = (await fetchYouTubePlaylists(context.accessToken)).find(
     (playlist) => playlist.title.trim().toLowerCase() === title.toLowerCase()
   );
@@ -99,6 +107,10 @@ export async function POST(request: NextRequest) {
   });
 }
 
+// Resolves the caller's active YouTube connection and a usable access token, or
+// returns the appropriate error response. Centralizes the auth → user → token
+// chain shared by both GET and POST; callers check `instanceof NextResponse` to
+// distinguish the failure case.
 async function getYouTubeConnectionContext(request: NextRequest) {
   const session = await auth();
   const email = session?.user?.email;
@@ -144,6 +156,9 @@ async function getYouTubeConnectionContext(request: NextRequest) {
   return { accessToken };
 }
 
+// Fetches all of the user's playlists, walking YouTube's pagination (50 per
+// page) until there are no more pages. On a mid-pagination API error it returns
+// whatever was collected so far rather than failing the whole request.
 async function fetchYouTubePlaylists(accessToken: string) {
   const playlists: Array<{ id: string; title: string }> = [];
   let pageToken: string | undefined;
@@ -181,6 +196,10 @@ async function fetchYouTubePlaylists(accessToken: string) {
   return playlists;
 }
 
+// Returns a valid YouTube access token, refreshing via the stored refresh token
+// when the cached one is missing or about to expire. A failed refresh marks the
+// connection (and dependent pipelines) errored so the user is prompted to
+// reconnect rather than hitting silent failures later.
 async function getUsableYouTubeAccessToken(
   connection: {
     encryptedAccessToken: string | null;
@@ -190,7 +209,10 @@ async function getUsableYouTubeAccessToken(
   },
   tokenKey: string
 ) {
+  // AAD binds the token ciphertext to this connection id (see token-vault).
   const aad = oauthTokenAad(connection.id);
+  // Reuse the cached token only if it won't expire within the next 60s, leaving
+  // headroom for the API call that follows.
   if (
     connection.encryptedAccessToken &&
     connection.expiresAt &&
@@ -230,6 +252,8 @@ async function getUsableYouTubeAccessToken(
     return null;
   }
 
+  // Cache the freshly minted token (re-encrypted with the same AAD) so the next
+  // call can reuse it until it nears expiry.
   await prisma.oAuthConnection.update({
     where: { id: connection.id },
     data: {

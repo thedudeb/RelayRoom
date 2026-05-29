@@ -1,5 +1,7 @@
 import { SkeletonShell } from "@/components/layout/SkeletonShell";
 
+// Loading placeholder for the dashboard, mirroring its metric cards + queue
+// table layout so content swaps in without shifting.
 export default function DashboardLoading() {
   return (
     <SkeletonShell activeHref="/dashboard" titleWidth={260} subtitleWidth={460}>

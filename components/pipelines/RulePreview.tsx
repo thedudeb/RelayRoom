@@ -1,5 +1,7 @@
 import type { ConditionNode, Pipeline } from "@/lib/domain/types";
 
+// Read-only render of a pipeline's rules and their condition trees, used to show
+// routing config at a glance.
 export function RulePreview({ pipeline }: { pipeline: Pipeline }) {
   return (
     <div className="stack">
@@ -19,6 +21,8 @@ export function RulePreview({ pipeline }: { pipeline: Pipeline }) {
   );
 }
 
+// Recursively renders a condition node: a group shows its AND/OR combinator and
+// recurses into children; a leaf shows its field/operator/value.
 function ConditionTree({ node }: { node: ConditionNode }) {
   if (node.type === "group") {
     return (
@@ -53,6 +57,8 @@ function labelForOperator(operator: string): string {
   return operator.replaceAll("_", " ");
 }
 
+// Renders a condition value for display: list → comma-joined, time range object
+// → JSON, scalar → string.
 function formatValue(value: unknown): string {
   if (Array.isArray(value)) {
     return value.join(", ");

@@ -7,6 +7,10 @@ import type { UserSummary } from "@/lib/domain/types";
 import { announceWorkspaceOwnerFilterChange } from "@/lib/workspace/owner-filter-events";
 import { workspaceUserOptionLabel } from "@/lib/workspace/users";
 
+// "Filter by owner" control (All / Mine / a specific user) used on the queue and
+// pipelines pages. The selection lives in the ?userId query param; changing it
+// pushes a new URL so the server component re-fetches filtered data. Hidden when
+// there are fewer than two users, since there'd be nothing to filter.
 export function WorkspaceUserFilter({
   currentUserId,
   selfLabel = "My items",
@@ -23,6 +27,9 @@ export function WorkspaceUserFilter({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Optimistic selection: highlight the clicked option immediately while the URL
+  // navigation + server refetch are in flight. null means "no pending change,
+  // trust the prop". Cleared by the effect once the prop catches up.
   const [pendingSelectedUserId, setPendingSelectedUserId] = useState<string | undefined | null>(
     null
   );
@@ -35,6 +42,8 @@ export function WorkspaceUserFilter({
     ? users.filter((user) => user.id !== currentUser.id)
     : users;
 
+  // Once the server-provided selectedUserId matches our optimistic value, the
+  // navigation has landed — drop the pending override.
   useEffect(() => {
     if (pendingSelectedUserId !== null && selectedUserId === pendingSelectedUserId) {
       setPendingSelectedUserId(null);
@@ -47,6 +56,8 @@ export function WorkspaceUserFilter({
 
   function navigateToUser(userId?: string) {
     setPendingSelectedUserId(userId);
+    // Broadcast so other on-page components (not in this React tree) can sync to
+    // the same owner filter — see owner-filter-events.ts.
     announceWorkspaceOwnerFilterChange(userId);
 
     const nextParams = new URLSearchParams(searchParams.toString());

@@ -27,6 +27,11 @@ type ToastContextValue = {
   dismiss: (id: number) => void;
 };
 
+// App-wide toast notifications. ToastProvider (mounted once in the root layout)
+// owns the toast list and exposes toast()/dismiss() via context; useToast() is
+// the consumer hook. The viewport renders the stack and auto-dismisses each
+// toast after its duration.
+
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -37,6 +42,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
+  // Enqueue a toast and return its id (so callers can dismiss early). A
+  // monotonic counter ref gives stable, collision-free keys without re-renders.
   const toast = useCallback(
     (input: ToastInput) => {
       counterRef.current += 1;
@@ -50,7 +57,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         duration
       };
 
+      // Cap the stack at 4 (keep last 3 + the new one) so toasts can't pile up.
       setToasts((prev) => [...prev.slice(-3), next]);
+      // duration <= 0 means "sticky" — no auto-dismiss timer.
       if (duration > 0) {
         window.setTimeout(() => dismiss(id), duration);
       }

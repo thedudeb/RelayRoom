@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { RelayRoomLogo } from "@/components/brand/RelayRoomLogo";
 
+// Static, public terms-of-service page. Like the privacy page, it satisfies the
+// Google OAuth verification requirement for a reachable terms URL. Pure content.
 export const metadata: Metadata = {
   title: "Terms of Service | RelayRoom",
   description: "Terms for using RelayRoom to route Drive recordings to YouTube."

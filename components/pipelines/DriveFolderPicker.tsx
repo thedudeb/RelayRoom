@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 
+// Drive folder selector backed by Google's Picker API. Clicking "Choose folder"
+// fetches a short-lived picker token from the server, lazily loads Google's
+// picker script, and opens the native folder chooser. The picked id/name go into
+// hidden inputs for form submit. Using Picker (rather than a free-text id) means
+// RelayRoom only ever sees folders the user explicitly granted.
+
+// Minimal typings for the Google Picker global, which has no bundled @types.
 declare global {
   interface Window {
     gapi?: {
@@ -80,6 +87,8 @@ export function DriveFolderPicker({
     setStatusTone("info");
 
     try {
+      // Fetch the token and load the picker script in parallel; we need both
+      // before we can build the picker.
       const [config] = await Promise.all([fetchPickerToken(connectionId), loadPickerScript()]);
       const pickerApi = window.google?.picker;
 
@@ -100,6 +109,8 @@ export function DriveFolderPicker({
         .addView(view)
         .setTitle("Choose a Drive folder")
         .setCallback((data) => {
+          // The callback fires for every picker event; act only on a final
+          // PICKED selection and ignore cancels/navigation.
           const action = data[pickerApi.Response.ACTION];
           if (action !== pickerApi.Action.PICKED) {
             return;
@@ -183,6 +194,9 @@ export function DriveFolderPicker({
   );
 }
 
+// Fetches the per-session Picker config (OAuth token, API key, app id) from the
+// server, which mints the token from the stored connection. Throws a friendly
+// message on failure or incomplete config.
 async function fetchPickerToken(connectionId?: string): Promise<PickerConfig> {
   const url = connectionId
     ? `/api/oauth/drive/picker-token?connectionId=${encodeURIComponent(connectionId)}`
@@ -207,6 +221,9 @@ async function fetchPickerToken(connectionId?: string): Promise<PickerConfig> {
   };
 }
 
+// Loads Google's api.js and the "picker" module once, resolving when ready.
+// Short-circuits if already loaded, and reuses an existing <script> tag to avoid
+// injecting it twice across repeated opens.
 function loadPickerScript() {
   return new Promise<void>((resolve, reject) => {
     if (window.google?.picker) {
@@ -236,6 +253,7 @@ function loadPickerScript() {
   });
 }
 
+// Maps picker-token endpoint error codes to friendly messages.
 function pickerErrorMessage(error?: string) {
   const messages: Record<string, string> = {
     MissingDriveConnection: "Connect Google Drive before choosing a folder.",

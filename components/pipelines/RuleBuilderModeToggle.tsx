@@ -2,6 +2,9 @@
 
 import { type ReactNode, useState } from "react";
 
+// Tabbed switch between the two rule-editing UIs (visual builder vs. classic
+// form). Both are always mounted; the inactive one is `hidden` AND `disabled` so
+// its form fields don't submit — only the visible mode's inputs reach the action.
 export function RuleBuilderModeToggle({
   classic,
   visual
