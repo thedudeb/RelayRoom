@@ -170,6 +170,7 @@ export function QueueDashboard({
   );
   const [bulkAction, setBulkAction] = useState<BulkQueueAction | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [shortcutsEnabled, setShortcutsEnabled] = useState(true);
   const [details, setDetails] = useState<QueueDetails>();
   const [detailsState, setDetailsState] = useState<"idle" | "loading">("idle");
   const [editRouteItem, setEditRouteItem] = useState<QueueItem>();
@@ -242,6 +243,53 @@ export function QueueDashboard({
       return next.size === current.size ? current : next;
     });
   }, [items]);
+
+  useEffect(() => {
+    function syncShortcutPreference() {
+      setShortcutsEnabled(document.documentElement.dataset.a11yShortcuts !== "off");
+    }
+
+    syncShortcutPreference();
+    window.addEventListener("relayroom:a11y-preferences", syncShortcutPreference);
+    window.addEventListener("storage", syncShortcutPreference);
+    return () => {
+      window.removeEventListener("relayroom:a11y-preferences", syncShortcutPreference);
+      window.removeEventListener("storage", syncShortcutPreference);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!shortcutsEnabled) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || isEditableTarget(event.target)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "a") {
+        event.preventDefault();
+        toggleSelectAllVisible();
+      } else if (key === "escape") {
+        event.preventDefault();
+        setSelectedIds(new Set());
+      } else if (key === "u") {
+        event.preventDefault();
+        void runBulkAction("upload");
+      } else if (key === "s") {
+        event.preventDefault();
+        void runBulkAction("skip");
+      } else if (key === "h") {
+        event.preventDefault();
+        void runBulkAction("mark_externally_handled");
+      } else if (key === "r") {
+        event.preventDefault();
+        void runBulkAction("restore");
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   function toggleSelectAllVisible() {
     setSelectedIds((current) => {
@@ -599,6 +647,7 @@ export function QueueDashboard({
           action={bulkAction}
           allManageableVisibleSelected={allManageableVisibleSelected}
           isDisabled={Boolean(busyAction) || Boolean(bulkAction)}
+          keyboardShortcutsEnabled={shortcutsEnabled}
           onAction={runBulkAction}
           onClearSelection={() => setSelectedIds(new Set())}
           onToggleAll={toggleSelectAllVisible}
@@ -614,6 +663,7 @@ export function QueueDashboard({
                   checked={allManageableVisibleSelected}
                   disabled={!manageableVisibleItems.length || Boolean(bulkAction)}
                   onChange={toggleSelectAllVisible}
+                  title={shortcutsEnabled ? "Shortcut: A" : undefined}
                   type="checkbox"
                 />
               </th>
@@ -743,6 +793,7 @@ function QueueRow({
             <FloatingTooltip label="View queue details">
               <button
                 aria-expanded={Boolean(details)}
+                aria-label={`View details. ${queueStatusA11yLabel(item)}`}
                 className="status-trigger"
                 onClick={() => onDetails(item)}
                 type="button"
@@ -792,6 +843,7 @@ function BulkActionToolbar({
   action,
   allManageableVisibleSelected,
   isDisabled,
+  keyboardShortcutsEnabled,
   onAction,
   onClearSelection,
   onToggleAll,
@@ -801,6 +853,7 @@ function BulkActionToolbar({
   action: BulkQueueAction | null;
   allManageableVisibleSelected: boolean;
   isDisabled: boolean;
+  keyboardShortcutsEnabled: boolean;
   onAction: (action: BulkQueueAction) => void;
   onClearSelection: () => void;
   onToggleAll: () => void;
@@ -843,6 +896,7 @@ function BulkActionToolbar({
         <button
           className="button compact-button"
           disabled={isDisabled || uploadableCount === 0}
+          title={keyboardShortcutsEnabled ? "Shortcut: U" : undefined}
           onClick={() => onAction("upload")}
           type="button"
         >
@@ -852,6 +906,7 @@ function BulkActionToolbar({
         <button
           className="button compact-button"
           disabled={isDisabled || skippableCount === 0}
+          title={keyboardShortcutsEnabled ? "Shortcut: S" : undefined}
           onClick={() => onAction("skip")}
           type="button"
         >
@@ -861,6 +916,7 @@ function BulkActionToolbar({
         <button
           className="button compact-button"
           disabled={isDisabled || closableCount === 0}
+          title={keyboardShortcutsEnabled ? "Shortcut: H" : undefined}
           onClick={() => onAction("mark_externally_handled")}
           type="button"
         >
@@ -870,6 +926,7 @@ function BulkActionToolbar({
         <button
           className="button compact-button"
           disabled={isDisabled || restorableCount === 0}
+          title={keyboardShortcutsEnabled ? "Shortcut: R" : undefined}
           onClick={() => onAction("restore")}
           type="button"
         >
@@ -877,6 +934,11 @@ function BulkActionToolbar({
           {action === "restore" ? "Restoring..." : `Restore ${restorableCount}`}
         </button>
       </div>
+      {keyboardShortcutsEnabled ? (
+        <p className="bulk-shortcut-hint">
+          <kbd>A</kbd> select visible <kbd>Esc</kbd> clear
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -937,7 +999,8 @@ function StatusBadge({
   return (
     <span className={`badge ${busyLabel ? "uploading" : status}`}>
       <Icon aria-hidden="true" className={busyLabel ? "spin-icon" : undefined} size={14} />
-      {busyLabel || status.replaceAll("_", " ")}
+      <span aria-hidden="true">{busyLabel || status.replaceAll("_", " ")}</span>
+      <span className="sr-only">{busyLabel ? `Status: ${busyLabel}.` : statusA11yText(status)}</span>
     </span>
   );
 }
@@ -1715,6 +1778,38 @@ function count(items: QueueItem[], status: QueueStatus): number {
 
 function canManageQueueItem(item: QueueItem, currentUserId?: string) {
   return !currentUserId || item.owner.id === currentUserId;
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return ["INPUT", "SELECT", "TEXTAREA", "BUTTON", "A"].includes(target.tagName);
+}
+
+function queueStatusA11yLabel(item: QueueItem) {
+  const parts = [statusA11yText(item.status)];
+  if (item.failureReason) {
+    parts.push(`Failure reason: ${item.failureReason.replaceAll("_", " ")}.`);
+  }
+  if (item.intendedPlaylistName) {
+    parts.push(`Playlist: ${item.intendedPlaylistName}.`);
+  }
+  return parts.join(" ");
+}
+
+function statusA11yText(status: QueueStatus) {
+  const messages: Record<QueueStatus, string> = {
+    detected: "Status: detected. Waiting for the upload worker.",
+    needs_routing: "Status: needs routing. Operator action required.",
+    needs_approval: "Status: needs approval. Operator action required.",
+    uploading: "Status: uploading. Upload is in progress.",
+    uploaded: "Status: uploaded. No action required.",
+    failed: "Status: failed. Recovery action required.",
+    skipped: "Status: skipped. Can be restored.",
+    externally_handled: "Status: externally handled. Can be restored."
+  };
+
+  return messages[status];
 }
 
 function isBulkActionEligible(item: QueueItem, action: BulkQueueAction) {

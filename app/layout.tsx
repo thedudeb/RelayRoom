@@ -87,6 +87,19 @@ export default function RootLayout({
               document.documentElement.dataset.theme = theme;
               document.documentElement.dataset.privacy =
                 localStorage.getItem('privacyMode') === 'on' ? 'on' : 'off';
+              var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+              var motion = localStorage.getItem('a11yMotion') || (prefersReducedMotion ? 'reduced' : 'standard');
+              document.documentElement.dataset.a11yMotion =
+                motion === 'reduced' ? 'reduced' : 'standard';
+              var density = localStorage.getItem('a11yDensity');
+              document.documentElement.dataset.a11yDensity =
+                density === 'compact' || density === 'large' ? density : 'comfortable';
+              document.documentElement.dataset.a11yContrast =
+                localStorage.getItem('a11yContrast') === 'on' ? 'on' : 'off';
+              document.documentElement.dataset.a11yFocus =
+                localStorage.getItem('a11yFocus') === 'on' ? 'on' : 'off';
+              document.documentElement.dataset.a11yShortcuts =
+                localStorage.getItem('a11yShortcuts') === 'off' ? 'off' : 'on';
             } catch (error) {}
           `}
         </Script>

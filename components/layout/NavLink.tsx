@@ -34,6 +34,7 @@ export function NavLink({ children, onClick, ...rest }: NavLinkProps) {
     // fall through to Link's normal navigation.
     if (typeof doc.startViewTransition !== "function") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (document.documentElement.dataset.a11yMotion === "reduced") return;
 
     event.preventDefault();
     const href = (typeof rest.href === "string" ? rest.href : rest.href.toString()) as Parameters<

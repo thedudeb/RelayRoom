@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { ApiKeyPanel } from "@/components/settings/ApiKeyPanel";
+import { AccessibilityPanel } from "@/components/settings/AccessibilityPanel";
 import { TimezonePicker } from "@/components/settings/TimezonePicker";
 import { WebhookSmokeTest } from "@/components/settings/WebhookSmokeTest";
 import { requireAppAccess, requireOwnerAccess } from "@/lib/auth/account";
@@ -107,6 +108,7 @@ export default async function SettingsPage({
               <ApiKeyPanel activeKey={activeApiKey} />
             </div>
           </section>
+          <AccessibilityPanel />
           <NotificationPreferencePanel
             disabled={access.isDemo}
             preference={notificationPreference}

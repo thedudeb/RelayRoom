@@ -151,6 +151,88 @@
   --shadow-xl: 0 32px 80px rgba(0, 0, 0, 0.52), 0 4px 12px rgba(0, 0, 0, 0.32);
 }
 
+:root[data-a11y-density="compact"] {
+  --space-3: 10px;
+  --space-4: 14px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-8: 26px;
+  --topbar-height: 64px;
+}
+
+:root[data-a11y-density="large"] {
+  --text-2xs: 12px;
+  --text-xs: 13px;
+  --text-sm: 15px;
+  --text-base: 16px;
+  --text-md: 17px;
+  --text-lg: 19px;
+  --text-xl: 23px;
+  --text-2xl: 28px;
+  --text-3xl: 34px;
+  --text-4xl: 42px;
+  --leading-normal: 1.58;
+  --leading-relaxed: 1.75;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+  --space-6: 28px;
+  --space-8: 36px;
+  --topbar-height: 84px;
+}
+
+:root[data-a11y-contrast="on"] {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f4f4f5;
+  --surface-raised: #ffffff;
+  --ink: #050505;
+  --muted: #303030;
+  --subtle: #4b4b4b;
+  --line: #737373;
+  --line-strong: #262626;
+  --blue: #005fcc;
+  --blue-ink: #003a7c;
+  --blue-soft: #d8eaff;
+  --green: #006b2f;
+  --green-soft: #d8f5e3;
+  --amber: #815200;
+  --amber-soft: #fff0bd;
+  --red: #a40000;
+  --red-soft: #ffe0e0;
+  --violet: #5a27b8;
+  --violet-soft: #ebe1ff;
+  --focus-ring: 0 0 0 4px color-mix(in srgb, var(--accent) 72%, transparent);
+  --shadow: 0 0 0 1px var(--line);
+  --shadow-sm: 0 0 0 1px var(--line);
+  --shadow-md: 0 0 0 1px var(--line-strong);
+  --shadow-lg: 0 0 0 1px var(--line-strong);
+  --shadow-xl: 0 0 0 1px var(--line-strong);
+}
+
+:root[data-theme="dark"][data-a11y-contrast="on"] {
+  --bg: #000000;
+  --surface: #050505;
+  --surface-muted: #111111;
+  --surface-raised: #0b0b0b;
+  --ink: #ffffff;
+  --muted: #e5e5e5;
+  --subtle: #cfcfcf;
+  --line: #9d9d9d;
+  --line-strong: #f5f5f5;
+  --blue: #8bcaff;
+  --blue-ink: #dff1ff;
+  --blue-soft: rgba(139, 202, 255, 0.28);
+  --green: #91f7b4;
+  --green-soft: rgba(145, 247, 180, 0.24);
+  --amber: #ffe16a;
+  --amber-soft: rgba(255, 225, 106, 0.24);
+  --red: #ffb4b4;
+  --red-soft: rgba(255, 180, 180, 0.24);
+  --violet: #d7c5ff;
+  --violet-soft: rgba(215, 197, 255, 0.25);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -160,6 +242,15 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+:root[data-a11y-motion="reduced"] *,
+:root[data-a11y-motion="reduced"] *::before,
+:root[data-a11y-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
 }
 
 /* ── View Transitions ─────────────────────────────────── */
@@ -237,6 +328,13 @@
   ::view-transition-new(*) {
     animation: none !important;
   }
+}
+
+:root[data-a11y-motion="reduced"]::view-transition-group(*),
+:root[data-a11y-motion="reduced"]::view-transition-image-pair(*),
+:root[data-a11y-motion="reduced"]::view-transition-old(*),
+:root[data-a11y-motion="reduced"]::view-transition-new(*) {
+  animation: none !important;
 }
 
 /* ── Motion utilities ─────────────────────────────────── */
@@ -421,6 +519,24 @@ h1, h2, h3 {
 
 :focus-visible {
   outline: none;
+}
+
+:root[data-a11y-focus="on"] :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.sr-only {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 :root[data-theme="dark"] body {
@@ -2230,6 +2346,101 @@ html[data-privacy="on"] input[data-private] {
   font-weight: 520 !important;
 }
 
+.accessibility-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.accessibility-control {
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+  padding: var(--space-3);
+}
+
+.accessibility-control legend {
+  align-items: center;
+  color: var(--ink);
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  gap: var(--space-2);
+  letter-spacing: var(--tracking-wide);
+  padding: 0 var(--space-1);
+  text-transform: uppercase;
+}
+
+.radio-card {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.radio-card:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.radio-card input {
+  accent-color: var(--accent);
+}
+
+.radio-card span {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.shortcut-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.shortcut-list span {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  display: inline-flex;
+  font-size: var(--text-xs);
+  gap: 6px;
+  padding: 4px var(--space-2);
+}
+
+kbd {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xs);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  min-width: 20px;
+  padding: 1px 5px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .accessibility-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .pipeline-next-step {
   background: color-mix(in srgb, var(--warning-soft) 55%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--warning) 26%, var(--line));
@@ -2335,6 +2546,17 @@ html[data-privacy="on"] input[data-private] {
 
 .bulk-action-buttons .button {
   min-height: 34px;
+}
+
+.bulk-shortcut-hint {
+  color: var(--muted);
+  flex-basis: 100%;
+  font-size: var(--text-xs);
+  margin: calc(var(--space-1) * -1) 0 0;
+}
+
+.bulk-shortcut-hint kbd {
+  margin: 0 2px;
 }
 
 .selection-cell {
