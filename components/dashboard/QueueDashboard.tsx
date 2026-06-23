@@ -203,6 +203,16 @@ export function QueueDashboard({
   );
   const hasAdvancedFilters =
     ruleFilter !== "all" || Boolean(detectedFrom) || Boolean(detectedTo);
+  const queueExportHref = buildQueueExportHref({
+    activeTab,
+    detectedFrom,
+    detectedTo,
+    isDemo,
+    pipelineFilter,
+    requestedOwnerUserId,
+    ruleFilter,
+    sortMode
+  });
 
   const visibleItems = useMemo(() => {
     return items
@@ -721,6 +731,9 @@ export function QueueDashboard({
             </button>
           ) : null}
           <div className="saved-view-actions">
+            <a className="button compact-button" href={queueExportHref}>
+              Export CSV
+            </a>
             <button className="button compact-button" onClick={saveCurrentView} type="button">
               Save view
             </button>
@@ -1884,6 +1897,37 @@ function readSavedQueueViews(): SavedQueueView[] {
   } catch {
     return [];
   }
+}
+
+function buildQueueExportHref({
+  activeTab,
+  detectedFrom,
+  detectedTo,
+  isDemo,
+  pipelineFilter,
+  requestedOwnerUserId,
+  ruleFilter,
+  sortMode
+}: {
+  activeTab: QueueTab;
+  detectedFrom: string;
+  detectedTo: string;
+  isDemo: boolean;
+  pipelineFilter: string;
+  requestedOwnerUserId?: string;
+  ruleFilter: string;
+  sortMode: SortMode;
+}) {
+  const params = new URLSearchParams();
+  if (isDemo) params.set("demo", "true");
+  if (requestedOwnerUserId) params.set("userId", requestedOwnerUserId);
+  if (activeTab !== "all") params.set("status", activeTab);
+  if (pipelineFilter !== "all") params.set("pipeline", pipelineFilter);
+  if (ruleFilter !== "all") params.set("rule", ruleFilter);
+  if (detectedFrom) params.set("detectedFrom", detectedFrom);
+  if (detectedTo) params.set("detectedTo", detectedTo);
+  params.set("sort", sortMode);
+  return `/api/export/queue?${params.toString()}`;
 }
 
 function writeSavedQueueViews(views: SavedQueueView[]) {

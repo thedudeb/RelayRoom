@@ -36,6 +36,7 @@ export default async function ActivityPage({
     ? await getDemoActivityEntries()
     : await getActivityEntries({ userId: selectedUserId });
   const dashboardHref = access.isDemo ? "/dashboard?demo=true" : "/dashboard";
+  const exportHref = activityExportHref({ isDemo: access.isDemo, selectedUserId });
 
   return (
     <AppShell
@@ -57,7 +58,12 @@ export default async function ActivityPage({
             <h2>Recent activity</h2>
             <p className="muted">Newest events first across visible queue items.</p>
           </div>
-          <span className="badge">{entries.length} events</span>
+          <div className="actions">
+            <a className="button compact-button" href={exportHref}>
+              Export CSV
+            </a>
+            <span className="badge">{entries.length} events</span>
+          </div>
         </div>
         {entries.length ? (
           <ol className="timeline activity-timeline">
@@ -202,6 +208,20 @@ function mapUser(user: { email: string; id: string; name: string | null }) {
     id: user.id,
     name: user.name || undefined
   };
+}
+
+function activityExportHref({
+  isDemo,
+  selectedUserId
+}: {
+  isDemo: boolean;
+  selectedUserId?: string;
+}) {
+  const params = new URLSearchParams();
+  if (isDemo) params.set("demo", "true");
+  if (selectedUserId) params.set("userId", selectedUserId);
+  const query = params.toString();
+  return query ? `/api/export/activity?${query}` : "/api/export/activity";
 }
 
 function bulkMetadata(metadata: unknown) {
