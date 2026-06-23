@@ -2313,6 +2313,47 @@ html[data-privacy="on"] input[data-private] {
   overflow: hidden;
 }
 
+.bulk-action-toolbar {
+  align-items: center;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+}
+
+.bulk-selection-summary,
+.bulk-action-buttons {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.bulk-action-buttons .button {
+  min-height: 34px;
+}
+
+.selection-cell {
+  text-align: center;
+  width: 44px;
+}
+
+.selection-cell input {
+  accent-color: var(--accent);
+  cursor: pointer;
+  height: 16px;
+  width: 16px;
+}
+
+.selection-cell input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .tooltip-overflow-wrap {
   overflow: visible;
 }
@@ -6102,13 +6143,20 @@ td strong {
   }
 
   .responsive-table td[data-label="File"],
+  .responsive-table td[data-label="Select"],
   .responsive-table td[data-label="Connection"] {
     grid-template-columns: 1fr;
   }
 
   .responsive-table td[data-label="File"]::before,
+  .responsive-table td[data-label="Select"]::before,
   .responsive-table td[data-label="Connection"]::before {
     margin-bottom: -2px;
+  }
+
+  .responsive-table td[data-label="Select"] {
+    border-bottom: 0;
+    padding-bottom: 0;
   }
 
   .responsive-table td[data-label="Actions"] .actions,

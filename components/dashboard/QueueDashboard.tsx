@@ -39,6 +39,7 @@ type QueueAction =
   | "route"
   | "upload"
   | "edit_route";
+type BulkQueueAction = "upload" | "skip" | "mark_externally_handled" | "restore";
 type QueueActionPayload = {
   playlistId?: string;
   playlistName?: string;
@@ -167,6 +168,8 @@ export function QueueDashboard({
   const [busyAction, setBusyAction] = useState<{ itemId: string; action: QueueAction } | null>(
     null
   );
+  const [bulkAction, setBulkAction] = useState<BulkQueueAction | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [details, setDetails] = useState<QueueDetails>();
   const [detailsState, setDetailsState] = useState<"idle" | "loading">("idle");
   const [editRouteItem, setEditRouteItem] = useState<QueueItem>();
@@ -199,6 +202,21 @@ export function QueueDashboard({
       .slice()
       .sort((a, b) => compareQueueItems(a, b, sortMode));
   }, [activeTab, detectedFrom, detectedTo, items, pipelineFilter, ruleFilter, sortMode]);
+  const manageableVisibleItems = useMemo(
+    () => visibleItems.filter((item) => canManageQueueItem(item, currentUserId)),
+    [currentUserId, visibleItems]
+  );
+  const selectedVisibleItems = useMemo(
+    () => visibleItems.filter((item) => selectedIds.has(item.id)),
+    [selectedIds, visibleItems]
+  );
+  const selectedManageableVisibleItems = useMemo(
+    () => selectedVisibleItems.filter((item) => canManageQueueItem(item, currentUserId)),
+    [currentUserId, selectedVisibleItems]
+  );
+  const allManageableVisibleSelected =
+    manageableVisibleItems.length > 0 &&
+    manageableVisibleItems.every((item) => selectedIds.has(item.id));
 
   const activeCounts = {
     approval: count(items, "needs_approval"),
@@ -216,6 +234,38 @@ export function QueueDashboard({
     const intervalId = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(intervalId);
   }, [isDemo]);
+
+  useEffect(() => {
+    const currentItemIds = new Set(items.map((item) => item.id));
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => currentItemIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [items]);
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allManageableVisibleSelected) {
+        manageableVisibleItems.forEach((item) => next.delete(item.id));
+      } else {
+        manageableVisibleItems.forEach((item) => next.add(item.id));
+      }
+      return next;
+    });
+  }
+
+  function toggleSelected(itemId: string, selected: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (selected) {
+        next.add(itemId);
+      } else {
+        next.delete(itemId);
+      }
+      return next;
+    });
+  }
 
   async function runQueueAction(
     item: QueueItem,
@@ -278,6 +328,99 @@ export function QueueDashboard({
       });
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function runBulkAction(action: BulkQueueAction) {
+    const eligibleItems = selectedManageableVisibleItems.filter((item) =>
+      isBulkActionEligible(item, action)
+    );
+    if (!eligibleItems.length) {
+      toast({
+        tone: "danger",
+        title: "No eligible queue items",
+        body: bulkNoEligibleMessage(action)
+      });
+      return;
+    }
+
+    if (!window.confirm(bulkConfirmMessage(action, eligibleItems.length))) {
+      return;
+    }
+
+    setBulkAction(action);
+
+    if (isDemo) {
+      setDemoItems((currentItems) =>
+        currentItems.map((item) => {
+          if (!eligibleItems.some((eligible) => eligible.id === item.id)) {
+            return item;
+          }
+          return simulateDemoAction(item, action, {}, null).next;
+        })
+      );
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        eligibleItems.forEach((item) => next.delete(item.id));
+        return next;
+      });
+      setBulkAction(null);
+      toast({
+        tone: "success",
+        title: bulkSuccessMessage(action, eligibleItems.length),
+        body: "Demo mode — sign in to run this against your own Drive + YouTube."
+      });
+      return;
+    }
+
+    const succeededIds: string[] = [];
+    const failures: string[] = [];
+
+    for (const item of eligibleItems) {
+      try {
+        const response = await fetch(`/api/queue/${encodeURIComponent(item.id)}/actions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action })
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(queueActionErrorMessage(payload.error));
+        }
+
+        succeededIds.push(item.id);
+      } catch (error) {
+        failures.push(
+          `${item.filename}: ${error instanceof Error ? error.message : "Queue action failed."}`
+        );
+      }
+    }
+
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      succeededIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    setBulkAction(null);
+
+    if (succeededIds.length) {
+      toast({
+        tone: failures.length ? "danger" : "success",
+        title: bulkSuccessMessage(action, succeededIds.length),
+        body: failures.length ? `${failures.length} item${failures.length === 1 ? "" : "s"} failed.` : undefined
+      });
+      router.refresh();
+    }
+
+    if (!succeededIds.length && failures.length) {
+      toast({
+        tone: "danger",
+        title: "Bulk action failed",
+        body: failures.slice(0, 2).join(" | ")
+      });
     }
   }
 
@@ -452,9 +595,28 @@ export function QueueDashboard({
       </section>
 
       <div className="table-wrap responsive-table-wrap tooltip-overflow-wrap" data-tour="queue-table">
+        <BulkActionToolbar
+          action={bulkAction}
+          allManageableVisibleSelected={allManageableVisibleSelected}
+          isDisabled={Boolean(busyAction) || Boolean(bulkAction)}
+          onAction={runBulkAction}
+          onClearSelection={() => setSelectedIds(new Set())}
+          onToggleAll={toggleSelectAllVisible}
+          selectedItems={selectedManageableVisibleItems}
+          visibleManageableCount={manageableVisibleItems.length}
+        />
         <table className="responsive-table">
           <thead>
             <tr>
+              <th className="selection-cell">
+                <input
+                  aria-label="Select all visible manageable queue items"
+                  checked={allManageableVisibleSelected}
+                  disabled={!manageableVisibleItems.length || Boolean(bulkAction)}
+                  onChange={toggleSelectAllVisible}
+                  type="checkbox"
+                />
+              </th>
               <th>File</th>
               <th>Pipeline</th>
               <th>User</th>
@@ -474,11 +636,14 @@ export function QueueDashboard({
                 isDetailsLoading={details?.item.id === item.id && detailsState === "loading"}
                 item={item}
                 key={item.id}
-                canManage={!currentUserId || item.owner.id === currentUserId}
+                canManage={canManageQueueItem(item, currentUserId)}
                 nowMs={relativeNowMs}
                 onAction={runQueueAction}
                 onDetails={openDetails}
                 onEditRoute={setEditRouteItem}
+                onSelectedChange={toggleSelected}
+                selected={selectedIds.has(item.id)}
+                selectionDisabled={Boolean(bulkAction)}
               />
             ))}
           </tbody>
@@ -523,7 +688,10 @@ function QueueRow({
   nowMs,
   onAction,
   onDetails,
-  onEditRoute
+  onEditRoute,
+  onSelectedChange,
+  selected,
+  selectionDisabled
 }: {
   busyAction: { itemId: string; action: QueueAction } | null;
   canManage: boolean;
@@ -534,6 +702,9 @@ function QueueRow({
   onAction: (item: QueueItem, action: QueueAction, payload?: QueueActionPayload) => void;
   onDetails: (item: QueueItem) => void;
   onEditRoute: (item: QueueItem) => void;
+  onSelectedChange: (itemId: string, selected: boolean) => void;
+  selected: boolean;
+  selectionDisabled: boolean;
 }) {
   const isUploading =
     busyAction?.itemId === item.id &&
@@ -542,6 +713,15 @@ function QueueRow({
   return (
     <>
       <tr>
+        <td className="selection-cell" data-label="Select">
+          <input
+            aria-label={`Select ${item.filename}`}
+            checked={selected}
+            disabled={!canManage || selectionDisabled}
+            onChange={(event) => onSelectedChange(item.id, event.target.checked)}
+            type="checkbox"
+          />
+        </td>
         <td data-label="File">
           <strong data-private>{item.filename}</strong>
           <div className="muted">{formatBytes(item.sizeBytes)} · {item.mimeType}</div>
@@ -595,7 +775,7 @@ function QueueRow({
       </tr>
       {details ? (
         <tr className="queue-detail-row">
-          <td colSpan={9}>
+          <td colSpan={10}>
             <QueueDetailsPanel
               details={details}
               isLoading={isDetailsLoading}
@@ -605,6 +785,99 @@ function QueueRow({
         </tr>
       ) : null}
     </>
+  );
+}
+
+function BulkActionToolbar({
+  action,
+  allManageableVisibleSelected,
+  isDisabled,
+  onAction,
+  onClearSelection,
+  onToggleAll,
+  selectedItems,
+  visibleManageableCount
+}: {
+  action: BulkQueueAction | null;
+  allManageableVisibleSelected: boolean;
+  isDisabled: boolean;
+  onAction: (action: BulkQueueAction) => void;
+  onClearSelection: () => void;
+  onToggleAll: () => void;
+  selectedItems: QueueItem[];
+  visibleManageableCount: number;
+}) {
+  const selectedCount = selectedItems.length;
+  const uploadableCount = selectedItems.filter((item) => isBulkActionEligible(item, "upload")).length;
+  const skippableCount = selectedItems.filter((item) => isBulkActionEligible(item, "skip")).length;
+  const closableCount = selectedItems.filter((item) =>
+    isBulkActionEligible(item, "mark_externally_handled")
+  ).length;
+  const restorableCount = selectedItems.filter((item) =>
+    isBulkActionEligible(item, "restore")
+  ).length;
+
+  return (
+    <div className="bulk-action-toolbar" aria-label="Bulk queue actions">
+      <div className="bulk-selection-summary">
+        <label className="checkbox-field">
+          <input
+            checked={allManageableVisibleSelected}
+            disabled={!visibleManageableCount || isDisabled}
+            onChange={onToggleAll}
+            type="checkbox"
+          />
+          <span>
+            {selectedCount
+              ? `${selectedCount} selected`
+              : `${visibleManageableCount} visible manageable`}
+          </span>
+        </label>
+        {selectedCount ? (
+          <button className="button ghost compact-button" disabled={isDisabled} onClick={onClearSelection} type="button">
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="bulk-action-buttons">
+        <button
+          className="button compact-button"
+          disabled={isDisabled || uploadableCount === 0}
+          onClick={() => onAction("upload")}
+          type="button"
+        >
+          <Play aria-hidden="true" size={14} />
+          {action === "upload" ? "Uploading..." : `Approve/retry ${uploadableCount}`}
+        </button>
+        <button
+          className="button compact-button"
+          disabled={isDisabled || skippableCount === 0}
+          onClick={() => onAction("skip")}
+          type="button"
+        >
+          <SkipForward aria-hidden="true" size={14} />
+          {action === "skip" ? "Skipping..." : `Skip ${skippableCount}`}
+        </button>
+        <button
+          className="button compact-button"
+          disabled={isDisabled || closableCount === 0}
+          onClick={() => onAction("mark_externally_handled")}
+          type="button"
+        >
+          <ExternalLink aria-hidden="true" size={14} />
+          {action === "mark_externally_handled" ? "Marking..." : `Mark handled ${closableCount}`}
+        </button>
+        <button
+          className="button compact-button"
+          disabled={isDisabled || restorableCount === 0}
+          onClick={() => onAction("restore")}
+          type="button"
+        >
+          <RotateCcw aria-hidden="true" size={14} />
+          {action === "restore" ? "Restoring..." : `Restore ${restorableCount}`}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1438,6 +1711,60 @@ function Metric({
 
 function count(items: QueueItem[], status: QueueStatus): number {
   return items.filter((item) => item.status === status).length;
+}
+
+function canManageQueueItem(item: QueueItem, currentUserId?: string) {
+  return !currentUserId || item.owner.id === currentUserId;
+}
+
+function isBulkActionEligible(item: QueueItem, action: BulkQueueAction) {
+  if (action === "upload") {
+    return (
+      (item.status === "needs_approval" || item.status === "failed") &&
+      Boolean(item.intendedPlaylistId)
+    );
+  }
+
+  if (action === "skip" || action === "mark_externally_handled") {
+    return item.status === "needs_routing" || item.status === "needs_approval" || item.status === "failed";
+  }
+
+  return item.status === "skipped" || item.status === "externally_handled";
+}
+
+function bulkNoEligibleMessage(action: BulkQueueAction) {
+  if (action === "upload") {
+    return "Select needs-approval or failed items that already have a playlist.";
+  }
+  if (action === "skip") {
+    return "Select items that are waiting for routing, approval, or failure recovery.";
+  }
+  if (action === "mark_externally_handled") {
+    return "Select items that are waiting for routing, approval, or failure recovery.";
+  }
+  return "Select skipped or externally handled items.";
+}
+
+function bulkConfirmMessage(action: BulkQueueAction, count: number) {
+  const itemLabel = `${count} item${count === 1 ? "" : "s"}`;
+  if (action === "upload") {
+    return `Approve or retry upload for ${itemLabel}? Uploads will run one at a time.`;
+  }
+  if (action === "skip") {
+    return `Skip ${itemLabel}? You can restore skipped items later.`;
+  }
+  if (action === "mark_externally_handled") {
+    return `Mark ${itemLabel} as already handled? Bulk handled items will not store individual YouTube URLs.`;
+  }
+  return `Restore ${itemLabel} to the queue?`;
+}
+
+function bulkSuccessMessage(action: BulkQueueAction, count: number) {
+  const itemLabel = `${count} item${count === 1 ? "" : "s"}`;
+  if (action === "upload") return `Started upload flow for ${itemLabel}`;
+  if (action === "skip") return `Skipped ${itemLabel}`;
+  if (action === "mark_externally_handled") return `Marked ${itemLabel} handled`;
+  return `Restored ${itemLabel}`;
 }
 
 function compareQueueItems(a: QueueItem, b: QueueItem, sortMode: SortMode): number {
