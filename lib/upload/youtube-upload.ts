@@ -7,6 +7,7 @@ import {
   QueueStatus
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { notifyQueueEvent } from "@/lib/notifications/queue-notifications";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { decryptToken, encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
@@ -301,6 +302,11 @@ export async function uploadQueueItemToYouTube({
         }
       })
     ]);
+    await notifyQueueEvent({
+      queueItemId: item.id,
+      type: "upload_failed",
+      userId
+    });
 
     throw error;
   }
@@ -945,6 +951,15 @@ export async function reapStaleUploads(staleMinutes = 90) {
       }))
     })
   ]);
+  await Promise.all(
+    stale.map((item) =>
+      notifyQueueEvent({
+        queueItemId: item.id,
+        type: "upload_failed",
+        userId: item.userId
+      })
+    )
+  );
 
   return { reaped: stale.length };
 }

@@ -11,6 +11,10 @@ import { prisma } from "@/lib/db/prisma";
 import type { DriveFileMetadata, Pipeline } from "@/lib/domain/types";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
+import {
+  notifyQueueEvent,
+  queueNotificationTypeForStatus
+} from "@/lib/notifications/queue-notifications";
 import { evaluatePipelineRules } from "@/lib/rules/rule-engine";
 import { decryptToken, encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
 import {
@@ -292,6 +296,14 @@ export async function runDriveDetectionForPipeline({
         youtubeVideoId: null
       });
       created += 1;
+      const notificationType = queueNotificationTypeForStatus(status);
+      if (notificationType) {
+        await notifyQueueEvent({
+          queueItemId: queueItem.id,
+          type: notificationType,
+          userId
+        });
+      }
 
       // Auto-mode uploads now happen out-of-band: the cron upload worker
       // (/api/cron/process-uploads) drains DETECTED items. Doing the upload
@@ -463,6 +475,14 @@ async function maybeReprocessExistingUpload({
       }
     })
   ]);
+  const notificationType = queueNotificationTypeForStatus(status);
+  if (notificationType) {
+    await notifyQueueEvent({
+      queueItemId: existingItem.id,
+      type: notificationType,
+      userId
+    });
+  }
 
   // Auto-mode reprocessing also defers to the upload worker (see comment in
   // the main detection loop).

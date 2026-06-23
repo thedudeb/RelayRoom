@@ -6,6 +6,7 @@ import {
 } from "@/lib/data/repository";
 import { prisma } from "@/lib/db/prisma";
 import type { QueueItem } from "@/lib/domain/types";
+import { generateRecordingIntelligence } from "@/lib/intelligence/recording-intelligence";
 
 // Detail view for a single queue item: the item itself, its persisted rule
 // evaluation (if any), and its activity log + upload attempts. Serves both real
@@ -41,6 +42,7 @@ export async function GET(
   return NextResponse.json({
     item,
     evaluation,
+    intelligence: generateRecordingIntelligence(item),
     ...details
   });
 }

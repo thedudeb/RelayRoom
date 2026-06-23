@@ -14,6 +14,8 @@ import { TimezonePicker } from "@/components/settings/TimezonePicker";
 import { WebhookSmokeTest } from "@/components/settings/WebhookSmokeTest";
 import { requireAppAccess, requireOwnerAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
+import { notificationWebhookAad } from "@/lib/notifications/queue-notifications";
+import { encryptToken } from "@/lib/security/token-vault";
 
 export default async function SettingsPage({
   searchParams
@@ -21,6 +23,7 @@ export default async function SettingsPage({
   searchParams?: Promise<{
     demo?: string;
     error?: string;
+    notificationsUpdated?: string;
     userEnabled?: string;
     userDisabled?: string;
     userRemoved?: string;
@@ -29,14 +32,22 @@ export default async function SettingsPage({
 }) {
   const params = await searchParams;
   const access = await requireAppAccess(params);
-  const [ownerState, readiness, activeApiKey, telemetry, profile] = access.isDemo
-    ? [null, await getReadinessState(), null, await getOperationsTelemetry(), { timezone: "UTC" }]
+  const [ownerState, readiness, activeApiKey, telemetry, profile, notificationPreference] = access.isDemo
+    ? [
+        null,
+        await getReadinessState(),
+        null,
+        await getOperationsTelemetry(),
+        { timezone: "UTC" },
+        defaultNotificationPreference()
+      ]
     : await Promise.all([
         getOwnerState(access.userId),
         getReadinessState(),
         getActiveApiKey(access.userId),
         getOperationsTelemetry(),
-        getProfileState(access.userId)
+        getProfileState(access.userId),
+        getNotificationPreference(access.userId)
       ]);
 
   return (
@@ -66,6 +77,11 @@ export default async function SettingsPage({
           Timezone saved.
         </div>
       ) : null}
+      {params?.notificationsUpdated ? (
+        <div className="notice success" role="status">
+          Notification preferences saved.
+        </div>
+      ) : null}
       {params?.error ? (
         <div className="notice danger" role="alert">
           {settingsErrorMessage(params.error)}
@@ -91,6 +107,10 @@ export default async function SettingsPage({
               <ApiKeyPanel activeKey={activeApiKey} />
             </div>
           </section>
+          <NotificationPreferencePanel
+            disabled={access.isDemo}
+            preference={notificationPreference}
+          />
         </section>
         <section className="stack">
           <section className="panel" data-tour="owner-controls">
@@ -147,6 +167,122 @@ async function getProfileState(userId: string) {
   });
 
   return { timezone: user?.timezone || "UTC" };
+}
+
+interface NotificationPreferenceState {
+  hasSlackWebhook: boolean;
+  notifyNeedsApproval: boolean;
+  notifyNeedsRouting: boolean;
+  notifyUploadFailed: boolean;
+}
+
+function defaultNotificationPreference(): NotificationPreferenceState {
+  return {
+    hasSlackWebhook: false,
+    notifyNeedsApproval: true,
+    notifyNeedsRouting: true,
+    notifyUploadFailed: true
+  };
+}
+
+async function getNotificationPreference(userId: string): Promise<NotificationPreferenceState> {
+  const preference = await prisma.notificationPreference.findUnique({
+    where: { userId },
+    select: {
+      encryptedSlackWebhookUrl: true,
+      notifyNeedsApproval: true,
+      notifyNeedsRouting: true,
+      notifyUploadFailed: true
+    }
+  });
+
+  if (!preference) {
+    return defaultNotificationPreference();
+  }
+
+  return {
+    hasSlackWebhook: Boolean(preference.encryptedSlackWebhookUrl),
+    notifyNeedsApproval: preference.notifyNeedsApproval,
+    notifyNeedsRouting: preference.notifyNeedsRouting,
+    notifyUploadFailed: preference.notifyUploadFailed
+  };
+}
+
+function NotificationPreferencePanel({
+  disabled,
+  preference
+}: {
+  disabled: boolean;
+  preference: NotificationPreferenceState;
+}) {
+  return (
+    <section className="panel" data-tour="notification-preferences">
+      <div className="section-header">
+        <div>
+          <h2>Notifications</h2>
+          <p className="muted">
+            Send queue alerts to a Slack-compatible incoming webhook.
+          </p>
+        </div>
+        <span className={`badge ${preference.hasSlackWebhook ? "uploaded" : "needs_routing"}`}>
+          {preference.hasSlackWebhook ? "configured" : "off"}
+        </span>
+      </div>
+      <form action={updateNotificationPreferencesAction} className="stack">
+        <label className="stack">
+          <span>Webhook URL</span>
+          <input
+            className="input"
+            disabled={disabled}
+            name="slackWebhookUrl"
+            placeholder={preference.hasSlackWebhook ? "Leave blank to keep current webhook" : "https://hooks.slack.com/services/..."}
+            type="url"
+          />
+          <small className="field-hint">
+            RelayRoom encrypts the webhook URL and never shows it again.
+          </small>
+        </label>
+        {preference.hasSlackWebhook ? (
+          <label className="checkbox-field">
+            <input disabled={disabled} name="clearSlackWebhookUrl" type="checkbox" />
+            <span>Remove saved webhook</span>
+          </label>
+        ) : null}
+        <div className="stack compact">
+          <label className="checkbox-field">
+            <input
+              defaultChecked={preference.notifyNeedsRouting}
+              disabled={disabled}
+              name="notifyNeedsRouting"
+              type="checkbox"
+            />
+            <span>Needs routing</span>
+          </label>
+          <label className="checkbox-field">
+            <input
+              defaultChecked={preference.notifyNeedsApproval}
+              disabled={disabled}
+              name="notifyNeedsApproval"
+              type="checkbox"
+            />
+            <span>Needs approval</span>
+          </label>
+          <label className="checkbox-field">
+            <input
+              defaultChecked={preference.notifyUploadFailed}
+              disabled={disabled}
+              name="notifyUploadFailed"
+              type="checkbox"
+            />
+            <span>Upload failed</span>
+          </label>
+        </div>
+        <button className="button" disabled={disabled} type="submit">
+          Save notifications
+        </button>
+      </form>
+    </section>
+  );
 }
 
 type ReadinessTone = "attention" | "missing" | "ready";
@@ -876,6 +1012,56 @@ async function updateTimezoneAction(formData: FormData) {
   redirect("/settings?timezoneUpdated=true");
 }
 
+async function updateNotificationPreferencesAction(formData: FormData) {
+  "use server";
+
+  const access = await requireAppAccess();
+  if (access.isDemo) {
+    redirect("/settings?demo=true&error=DemoReadOnly");
+  }
+
+  const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+  const webhookUrl = getRequiredFormValue(formData, "slackWebhookUrl");
+  const shouldClearWebhook = formData.get("clearSlackWebhookUrl") === "on";
+  let encryptedSlackWebhookUrl: string | null | undefined;
+
+  if (webhookUrl) {
+    if (!isValidHttpsUrl(webhookUrl)) {
+      redirect("/settings?error=InvalidWebhookUrl");
+    }
+    if (!tokenKey) {
+      redirect("/settings?error=MissingTokenKey");
+    }
+    encryptedSlackWebhookUrl = encryptToken(
+      webhookUrl,
+      tokenKey,
+      notificationWebhookAad(access.userId)
+    );
+  } else if (shouldClearWebhook) {
+    encryptedSlackWebhookUrl = null;
+  }
+
+  await prisma.notificationPreference.upsert({
+    where: { userId: access.userId },
+    create: {
+      encryptedSlackWebhookUrl: encryptedSlackWebhookUrl ?? null,
+      notifyNeedsApproval: formData.get("notifyNeedsApproval") === "on",
+      notifyNeedsRouting: formData.get("notifyNeedsRouting") === "on",
+      notifyUploadFailed: formData.get("notifyUploadFailed") === "on",
+      userId: access.userId
+    },
+    update: {
+      ...(encryptedSlackWebhookUrl !== undefined ? { encryptedSlackWebhookUrl } : {}),
+      notifyNeedsApproval: formData.get("notifyNeedsApproval") === "on",
+      notifyNeedsRouting: formData.get("notifyNeedsRouting") === "on",
+      notifyUploadFailed: formData.get("notifyUploadFailed") === "on"
+    }
+  });
+
+  revalidatePath("/settings");
+  redirect("/settings?notificationsUpdated=true");
+}
+
 async function assertManageableUser(targetUserId: string, currentUserId: string | null) {
   if (!targetUserId) {
     redirect("/settings?error=MissingUser");
@@ -915,6 +1101,15 @@ function isValidTimezone(timezone: string) {
   }
 }
 
+function isValidHttpsUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function settingsErrorMessage(error: string) {
   const messages: Record<string, string> = {
     CannotManageOwner: "Owner accounts cannot be disabled or removed.",
@@ -922,6 +1117,8 @@ function settingsErrorMessage(error: string) {
     DemoReadOnly: "Demo settings cannot be changed.",
     DisableBeforeRemove: "Disable a user before removing them.",
     InvalidTimezone: "Choose a valid IANA timezone.",
+    InvalidWebhookUrl: "Enter a valid https webhook URL.",
+    MissingTokenKey: "TOKEN_ENCRYPTION_KEY is required before saving notification webhooks.",
     MissingUser: "Choose a user first.",
     OwnerOnly: "Only the platform owner can manage user access.",
     UserNotFound: "User not found."

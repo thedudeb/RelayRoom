@@ -42,6 +42,7 @@ import { RuleBuilderModeToggle } from "@/components/pipelines/RuleBuilderModeTog
 import { RulePlaylistSelect } from "@/components/pipelines/RulePlaylistSelect";
 import { RuleTester } from "@/components/pipelines/RuleTester";
 import { ClassicConditionInputs } from "@/components/pipelines/ClassicConditionInputs";
+import { DriveSampleRulePreview } from "@/components/pipelines/DriveSampleRulePreview";
 import { verifyDriveFolderSelection } from "@/lib/oauth/drive-folder-verification";
 import { getUsableYouTubeAccessToken } from "@/lib/detection/drive-detection";
 import { verifyChannelPlaylist } from "@/lib/oauth/youtube-playlists";
@@ -547,6 +548,7 @@ function RuleManager({
       <summary>Routing rules</summary>
       <div className="rule-editor">
         <RuleTester pipeline={pipeline} />
+        <DriveSampleRulePreview pipeline={pipeline} />
         {pipeline.rules.map((rule, index) => {
           const playlistValue = playlistOptionValue(rule.playlist.id, rule.playlist.name);
 

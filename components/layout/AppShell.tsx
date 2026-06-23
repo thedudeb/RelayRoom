@@ -6,6 +6,7 @@ import { NavLink } from "@/components/layout/NavLink";
 import {
   ChevronDown,
   GitBranch,
+  History,
   ListChecks,
   LogOut,
   Menu,
@@ -29,6 +30,7 @@ export interface AccountSummary {
 const navItems = [
   { href: "/dashboard", label: "Queue", icon: ListChecks },
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
+  { href: "/activity", label: "Activity", icon: History },
   { href: "/connections", label: "Connections", icon: PlugZap },
   { href: "/settings", label: "Settings", icon: Settings }
 ] as const;
@@ -151,6 +153,7 @@ export function AppShell({
 function getEyebrow(pathname: string): string {
   if (pathname.startsWith("/dashboard")) return "Operations";
   if (pathname.startsWith("/pipelines")) return "Automation";
+  if (pathname.startsWith("/activity")) return "Audit";
   if (pathname.startsWith("/connections")) return "Identity";
   if (pathname.startsWith("/settings")) return "Workspace";
   return "RelayRoom";

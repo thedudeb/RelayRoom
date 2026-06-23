@@ -183,6 +183,27 @@ export interface RoutingResult {
   ruleTraces: RuleTrace[];
 }
 
+// Recording intelligence is the product-facing enrichment layer for queue
+// items. The current implementation can be deterministic, but the shape is
+// intentionally model-ready: a future provider can fill this from a transcript,
+// Drive metadata, or a multimodal pass without changing the dashboard contract.
+export interface RecordingIntelligence {
+  confidence: "high" | "medium" | "low";
+  suggestedTitle: string;
+  suggestedDescription: string;
+  summary: string;
+  tags: string[];
+  chapters: Array<{
+    start: string;
+    title: string;
+  }>;
+  routingRecommendation?: {
+    playlistName: string;
+    reason: string;
+  };
+  reviewFlags: string[];
+}
+
 // A single detected Drive file as it moves through the upload queue. Carries
 // the routing decision (intended playlist, rendered title/description, matched
 // rule + trace), the YouTube result once uploaded, and failure detail on error.

@@ -14,7 +14,12 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { QueueItem, QueueStatus, RuleTrace } from "@/lib/domain/types";
+import type {
+  QueueItem,
+  QueueStatus,
+  RecordingIntelligence,
+  RuleTrace
+} from "@/lib/domain/types";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { RuleTraceList } from "@/components/rules/RuleTraceList";
 import { useToast } from "@/components/toast/ToastContext";
@@ -48,6 +53,7 @@ type QueueDetails = {
     at: string;
     message: string;
   }>;
+  intelligence?: RecordingIntelligence;
   attempts?: Array<{
     attemptNumber: number;
     failureReason?: string;
@@ -1227,6 +1233,10 @@ function QueueDetailsPanel({
         </div>
       ) : null}
 
+      {details.intelligence ? (
+        <RecordingIntelligencePanel intelligence={details.intelligence} />
+      ) : null}
+
       {details.evaluation ? (
         <section className="detail-section">
           <h3>
@@ -1298,6 +1308,73 @@ function QueueDetailsPanel({
         </section>
       </div>
     </div>
+  );
+}
+
+function RecordingIntelligencePanel({
+  intelligence
+}: {
+  intelligence: RecordingIntelligence;
+}) {
+  return (
+    <section className="detail-section intelligence-panel">
+      <div className="intelligence-header">
+        <div>
+          <h3>
+            Recording intelligence
+            <span className={`confidence-pill ${intelligence.confidence}`}>
+              {intelligence.confidence}
+            </span>
+          </h3>
+          <p className="detail-section-help" data-private>
+            {intelligence.summary}
+          </p>
+        </div>
+        {intelligence.routingRecommendation ? (
+          <div className="intelligence-route">
+            <span>Recommended route</span>
+            <strong data-private>{intelligence.routingRecommendation.playlistName}</strong>
+            <p>{intelligence.routingRecommendation.reason}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="intelligence-grid">
+        <div className="intelligence-copy">
+          <span>Suggested title</span>
+          <strong data-private>{intelligence.suggestedTitle}</strong>
+          <span>Description</span>
+          <p data-private>{intelligence.suggestedDescription}</p>
+        </div>
+
+        <div className="intelligence-copy">
+          <span>Suggested chapters</span>
+          <ol className="chapter-list">
+            {intelligence.chapters.map((chapter) => (
+              <li key={`${chapter.start}-${chapter.title}`}>
+                <time>{chapter.start}</time>
+                <span data-private>{chapter.title}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+
+      <div className="intelligence-footer">
+        <div className="tag-list" aria-label="Suggested tags">
+          {intelligence.tags.map((tag) => (
+            <span data-private key={tag}>{tag}</span>
+          ))}
+        </div>
+        {intelligence.reviewFlags.length ? (
+          <div className="review-flag-list" aria-label="Review flags">
+            {intelligence.reviewFlags.map((flag) => (
+              <span key={flag}>{flag}</span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
