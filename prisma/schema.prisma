@@ -78,6 +78,7 @@ model User {
   sessions      Session[]
   apiKeys       ApiKey[]
   notificationPreference NotificationPreference?
+  notificationDeliveries NotificationDeliveryAttempt[]
   connections   OAuthConnection[]
   pipelines     Pipeline[]
   queueItems    QueueItem[]
@@ -272,10 +273,27 @@ model QueueItem {
   pipeline              Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   attempts              UploadAttempt[]
   activityLog           ActivityLogEntry[]
+  notificationDeliveries NotificationDeliveryAttempt[]
 
   @@unique([pipelineId, driveFileId])
   @@index([userId, status, detectedAt])
   @@index([pipelineId, status])
+}
+
+model NotificationDeliveryAttempt {
+  id          String    @id @default(cuid())
+  userId      String
+  queueItemId String?
+  type        String
+  delivered   Boolean
+  reason      String?
+  statusCode  Int?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  queueItem   QueueItem? @relation(fields: [queueItemId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([queueItemId, createdAt])
 }
 
 model UploadAttempt {

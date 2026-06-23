@@ -102,6 +102,7 @@ async function getActivityEntries({ userId }: { userId?: string }): Promise<Acti
       createdAt: true,
       id: true,
       message: true,
+      metadata: true,
       queueItem: {
         select: {
           filename: true,
@@ -115,7 +116,36 @@ async function getActivityEntries({ userId }: { userId?: string }): Promise<Acti
     }
   });
 
-  return entries.map((entry) => ({
+  const grouped = new Map<string, ActivityEntry>();
+  const output: ActivityEntry[] = [];
+
+  for (const entry of entries) {
+    const bulk = bulkMetadata(entry.metadata);
+    if (bulk) {
+      const existing = grouped.get(bulk.batchId);
+      if (existing) {
+        existing.filename = `${Number(existing.filename.split(" ")[0]) + 1} recordings`;
+        existing.pipelineName = "Multiple pipelines";
+        continue;
+      }
+
+      const activity = {
+        actor: entry.user ? displayWorkspaceUser(mapUser(entry.user)) : entry.actorType,
+        at: entry.createdAt.toISOString(),
+        filename: "1 recording",
+        id: `bulk-${bulk.batchId}`,
+        message: `Bulk ${bulk.action.replaceAll("_", " ")} applied to ${bulk.size} item${bulk.size === 1 ? "" : "s"}.`,
+        owner: mapUser(entry.queueItem.user),
+        pipelineName: entry.queueItem.pipeline.name,
+        queueItemId: entry.queueItem.id,
+        status: entry.queueItem.status.toLowerCase()
+      };
+      grouped.set(bulk.batchId, activity);
+      output.push(activity);
+      continue;
+    }
+
+    output.push({
     actor: entry.user ? displayWorkspaceUser(mapUser(entry.user)) : entry.actorType,
     at: entry.createdAt.toISOString(),
     filename: entry.queueItem.filename,
@@ -125,7 +155,10 @@ async function getActivityEntries({ userId }: { userId?: string }): Promise<Acti
     pipelineName: entry.queueItem.pipeline.name,
     queueItemId: entry.queueItem.id,
     status: entry.queueItem.status.toLowerCase()
-  }));
+    });
+  }
+
+  return output;
 }
 
 async function getDemoActivityEntries(): Promise<ActivityEntry[]> {
@@ -168,5 +201,27 @@ function mapUser(user: { email: string; id: string; name: string | null }) {
     email: user.email,
     id: user.id,
     name: user.name || undefined
+  };
+}
+
+function bulkMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") return null;
+  const value = metadata as {
+    bulkAction?: unknown;
+    bulkBatchId?: unknown;
+    bulkSize?: unknown;
+  };
+  if (
+    typeof value.bulkAction !== "string" ||
+    typeof value.bulkBatchId !== "string" ||
+    typeof value.bulkSize !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    action: value.bulkAction,
+    batchId: value.bulkBatchId,
+    size: value.bulkSize
   };
 }

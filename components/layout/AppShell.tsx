@@ -7,6 +7,7 @@ import {
   ChevronDown,
   GitBranch,
   History,
+  HeartPulse,
   ListChecks,
   LogOut,
   Menu,
@@ -30,6 +31,7 @@ export interface AccountSummary {
 const navItems = [
   { href: "/dashboard", label: "Queue", icon: ListChecks },
   { href: "/pipelines", label: "Pipelines", icon: GitBranch },
+  { href: "/health", label: "Health", icon: HeartPulse },
   { href: "/activity", label: "Activity", icon: History },
   { href: "/connections", label: "Connections", icon: PlugZap },
   { href: "/settings", label: "Settings", icon: Settings }
@@ -153,6 +155,7 @@ export function AppShell({
 function getEyebrow(pathname: string): string {
   if (pathname.startsWith("/dashboard")) return "Operations";
   if (pathname.startsWith("/pipelines")) return "Automation";
+  if (pathname.startsWith("/health")) return "Reliability";
   if (pathname.startsWith("/activity")) return "Audit";
   if (pathname.startsWith("/connections")) return "Identity";
   if (pathname.startsWith("/settings")) return "Workspace";

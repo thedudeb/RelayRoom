@@ -32,6 +32,18 @@ import { displayWorkspaceUser } from "@/lib/workspace/users";
 
 type QueueTab = "all" | QueueStatus;
 type SortMode = "detected_desc" | "filename_asc" | "status_asc" | "last_action_desc";
+type SavedQueueView = {
+  filters: {
+    activeTab: QueueTab;
+    detectedFrom: string;
+    detectedTo: string;
+    pipelineFilter: string;
+    ruleFilter: string;
+    sortMode: SortMode;
+  };
+  id: string;
+  name: string;
+};
 type QueueAction =
   | "skip"
   | "restore"
@@ -85,6 +97,7 @@ const tabs: { label: string; status?: QueueStatus }[] = [
   { label: "Skipped", status: "skipped" },
   { label: "Externally Handled", status: "externally_handled" }
 ];
+const savedQueueViewsKey = "relayroom:savedQueueViews";
 
 export function QueueDashboard({
   currentUserId,
@@ -164,6 +177,7 @@ export function QueueDashboard({
   const [detectedFrom, setDetectedFrom] = useState("");
   const [detectedTo, setDetectedTo] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("detected_desc");
+  const [savedViews, setSavedViews] = useState<SavedQueueView[]>([]);
   const { toast } = useToast();
   const [busyAction, setBusyAction] = useState<{ itemId: string; action: QueueAction } | null>(
     null
@@ -245,6 +259,10 @@ export function QueueDashboard({
   }, [items]);
 
   useEffect(() => {
+    setSavedViews(readSavedQueueViews());
+  }, []);
+
+  useEffect(() => {
     function syncShortcutPreference() {
       setShortcutsEnabled(document.documentElement.dataset.a11yShortcuts !== "off");
     }
@@ -313,6 +331,47 @@ export function QueueDashboard({
       }
       return next;
     });
+  }
+
+  function saveCurrentView() {
+    const name = window.prompt("Name this queue view");
+    if (!name?.trim()) return;
+
+    const view: SavedQueueView = {
+      filters: {
+        activeTab,
+        detectedFrom,
+        detectedTo,
+        pipelineFilter,
+        ruleFilter,
+        sortMode
+      },
+      id: `view_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      name: name.trim()
+    };
+    const next = [view, ...savedViews.filter((savedView) => savedView.name !== view.name)].slice(0, 8);
+    setSavedViews(next);
+    writeSavedQueueViews(next);
+    toast({ tone: "success", title: `Saved view: ${view.name}` });
+  }
+
+  function applySavedView(viewId: string) {
+    const view = savedViews.find((candidate) => candidate.id === viewId);
+    if (!view) return;
+
+    setActiveTab(view.filters.activeTab);
+    setPipelineFilter(view.filters.pipelineFilter);
+    setRuleFilter(view.filters.ruleFilter);
+    setDetectedFrom(view.filters.detectedFrom);
+    setDetectedTo(view.filters.detectedTo);
+    setSortMode(view.filters.sortMode);
+    toast({ tone: "success", title: `Applied view: ${view.name}` });
+  }
+
+  function deleteSavedView(viewId: string) {
+    const next = savedViews.filter((view) => view.id !== viewId);
+    setSavedViews(next);
+    writeSavedQueueViews(next);
   }
 
   async function runQueueAction(
@@ -423,13 +482,20 @@ export function QueueDashboard({
 
     const succeededIds: string[] = [];
     const failures: string[] = [];
+    const bulkBatchId = `bulk_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
 
     for (const item of eligibleItems) {
       try {
         const response = await fetch(`/api/queue/${encodeURIComponent(item.id)}/actions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action })
+          body: JSON.stringify({
+            action,
+            bulkBatchId,
+            bulkSize: eligibleItems.length
+          })
         });
         const payload = (await response.json().catch(() => ({}))) as {
           error?: string;
@@ -562,6 +628,21 @@ export function QueueDashboard({
           })}
         </div>
         <div className="filter-row">
+          <label className="filter-field saved-view-field">
+            <span>Saved view</span>
+            <select
+              className="select"
+              onChange={(event) => applySavedView(event.target.value)}
+              value=""
+            >
+              <option value="">Choose saved view</option>
+              {savedViews.map((view) => (
+                <option key={view.id} value={view.id}>
+                  {view.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="filter-field">
             <span>Pipeline</span>
             <select
@@ -639,6 +720,21 @@ export function QueueDashboard({
               Clear filters
             </button>
           ) : null}
+          <div className="saved-view-actions">
+            <button className="button compact-button" onClick={saveCurrentView} type="button">
+              Save view
+            </button>
+            {savedViews.map((view) => (
+              <button
+                className="button ghost compact-button"
+                key={view.id}
+                onClick={() => deleteSavedView(view.id)}
+                type="button"
+              >
+                Delete {view.name}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -1778,6 +1874,32 @@ function count(items: QueueItem[], status: QueueStatus): number {
 
 function canManageQueueItem(item: QueueItem, currentUserId?: string) {
   return !currentUserId || item.owner.id === currentUserId;
+}
+
+function readSavedQueueViews(): SavedQueueView[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(savedQueueViewsKey) || "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isSavedQueueView).slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedQueueViews(views: SavedQueueView[]) {
+  window.localStorage.setItem(savedQueueViewsKey, JSON.stringify(views));
+}
+
+function isSavedQueueView(value: unknown): value is SavedQueueView {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as SavedQueueView;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.name === "string" &&
+    candidate.filters &&
+    typeof candidate.filters.pipelineFilter === "string" &&
+    typeof candidate.filters.ruleFilter === "string"
+  );
 }
 
 function isEditableTarget(target: EventTarget | null) {

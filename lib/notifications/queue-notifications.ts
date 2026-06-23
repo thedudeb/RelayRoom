@@ -133,6 +133,7 @@ export async function notifyQueueEvent({
     const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
     if (!tokenKey) {
       console.warn("Notification webhook is configured, but TOKEN_ENCRYPTION_KEY is missing.");
+      await recordNotificationDelivery({ delivered: false, queueItemId, reason: "missing_token_key", type, userId });
       return { delivered: false, reason: "missing_token_key" };
     }
 
@@ -156,6 +157,7 @@ export async function notifyQueueEvent({
     });
 
     if (!item) {
+      await recordNotificationDelivery({ delivered: false, queueItemId, reason: "missing_queue_item", type, userId });
       return { delivered: false, reason: "missing_queue_item" };
     }
 
@@ -182,9 +184,18 @@ export async function notifyQueueEvent({
         status: response.status,
         type
       });
+      await recordNotificationDelivery({
+        delivered: false,
+        queueItemId,
+        reason: `http_${response.status}`,
+        statusCode: response.status,
+        type,
+        userId
+      });
       return { delivered: false, reason: `http_${response.status}` };
     }
 
+    await recordNotificationDelivery({ delivered: true, queueItemId, statusCode: response.status, type, userId });
     return { delivered: true };
   } catch (error) {
     console.warn("Queue notification delivery failed.", {
@@ -192,8 +203,42 @@ export async function notifyQueueEvent({
       queueItemId,
       type
     });
+    await recordNotificationDelivery({
+      delivered: false,
+      queueItemId,
+      reason: "delivery_error",
+      type,
+      userId
+    }).catch(() => {});
     return { delivered: false, reason: "delivery_error" };
   }
+}
+
+async function recordNotificationDelivery({
+  delivered,
+  queueItemId,
+  reason,
+  statusCode,
+  type,
+  userId
+}: {
+  delivered: boolean;
+  queueItemId: string;
+  reason?: string;
+  statusCode?: number;
+  type: QueueNotificationType;
+  userId: string;
+}) {
+  await prisma.notificationDeliveryAttempt.create({
+    data: {
+      delivered,
+      queueItemId,
+      reason,
+      statusCode,
+      type,
+      userId
+    }
+  });
 }
 
 function queueNotificationTitle(type: QueueNotificationType) {

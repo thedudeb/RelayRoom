@@ -66,10 +66,12 @@ const allowedTransitions: Record<UploadTrigger, ReadonlySet<QueueStatus>> = {
 };
 
 export async function uploadQueueItemToYouTube({
+  bulk,
   queueItemId,
   trigger,
   userId
 }: {
+  bulk?: { action: string; batchId: string; size: number };
   queueItemId: string;
   // The caller asserts what kind of transition is happening. We enforce that
   // the queue item's current status matches the trigger (ISSUE-047): an
@@ -158,7 +160,16 @@ export async function uploadQueueItemToYouTube({
           item.status === QueueStatus.DETECTED
             ? "Auto-upload started."
             : "Approved item for YouTube upload.",
-        metadata: { fromStatus: item.status },
+        metadata: {
+          ...(bulk
+            ? {
+                bulkAction: bulk.action,
+                bulkBatchId: bulk.batchId,
+                bulkSize: bulk.size
+              }
+            : {}),
+          fromStatus: item.status
+        },
         queueItemId: item.id,
         userId
       }

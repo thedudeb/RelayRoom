@@ -18,6 +18,8 @@ type QueueActionBody = {
   playlistName?: string;
   titleOverride?: string;
   descriptionOverride?: string;
+  bulkBatchId?: string;
+  bulkSize?: number;
   // When supplied (and playlistId is absent), the route flow creates a new
   // playlist with this title on the pipeline's destination channel before
   // routing. SPEC §4.8 Edit-and-route.
@@ -77,6 +79,7 @@ export async function POST(
         currentItem.status === PrismaQueueStatus.NEEDS_APPROVAL ? "approve" : "retry";
 
       const result = await uploadQueueItemToYouTube({
+        bulk: bulkMetadata(body),
         queueItemId: id,
         trigger,
         userId: access.userId
@@ -156,6 +159,7 @@ export async function POST(
       });
 
       const result = await uploadQueueItemToYouTube({
+        bulk: bulkMetadata(body),
         queueItemId: id,
         trigger: "approve",
         userId: access.userId
@@ -189,7 +193,8 @@ export async function POST(
       previousStatus: item.previousStatus,
       rules: item.pipeline.rules,
       youtubeUrl,
-      now
+      now,
+      bulk: bulkMetadata(body)
     });
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -505,7 +510,8 @@ function getActionUpdate({
   playlistName,
   previousStatus,
   rules,
-  youtubeUrl
+  youtubeUrl,
+  bulk
 }: {
   action: NonNullable<QueueActionBody["action"]>;
   currentStatus: PrismaQueueStatus;
@@ -523,6 +529,7 @@ function getActionUpdate({
     youtubePlaylistName: string;
   }>;
   youtubeUrl?: string;
+  bulk?: { action: string; batchId: string; size: number };
 }) {
   if (action === "route") {
     const isRecoveringPlaylistAssignment =
@@ -558,6 +565,7 @@ function getActionUpdate({
         ? `Recovered playlist assignment to ${friendlyName}.`
         : `Routed item to ${friendlyName}.`,
       metadata: {
+        ...bulkMetadataFields(bulk),
         fromStatus: currentStatus,
         recoveredPlaylistAssignment: isRecoveringPlaylistAssignment,
         playlistId,
@@ -578,7 +586,7 @@ function getActionUpdate({
         lastActionAt: now
       },
       message: "Skipped item.",
-      metadata: { fromStatus: currentStatus }
+      metadata: { ...bulkMetadataFields(bulk), fromStatus: currentStatus }
     };
   }
 
@@ -602,7 +610,7 @@ function getActionUpdate({
       message: youtubeUrl
         ? "Marked item as already uploaded with a YouTube link."
         : "Marked item as already uploaded.",
-      metadata: { fromStatus: currentStatus, youtubeUrl }
+      metadata: { ...bulkMetadataFields(bulk), fromStatus: currentStatus, youtubeUrl }
     };
   }
 
@@ -634,11 +642,33 @@ function getActionUpdate({
           : {})
       },
       message: `Restored item to ${formatStatus(restoreStatus)}.`,
-      metadata: { fromStatus: currentStatus, toStatus: restoreStatus }
+      metadata: { ...bulkMetadataFields(bulk), fromStatus: currentStatus, toStatus: restoreStatus }
     };
   }
 
   throw new Error("Unsupported queue action.");
+}
+
+function bulkMetadata(body: QueueActionBody) {
+  if (!body.action || !body.bulkBatchId || !body.bulkSize || body.bulkSize < 2) {
+    return undefined;
+  }
+
+  return {
+    action: body.action,
+    batchId: body.bulkBatchId,
+    size: body.bulkSize
+  };
+}
+
+function bulkMetadataFields(bulk?: { action: string; batchId: string; size: number }) {
+  return bulk
+    ? {
+        bulkAction: bulk.action,
+        bulkBatchId: bulk.batchId,
+        bulkSize: bulk.size
+      }
+    : {};
 }
 
 const ALLOWED_YOUTUBE_HOSTS = new Set([
