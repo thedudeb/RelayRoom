@@ -12,6 +12,7 @@ Use this checklist when moving RelayRoom from local testing to Vercel production
   npm run prisma:deploy
   ```
 
+- Confirm the latest migration batch includes notification preferences and delivery attempts. Those tables power Settings notifications and the Health delivery log.
 - Keep `TOKEN_ENCRYPTION_KEY` stable forever for that environment. Changing it makes existing encrypted OAuth tokens unreadable.
 
 ## 2. App Secrets
@@ -160,7 +161,25 @@ curl -X POST \
   http://localhost:3000/api/webhooks/detection
 ```
 
-## 7. Production Smoke Test
+## 7. Automated Smoke Test
+
+Run the public/demo smoke script after each deploy:
+
+```bash
+SMOKE_BASE_URL=https://relay-room-one.vercel.app npm run smoke:local
+```
+
+The smoke pass checks:
+
+- Public and demo pages: landing, queue, pipelines, connections, settings, activity, health, privacy, and terms.
+- Dependency-free health API: `GET /api/health`.
+- Demo read APIs: `GET /api/queue?demo=true` and `GET /api/pipelines?demo=true`.
+- Demo CSV exports: `GET /api/export/queue?demo=true` and `GET /api/export/activity?demo=true`.
+- Auth guards for cron and signed detection webhook endpoints.
+
+On localhost, the guard checks tolerate missing cron/webhook secrets so developers can run the demo smoke pass against a fresh env. Against deployed URLs, a missing secret is a failure.
+
+## 8. Manual Production Smoke Test
 
 1. Log in with the owner account.
 2. Connect Drive and YouTube.
@@ -169,16 +188,21 @@ curl -X POST \
 5. Upload one small MP4 into the Drive folder.
 6. Run detection manually or wait for cron.
 7. Confirm a queue item appears.
-8. Approve upload.
-9. Confirm the video appears in the connected YouTube account and playlist.
-10. Log in with a second allowed user and confirm shared workspace visibility plus user filtering.
+8. Bulk-select queue items and confirm approve/skip/restore controls only enable for valid states.
+9. Export queue CSV and activity CSV from the UI; confirm filters are reflected in the downloaded files.
+10. Approve upload.
+11. Confirm the video appears in the connected YouTube account and playlist.
+12. Open Settings and confirm timezone, accessibility, notification, webhook smoke, and API key panels render.
+13. Open Health and confirm pipeline health plus notification delivery rows render.
+14. Log in with a second allowed user and confirm shared workspace visibility plus user filtering.
 
-## 8. Operational Notes
+## 9. Operational Notes
 
 - YouTube uploads cost 1,600 quota units each.
 - Failed, skipped, externally handled, and uploaded queue items stay visible for auditability.
 - Archived pipelines are read-only and do not run detection.
 - Disconnecting a Google connection pauses dependent pipelines until the connection is restored.
+- CSV exports are available from the Queue and Activity pages and through read-only API keys.
 - Settings can generate a read-only API key for external reporting scripts. Store the raw `rrp_live_...` key immediately; RelayRoom cannot display it again after creation.
 - Read-only API keys are scoped to the key owner's queue and pipeline data. The browser UI can show workspace-wide data, but API keys should not be used to export another user's private rows.
 - Read-only API smoke test:
@@ -187,4 +211,6 @@ curl -X POST \
   curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/queue
   curl -H "Authorization: Bearer rrp_live_..." "https://relay-room-one.vercel.app/api/queue?detectedFrom=2026-05-01&detectedTo=2026-05-18"
   curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/pipelines
+  curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/export/queue
+  curl -H "Authorization: Bearer rrp_live_..." https://relay-room-one.vercel.app/api/export/activity
   ```

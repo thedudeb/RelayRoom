@@ -193,6 +193,10 @@ Supported read-only endpoints:
 - `GET /api/queue?detectedFrom=2026-05-01&detectedTo=2026-05-18`
 - `GET /api/queue/:id`
 - `GET /api/pipelines`
+- `GET /api/export/queue`
+- `GET /api/export/activity`
+
+CSV exports honor the same owner scoping as the JSON read-only API. Browser sessions can export workspace-wide filtered views; API keys export only the key owner's rows.
 
 ## Upload Pipeline
 
@@ -256,4 +260,4 @@ To check production after Vercel deploys:
 SMOKE_BASE_URL=https://relay-room-one.vercel.app npm run smoke:local
 ```
 
-The smoke script checks the landing page, demo app pages, public legal pages, and demo read-only APIs.
+The smoke script checks the landing page, demo app pages, public legal pages, the health API, demo read-only APIs, demo CSV exports, and auth guards for cron/webhook entry points. Localhost runs tolerate missing cron/webhook secrets; deployed smoke checks fail if those secrets are not configured.
