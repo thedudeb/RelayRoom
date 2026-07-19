@@ -16,6 +16,7 @@
 import { randomBytes } from "node:crypto";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { getUsableDriveAccessToken } from "@/lib/detection/drive-detection";
+import { assertGoogleIntegrationsEnabled } from "@/lib/google/integrations";
 
 interface DriveWatchResponse {
   expiration?: string;
@@ -48,6 +49,8 @@ export async function subscribeDriveFolderWatch({
   tokenKey: string;
   webhookUrl: string;
 }): Promise<DriveWatchSubscription> {
+  assertGoogleIntegrationsEnabled();
+
   const accessToken = await getUsableDriveAccessToken(driveConnection, tokenKey);
   if (!accessToken) {
     throw new Error("DriveWatchTokenRefreshFailed");
@@ -100,6 +103,8 @@ export async function stopDriveWatchChannel({
   driveConnection: Parameters<typeof getUsableDriveAccessToken>[0];
   tokenKey: string;
 }): Promise<void> {
+  assertGoogleIntegrationsEnabled();
+
   const accessToken = await getUsableDriveAccessToken(driveConnection, tokenKey);
   if (!accessToken) {
     // Best-effort stop. If we can't refresh, the channel will expire on its

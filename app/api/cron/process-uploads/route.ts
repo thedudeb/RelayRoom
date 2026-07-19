@@ -1,6 +1,7 @@
 import { FailureReason, QueueStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
+import { areGoogleIntegrationsPaused, googleIntegrationsPausedResponse } from "@/lib/google/integrations";
 import { authorizeCronRequest } from "@/lib/security/cron-auth";
 import { uploadQueueItemToYouTube } from "@/lib/upload/youtube-upload";
 
@@ -13,6 +14,10 @@ const DEFAULT_MAX_ITEMS = 5;
 const MAX_ITEMS_HARD_CAP = 25;
 
 export async function GET(request: NextRequest) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   const auth = authorizeCronRequest(request);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });

@@ -33,6 +33,11 @@ import type {
   Pipeline,
   QueueItem
 } from "@/lib/domain/types";
+import {
+  areGoogleIntegrationsPaused,
+  GOOGLE_INTEGRATIONS_PAUSED_ERROR,
+  GOOGLE_INTEGRATIONS_PAUSED_MESSAGE
+} from "@/lib/google/integrations";
 import { displayWorkspaceUser, selectedWorkspaceUserId } from "@/lib/workspace/users";
 import { CreateDriveSourceFields } from "@/components/pipelines/CreateDriveSourceFields";
 import { DriveFolderPicker } from "@/components/pipelines/DriveFolderPicker";
@@ -122,6 +127,7 @@ export default async function PipelinesPage({
     selectedUserId,
     view: "archived"
   });
+  const googleIntegrationsPaused = areGoogleIntegrationsPaused();
 
   return (
     <AppShell
@@ -130,6 +136,12 @@ export default async function PipelinesPage({
       account={access.account}
       isDemo={access.isDemo}
     >
+      {googleIntegrationsPaused ? (
+        <div className="notice" role="status">
+          {GOOGLE_INTEGRATIONS_PAUSED_MESSAGE} Demo data, queue history, CSV exports, and local
+          pipeline editing remain available.
+        </div>
+      ) : null}
       {params?.created ? (
         <div className="notice success" role="status">
           Pipeline created in review mode. Check the folder and playlist, then click Enable pipeline
@@ -218,6 +230,7 @@ export default async function PipelinesPage({
           ) : (
             <CreatePipelinePanel
               driveConnections={connectionOptions.driveConnections}
+              googleIntegrationsPaused={googleIntegrationsPaused}
               isDemo={access.isDemo}
               youtubeConnections={connectionOptions.youtubeConnections}
             />
@@ -292,6 +305,7 @@ export default async function PipelinesPage({
               {!showingArchived && canManagePipeline ? (
                 <div data-tour="pipeline-actions">
                   <PipelineStatusControls
+                    googleIntegrationsPaused={googleIntegrationsPaused}
                     initialStatus={pipeline.status}
                     pipelineId={pipeline.id}
                   />
@@ -355,14 +369,17 @@ function pipelinesViewHref({
 // endpoints to function.
 function CreatePipelinePanel({
   driveConnections,
+  googleIntegrationsPaused,
   isDemo,
   youtubeConnections
 }: {
   driveConnections: ConnectionOption[];
+  googleIntegrationsPaused: boolean;
   isDemo: boolean;
   youtubeConnections: ConnectionOption[];
 }) {
-  const canCreate = !isDemo && driveConnections.length > 0 && youtubeConnections.length > 0;
+  const canCreate =
+    !googleIntegrationsPaused && !isDemo && driveConnections.length > 0 && youtubeConnections.length > 0;
 
   return (
     <div className="panel" data-tour="new-pipeline">
@@ -408,7 +425,9 @@ function CreatePipelinePanel({
           </button>
           {!canCreate ? (
             <span className="muted">
-              Connect one active Drive account and one active YouTube account first.
+              {googleIntegrationsPaused
+                ? "Google Drive and YouTube integrations are paused for this deployment."
+                : "Connect one active Drive account and one active YouTube account first."}
             </span>
           ) : null}
         </div>
@@ -864,6 +883,9 @@ async function createPipelineAction(formData: FormData) {
   if (access.isDemo) {
     redirect("/pipelines?demo=true&error=DemoReadOnly");
   }
+  if (areGoogleIntegrationsPaused()) {
+    redirect(`/pipelines?error=${GOOGLE_INTEGRATIONS_PAUSED_ERROR}`);
+  }
 
   const name = getRequiredFormValue(formData, "name");
   const driveConnectionId = getRequiredFormValue(formData, "driveConnectionId");
@@ -1004,6 +1026,9 @@ async function updatePipelineAction(formData: FormData) {
   if (access.isDemo) {
     redirect("/pipelines?demo=true&error=DemoReadOnly");
   }
+  if (areGoogleIntegrationsPaused()) {
+    redirect(`/pipelines?error=${GOOGLE_INTEGRATIONS_PAUSED_ERROR}`);
+  }
 
   const pipelineId = getRequiredFormValue(formData, "pipelineId");
   const name = getRequiredFormValue(formData, "name");
@@ -1098,6 +1123,9 @@ async function createRuleAction(formData: FormData) {
   if (access.isDemo) {
     redirect("/pipelines?demo=true&error=DemoReadOnly");
   }
+  if (areGoogleIntegrationsPaused()) {
+    redirect(`/pipelines?error=${GOOGLE_INTEGRATIONS_PAUSED_ERROR}`);
+  }
 
   const pipelineId = getRequiredFormValue(formData, "pipelineId");
   const ruleName = getRequiredFormValue(formData, "ruleName");
@@ -1168,6 +1196,9 @@ async function updateRuleAction(formData: FormData) {
   const access = await requireAppAccess();
   if (access.isDemo) {
     redirect("/pipelines?demo=true&error=DemoReadOnly");
+  }
+  if (areGoogleIntegrationsPaused()) {
+    redirect(`/pipelines?error=${GOOGLE_INTEGRATIONS_PAUSED_ERROR}`);
   }
 
   const ruleId = getRequiredFormValue(formData, "ruleId");
@@ -1760,6 +1791,7 @@ function pipelineErrorMessage(error: string) {
     DemoReadOnly: "Demo mode is read-only. Log in to create your own pipeline.",
     FolderAlreadyWatched:
       "Another enabled pipeline is already watching this Drive folder. Disable it before using this folder here.",
+    GoogleIntegrationsPaused: "Google Drive and YouTube integrations are paused for this deployment.",
     LastRuleRequired: "Keep at least one routing rule on each pipeline.",
     MissingActiveConnections: "Connect one active Drive account and one active YouTube account first.",
     MissingActiveDriveConnection: "Reconnect Google Drive before running detection.",

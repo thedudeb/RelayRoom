@@ -1,3 +1,4 @@
+import { assertGoogleIntegrationsEnabled } from "@/lib/google/integrations";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 
 interface YouTubePlaylistResponse {
@@ -37,6 +38,8 @@ export async function verifyChannelPlaylist({
   accessToken: string;
   playlistId: string;
 }): Promise<YouTubePlaylistRef | null> {
+  assertGoogleIntegrationsEnabled();
+
   const channelUrl = new URL("https://www.googleapis.com/youtube/v3/channels");
   channelUrl.searchParams.set("mine", "true");
   channelUrl.searchParams.set("part", "id");
@@ -88,6 +91,8 @@ export async function createChannelPlaylist({
   accessToken: string;
   title: string;
 }): Promise<YouTubePlaylistRef> {
+  assertGoogleIntegrationsEnabled();
+
   const response = await fetch(
     "https://www.googleapis.com/youtube/v3/playlists?part=snippet,status",
     {

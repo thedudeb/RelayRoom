@@ -3,6 +3,7 @@ import { PipelineStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { usesSeedTokenPlaceholder } from "@/lib/cron/scheduler";
 import { prisma } from "@/lib/db/prisma";
+import { areGoogleIntegrationsPaused, googleIntegrationsPausedResponse } from "@/lib/google/integrations";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
 import { verifyWebhookSignature } from "@/lib/security/webhook-signature";
 
@@ -16,6 +17,10 @@ interface DetectionWebhookPayload {
 }
 
 export async function POST(request: NextRequest) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   const rawBody = await request.text();
   const auth = verifyWebhookSignature({
     body: rawBody,

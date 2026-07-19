@@ -10,6 +10,11 @@ import {
   getConnectionsForUser,
   getWorkspaceUsers
 } from "@/lib/data/repository";
+import {
+  areGoogleIntegrationsPaused,
+  GOOGLE_INTEGRATIONS_PAUSED_ERROR,
+  GOOGLE_INTEGRATIONS_PAUSED_MESSAGE
+} from "@/lib/google/integrations";
 import { displayWorkspaceUser, selectedWorkspaceUserId } from "@/lib/workspace/users";
 
 export default async function ConnectionsPage({
@@ -41,6 +46,7 @@ export default async function ConnectionsPage({
     );
   const hasDrive = ownedActive("drive");
   const hasYouTube = ownedActive("youtube");
+  const googleIntegrationsPaused = areGoogleIntegrationsPaused();
 
   return (
     <AppShell
@@ -51,7 +57,7 @@ export default async function ConnectionsPage({
     >
       <div className="section-header" data-tour="connection-actions">
         <div className="actions">
-          {access.isDemo ? (
+          {access.isDemo || googleIntegrationsPaused ? (
             <>
               <button className="button primary" disabled type="button">Connect Drive</button>
               <button className="button" disabled type="button">Connect YouTube</button>
@@ -76,6 +82,12 @@ export default async function ConnectionsPage({
           )}
         </div>
       </div>
+      {googleIntegrationsPaused ? (
+        <div className="notice" role="status">
+          {GOOGLE_INTEGRATIONS_PAUSED_MESSAGE} Existing connections stay visible, but connect and
+          reconnect are disabled.
+        </div>
+      ) : null}
       {params?.connected ? (
         <div className="notice success" role="status">
           Connection saved. RelayRoom can now use this account in pipelines.
@@ -147,6 +159,7 @@ export default async function ConnectionsPage({
                     <ConnectionActions
                       canManage={!access.isDemo && connection.owner.id === access.userId}
                       connectionId={connection.id}
+                      googleIntegrationsPaused={googleIntegrationsPaused}
                       kind={connection.kind}
                       label={connection.label}
                     />
@@ -200,6 +213,8 @@ function formatConnectionDate(isoDate: string) {
 function connectionErrorMessage(error: string) {
   const messages: Record<string, string> = {
     InvalidOAuthState: "The OAuth session expired. Please try connecting again.",
+    [GOOGLE_INTEGRATIONS_PAUSED_ERROR]:
+      "Google Drive and YouTube integrations are paused for this deployment.",
     MissingGOOGLE_DRIVEConfig: "Drive OAuth is not configured yet. Add the Drive client ID and secret.",
     MissingGOOGLE_YOUTUBEConfig:
       "YouTube OAuth is not configured yet. Add the YouTube client ID and secret.",

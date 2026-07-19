@@ -2,6 +2,11 @@ import { ConnectionKind, ConnectionStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import {
+  areGoogleIntegrationsPaused,
+  assertGoogleIntegrationsEnabled,
+  googleIntegrationsPausedResponse
+} from "@/lib/google/integrations";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { decryptToken, encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
@@ -13,6 +18,10 @@ interface GoogleRefreshResponse {
 }
 
 export async function GET(request: NextRequest) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   const session = await auth();
   const email = session?.user?.email;
 
@@ -83,6 +92,8 @@ async function getUsableDriveAccessToken(
   },
   tokenKey: string
 ) {
+  assertGoogleIntegrationsEnabled();
+
   const aad = oauthTokenAad(connection.id);
   if (
     connection.encryptedAccessToken &&

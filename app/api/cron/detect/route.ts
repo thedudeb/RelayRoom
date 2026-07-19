@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { selectDuePipelines } from "@/lib/cron/scheduler";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
 import { renewDriveWatchSubscriptions } from "@/lib/drive/renewal";
+import { googleIntegrationsPausedResponse, areGoogleIntegrationsPaused } from "@/lib/google/integrations";
 import { authorizeCronRequest } from "@/lib/security/cron-auth";
 import { reapStaleUploads } from "@/lib/upload/youtube-upload";
 
@@ -19,6 +20,10 @@ const DEFAULT_PIPELINE_LIMIT = 20;
 const MAX_PIPELINE_LIMIT = 50;
 
 export async function GET(request: NextRequest) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   // Reject anything without the shared cron secret before touching the DB.
   const auth = authorizeCronRequest(request);
   if (!auth.ok) {

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
+import { areGoogleIntegrationsPaused } from "@/lib/google/integrations";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 import { decryptToken, oauthTokenAad } from "@/lib/security/token-vault";
 
@@ -39,14 +40,16 @@ export async function POST(
     return NextResponse.json({ error: "ConnectionNotFound" }, { status: 404 });
   }
 
-  const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
-  if (!tokenKey) {
-    return NextResponse.json({ error: "MissingTokenKey" }, { status: 400 });
-  }
+  if (!areGoogleIntegrationsPaused()) {
+    const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
+    if (!tokenKey) {
+      return NextResponse.json({ error: "MissingTokenKey" }, { status: 400 });
+    }
 
-  const revoked = await revokeGoogleToken(connection, tokenKey);
-  if (!revoked) {
-    return NextResponse.json({ error: "DisconnectFailed" }, { status: 502 });
+    const revoked = await revokeGoogleToken(connection, tokenKey);
+    if (!revoked) {
+      return NextResponse.json({ error: "DisconnectFailed" }, { status: 502 });
+    }
   }
 
   const pipelineWhere =

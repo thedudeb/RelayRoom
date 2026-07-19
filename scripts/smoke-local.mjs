@@ -214,6 +214,10 @@ async function verifyGuardResponse(response) {
     // Keep the clearer HTTP status error below if the body is not JSON.
   }
 
+  if (response.status === 503 && payload?.error === "GoogleIntegrationsPaused") {
+    return;
+  }
+
   if (localBase && response.status === 500 && payload?.error === "MissingCronSecret") {
     return;
   }

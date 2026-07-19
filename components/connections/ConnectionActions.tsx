@@ -16,11 +16,13 @@ interface DisconnectResponse {
 export function ConnectionActions({
   canManage,
   connectionId,
+  googleIntegrationsPaused = false,
   kind,
   label
 }: {
   canManage: boolean;
   connectionId: string;
+  googleIntegrationsPaused?: boolean;
   kind: ConnectionKind;
   label: string;
 }) {
@@ -68,12 +70,18 @@ export function ConnectionActions({
     <>
       {canManage ? (
         <>
-          <Link
-            className="button"
-            href={kind === "drive" ? "/api/oauth/drive/start" : "/api/oauth/youtube/start"}
-          >
-            Reconnect
-          </Link>
+          {googleIntegrationsPaused ? (
+            <button className="button" disabled type="button">
+              Reconnect
+            </button>
+          ) : (
+            <Link
+              className="button"
+              href={kind === "drive" ? "/api/oauth/drive/start" : "/api/oauth/youtube/start"}
+            >
+              Reconnect
+            </Link>
+          )}
           <button
             className="button danger"
             disabled={isDisconnecting}
@@ -99,6 +107,7 @@ function connectionErrorMessage(error?: string) {
   const messages: Record<string, string> = {
     ConnectionNotFound: "Connection not found.",
     DisconnectFailed: "Google could not revoke the token. Please try again.",
+    GoogleIntegrationsPaused: "Google Drive and YouTube integrations are paused for this deployment.",
     MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing.",
     Unauthorized: "Log in before disconnecting a connection."
   };

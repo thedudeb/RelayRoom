@@ -1,6 +1,7 @@
 import { PipelineStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { renewalCutoff, subscribeDriveFolderWatch } from "@/lib/drive/watch";
+import { areGoogleIntegrationsPaused } from "@/lib/google/integrations";
 
 // Renew Drive push channels that are due to expire and backfill any
 // enabled pipelines that don't yet have a channel. Soft-capped per tick
@@ -13,6 +14,10 @@ export async function renewDriveWatchSubscriptions({
 }: {
   webhookUrl: string;
 }) {
+  if (areGoogleIntegrationsPaused()) {
+    return { renewed: 0, failed: 0 };
+  }
+
   const tokenKey = process.env.TOKEN_ENCRYPTION_KEY;
   if (!tokenKey) {
     return { renewed: 0, failed: 0 };

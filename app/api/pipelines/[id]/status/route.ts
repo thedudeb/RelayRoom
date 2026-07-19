@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
 import { stopDriveWatchChannel, subscribeDriveFolderWatch } from "@/lib/drive/watch";
+import {
+  areGoogleIntegrationsPaused,
+  googleIntegrationsPausedResponse
+} from "@/lib/google/integrations";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 export async function POST(
@@ -33,6 +37,11 @@ export async function POST(
     return NextResponse.json({ error: "MissingPipelineFields" }, { status: 400 });
   }
 
+  const googleIntegrationsPaused = areGoogleIntegrationsPaused();
+  if (googleIntegrationsPaused && nextStatus === PipelineStatus.ENABLED) {
+    return googleIntegrationsPausedResponse();
+  }
+
   const pipeline = await prisma.pipeline.findFirst({
     where: {
       archivedAt: null,
@@ -58,6 +67,14 @@ export async function POST(
       status: nextStatus,
       ...(nextStatus === PipelineStatus.ENABLED
         ? { errorMessage: null, processedFromTime: new Date() }
+        : {}),
+      ...(googleIntegrationsPaused && nextStatus === PipelineStatus.DISABLED
+        ? {
+            driveChannelExpiresAt: null,
+            driveChannelId: null,
+            driveChannelResourceId: null,
+            driveChannelToken: null
+          }
         : {})
     }
   });
@@ -69,13 +86,15 @@ export async function POST(
   // Subscribe / unsubscribe the Drive push channel as a side effect of the
   // status flip. Failures are non-fatal: polling still works as a backstop,
   // and the renewal cron can re-attempt subscription on the next tick.
-  await syncDriveWatchSubscription({
-    nextStatus,
-    pipeline,
-    request
-  }).catch((error) => {
-    console.error("Drive watch sync failed.", { pipelineId: pipeline.id, error });
-  });
+  if (!googleIntegrationsPaused) {
+    await syncDriveWatchSubscription({
+      nextStatus,
+      pipeline,
+      request
+    }).catch((error) => {
+      console.error("Drive watch sync failed.", { pipelineId: pipeline.id, error });
+    });
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/pipelines");

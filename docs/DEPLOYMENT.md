@@ -29,6 +29,7 @@ DATABASE_URL=postgresql://...
 TOKEN_ENCRYPTION_KEY=...
 CRON_SECRET=...
 DETECTION_WEBHOOK_SECRET=...
+GOOGLE_INTEGRATIONS_DISABLED=true
 ```
 
 `AUTH_SECRET` and `NEXTAUTH_SECRET` can use the same long random value. `CRON_SECRET` and `DETECTION_WEBHOOK_SECRET` can also use the same value.
@@ -76,7 +77,19 @@ Restrict the Picker API key to websites and the Google Picker API / Google Drive
 
 RelayRoom requests Drive `drive.readonly`; the assignment reviewers confirmed this is acceptable. `drive.file` did not reliably expose all user-uploaded files inside selected watched folders during local testing, so `drive.readonly` is the supported scope for polling-based folder detection.
 
-## 4. OAuth Consent
+## 4. Parking Without Google Usage
+
+Use this mode when RelayRoom should stay visible without spending Google Drive or YouTube quota:
+
+1. Leave `GOOGLE_INTEGRATIONS_DISABLED` unset or set it to `true` in Vercel Production, Preview, and Development. RelayRoom fails closed; only `GOOGLE_INTEGRATIONS_DISABLED=false` enables Drive/YouTube calls.
+2. Keep `vercel.json` crons empty so Vercel does not schedule `/api/cron/detect` or `/api/cron/process-uploads`.
+3. In Google Cloud, cap Drive API and YouTube Data API quotas as low as the console allows, or disable those APIs if the project is fully parked.
+4. Disable or delete the Drive and YouTube OAuth client secrets. Leave the Google sign-in client only if authenticated historical access should keep working.
+5. Confirm production smoke still passes. The smoke script treats `GoogleIntegrationsPaused` from protected cron/webhook routes as expected in parked mode.
+
+Paused mode blocks Drive/YouTube connect/reconnect, token vending, manual detection, folder probing, Drive watch maintenance, signed detection webhooks, playlist listing/creation, route-to-channel, and uploads. Demo mode, historical queue views, settings, health, read-only APIs, and CSV exports remain available.
+
+## 5. OAuth Consent
 
 - Audience should be External unless all operators are in one Google Workspace org.
 - Add every testing Google account under Test users while the app is in testing mode.
@@ -85,15 +98,22 @@ RelayRoom requests Drive `drive.readonly`; the assignment reviewers confirmed th
   - Terms of Service: `https://relay-room-one.vercel.app/terms`
 - Keep the approved Drive scope note above visible in deployment notes and any submission docs.
 
-## 5. Vercel Cron
+## 6. Vercel Cron
 
-`vercel.json` schedules:
+`vercel.json` is intentionally parked with no scheduled jobs:
+
+```text
+crons: []
+```
+
+To resume production automation later, set `GOOGLE_INTEGRATIONS_DISABLED=false`, then add schedules for:
 
 ```text
 /api/cron/detect
+/api/cron/process-uploads
 ```
 
-The endpoint checks all enabled pipelines and only runs pipelines whose stored cadence is due. A 5-minute cron can safely support 15-minute, hourly, daily, and custom cadence pipelines.
+The detection endpoint checks all enabled pipelines and only runs pipelines whose stored cadence is due. A 5-minute detect cron can safely support 15-minute, hourly, daily, and custom cadence pipelines.
 
 Manual smoke test:
 
@@ -102,9 +122,9 @@ SECRET=$(grep '^CRON_SECRET=' .env | cut -d= -f2-)
 curl -H "Authorization: Bearer $SECRET" http://localhost:3000/api/cron/detect
 ```
 
-Expected result includes `checkedAt`, `enabledPipelines`, `due`, `results`, and `skippedNotDue`.
+When automation is enabled, the expected result includes `checkedAt`, `enabledPipelines`, `due`, `results`, and `skippedNotDue`. In parked mode, expect a `503` response with `error: "GoogleIntegrationsPaused"`.
 
-## 6. Signed Detection Webhook
+## 7. Signed Detection Webhook
 
 RelayRoom also exposes the spec's Path A receiver for external automation services:
 
@@ -161,7 +181,7 @@ curl -X POST \
   http://localhost:3000/api/webhooks/detection
 ```
 
-## 7. Automated Smoke Test
+## 8. Automated Smoke Test
 
 Run the public/demo smoke script after each deploy:
 
@@ -179,7 +199,7 @@ The smoke pass checks:
 
 On localhost, the guard checks tolerate missing cron/webhook secrets so developers can run the demo smoke pass against a fresh env. Against deployed URLs, a missing secret is a failure.
 
-## 8. Manual Production Smoke Test
+## 9. Manual Production Smoke Test
 
 1. Log in with the owner account.
 2. Connect Drive and YouTube.
@@ -196,7 +216,7 @@ On localhost, the guard checks tolerate missing cron/webhook secrets so develope
 13. Open Health and confirm pipeline health plus notification delivery rows render.
 14. Log in with a second allowed user and confirm shared workspace visibility plus user filtering.
 
-## 9. Operational Notes
+## 10. Operational Notes
 
 - YouTube uploads cost 1,600 quota units each.
 - Failed, skipped, externally handled, and uploaded queue items stay visible for auditability.

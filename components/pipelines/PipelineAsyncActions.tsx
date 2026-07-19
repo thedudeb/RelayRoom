@@ -113,9 +113,11 @@ export function PipelineAsyncActions({ pipelineId }: { pipelineId: string }) {
 // instant button-label feedback (alongside the router.refresh()). Detection and
 // Drive-check are only offered while enabled.
 export function PipelineStatusControls({
+  googleIntegrationsPaused = false,
   initialStatus,
   pipelineId
 }: {
+  googleIntegrationsPaused?: boolean;
   initialStatus: "disabled" | "enabled" | "errored";
   pipelineId: string;
 }) {
@@ -129,6 +131,14 @@ export function PipelineStatusControls({
 
   async function togglePipeline() {
     const nextStatus = isEnabled ? "disabled" : "enabled";
+    if (googleIntegrationsPaused && nextStatus === "enabled") {
+      setState({
+        tone: "danger",
+        message: "Google Drive and YouTube integrations are paused for this deployment."
+      });
+      return;
+    }
+
     if (
       isEnabled &&
       !window.confirm(
@@ -259,7 +269,7 @@ export function PipelineStatusControls({
     <div className="actions">
       <button
         className={isEnabled ? "button danger" : "button primary"}
-        disabled={busyAction !== null}
+        disabled={busyAction !== null || (!isEnabled && googleIntegrationsPaused)}
         onClick={togglePipeline}
         type="button"
       >
@@ -280,7 +290,7 @@ export function PipelineStatusControls({
         <>
           <button
             className="button"
-            disabled={busyAction !== null}
+            disabled={busyAction !== null || googleIntegrationsPaused}
             onClick={runDetection}
             type="button"
           >
@@ -289,7 +299,7 @@ export function PipelineStatusControls({
           </button>
           <button
             className="button"
-            disabled={busyAction !== null}
+            disabled={busyAction !== null || googleIntegrationsPaused}
             onClick={checkDriveFolder}
             type="button"
           >
@@ -318,6 +328,11 @@ export function PipelineStatusControls({
       {state ? (
         <div className={`notice inline ${state.tone}`} role={state.tone === "danger" ? "alert" : "status"}>
           {state.message}
+        </div>
+      ) : null}
+      {googleIntegrationsPaused ? (
+        <div className="notice inline" role="status">
+          Google Drive and YouTube actions are paused. Duplicate and archive remain available.
         </div>
       ) : null}
     </div>
@@ -406,6 +421,7 @@ async function postAction(
 function pipelineErrorMessage(error?: string) {
   const messages: Record<string, string> = {
     DriveListFailed: "Google Drive could not list files in this folder.",
+    GoogleIntegrationsPaused: "Google Drive and YouTube integrations are paused for this deployment.",
     MissingActiveDriveConnection: "Reconnect Google Drive before running detection.",
     MissingPipelineFields: "Fill out every required pipeline field.",
     MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing.",

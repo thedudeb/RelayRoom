@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChannelPlaylist } from "@/lib/oauth/youtube-playlists";
 
+const originalPauseValue = process.env.GOOGLE_INTEGRATIONS_DISABLED;
+
 describe("YouTube playlist verification", () => {
   afterEach(() => {
+    process.env.GOOGLE_INTEGRATIONS_DISABLED = originalPauseValue;
     vi.restoreAllMocks();
   });
 
   it("verifies a playlist by comparing it with the authenticated channel", async () => {
+    process.env.GOOGLE_INTEGRATIONS_DISABLED = "false";
+
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ items: [{ id: "channel-1" }] }))
@@ -35,6 +40,8 @@ describe("YouTube playlist verification", () => {
   });
 
   it("rejects playlists owned by another channel", async () => {
+    process.env.GOOGLE_INTEGRATIONS_DISABLED = "false";
+
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ items: [{ id: "channel-1" }] }))
       .mockResolvedValueOnce(

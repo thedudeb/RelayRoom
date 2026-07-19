@@ -1,5 +1,6 @@
 import { ConnectionStatus, type OAuthConnection } from "@prisma/client";
 import { getUsableDriveAccessToken } from "@/lib/detection/drive-detection";
+import { areGoogleIntegrationsPaused } from "@/lib/google/integrations";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 
 // Verifies that a user-supplied Drive folder id actually points at a live,
@@ -49,6 +50,10 @@ export async function verifyDriveFolderSelection({
   folderId: string;
   tokenKey: string;
 }) {
+  if (areGoogleIntegrationsPaused()) {
+    return null;
+  }
+
   const normalizedFolderId = folderId.trim();
   if (!isValidDriveFolderId(normalizedFolderId)) {
     return null;

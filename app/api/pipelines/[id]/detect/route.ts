@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getApiAccess } from "@/lib/auth/account";
 import { runDriveDetectionForPipeline } from "@/lib/detection/drive-detection";
 import { prisma } from "@/lib/db/prisma";
+import { areGoogleIntegrationsPaused, googleIntegrationsPausedResponse } from "@/lib/google/integrations";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 // Manual "check for new files now" trigger for a single pipeline, bypassing the
@@ -12,6 +13,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   // Standard mutation guard chain: block cross-site calls, require a real
   // (non-demo) authenticated user — demo mode is read-only.
   const originError = rejectCrossSiteMutation(request);

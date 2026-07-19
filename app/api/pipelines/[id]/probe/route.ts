@@ -6,6 +6,7 @@ import {
   isYouTubeSupportedVideoFile
 } from "@/lib/detection/youtube-supported-formats";
 import { prisma } from "@/lib/db/prisma";
+import { areGoogleIntegrationsPaused, googleIntegrationsPausedResponse } from "@/lib/google/integrations";
 import { rejectCrossSiteMutation } from "@/lib/security/request-guard";
 
 // Diagnostic "dry run" for a pipeline's Drive source: lists what Drive currently
@@ -16,6 +17,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   // Mutation guard chain: no cross-site calls, no demo (read-only) users.
   const originError = rejectCrossSiteMutation(request);
   if (originError) {

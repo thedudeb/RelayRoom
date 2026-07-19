@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import {
+  areGoogleIntegrationsPaused,
+  GOOGLE_INTEGRATIONS_PAUSED_ERROR
+} from "@/lib/google/integrations";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { encryptToken, oauthTokenAad } from "@/lib/security/token-vault";
 
@@ -72,6 +76,10 @@ const connectionConfig = {
 } as const;
 
 export async function startGoogleConnection(kind: GoogleConnectionKind) {
+  if (areGoogleIntegrationsPaused()) {
+    redirect(`/connections?error=${GOOGLE_INTEGRATIONS_PAUSED_ERROR}`);
+  }
+
   const user = await requireSignedInUser();
   const config = getConnectionConfig(kind);
   const state = randomBytes(24).toString("base64url");
@@ -108,6 +116,10 @@ export async function handleGoogleConnectionCallback(
   kind: GoogleConnectionKind,
   requestUrl: string
 ) {
+  if (areGoogleIntegrationsPaused()) {
+    redirect(`/connections?error=${GOOGLE_INTEGRATIONS_PAUSED_ERROR}`);
+  }
+
   const user = await requireSignedInUser();
   const config = getConnectionConfig(kind);
   const url = new URL(requestUrl);

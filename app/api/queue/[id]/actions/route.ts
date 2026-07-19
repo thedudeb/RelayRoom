@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getApiAccess } from "@/lib/auth/account";
 import { prisma } from "@/lib/db/prisma";
 import { getUsableYouTubeAccessToken } from "@/lib/detection/drive-detection";
+import { areGoogleIntegrationsPaused, googleIntegrationsPausedResponse } from "@/lib/google/integrations";
 import {
   createChannelPlaylist,
   verifyChannelPlaylist,
@@ -39,6 +40,12 @@ const manuallyClosableStatuses = new Set<PrismaQueueStatus>([
   PrismaQueueStatus.FAILED
 ]);
 
+const googleBackedQueueActions = new Set<NonNullable<QueueActionBody["action"]>>([
+  "edit_route",
+  "route",
+  "upload"
+]);
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -57,6 +64,10 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as QueueActionBody;
   if (!id || !body.action) {
     return NextResponse.json({ error: "Missing queue action." }, { status: 400 });
+  }
+
+  if (areGoogleIntegrationsPaused() && googleBackedQueueActions.has(body.action)) {
+    return googleIntegrationsPausedResponse();
   }
 
   if (body.action === "upload") {

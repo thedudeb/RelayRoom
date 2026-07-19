@@ -2103,6 +2103,7 @@ function queueActionErrorMessage(error?: string) {
   const messages: Record<string, string> = {
     MissingActiveDriveConnection: "Reconnect Google Drive before uploading.",
     MissingActiveYouTubeConnection: "Reconnect YouTube before uploading.",
+    GoogleIntegrationsPaused: "Google Drive and YouTube integrations are paused for this deployment.",
     MissingTokenKey: "TOKEN_ENCRYPTION_KEY is missing.",
     TokenRefreshFailed: "Google could not refresh one of the OAuth tokens. Reconnect Drive and YouTube, then try again."
   };

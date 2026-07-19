@@ -7,6 +7,7 @@ import {
   QueueStatus
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { assertGoogleIntegrationsEnabled } from "@/lib/google/integrations";
 import { notifyQueueEvent } from "@/lib/notifications/queue-notifications";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
@@ -80,6 +81,8 @@ export async function uploadQueueItemToYouTube({
   trigger: UploadTrigger;
   userId: string;
 }) {
+  assertGoogleIntegrationsEnabled();
+
   const item = await prisma.queueItem.findFirst({
     where: {
       id: queueItemId,
@@ -361,6 +364,8 @@ async function getUsableGoogleAccessToken({
   serviceName: "Drive" | "YouTube";
   tokenKey: string;
 }) {
+  assertGoogleIntegrationsEnabled();
+
   const aad = oauthTokenAad(connection.id);
   if (
     connection.encryptedAccessToken &&
@@ -439,6 +444,8 @@ async function openDriveFileStream({
   filename: string;
   mimeType: string;
 }): Promise<DriveFileStream> {
+  assertGoogleIntegrationsEnabled();
+
   const response = await fetchWithTransientRetries(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(driveFileId)}?alt=media`,
     {

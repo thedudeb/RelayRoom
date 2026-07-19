@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { DriveFileMetadata, Pipeline } from "@/lib/domain/types";
+import { assertGoogleIntegrationsEnabled } from "@/lib/google/integrations";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import {
@@ -77,6 +78,8 @@ export async function runDriveDetectionForPipeline({
   pipelineId: string;
   userId: string;
 }): Promise<DetectionResult> {
+  assertGoogleIntegrationsEnabled();
+
   const pipeline = await prisma.pipeline.findFirst({
     where: {
       archivedAt: null,
@@ -496,6 +499,8 @@ export async function probeDriveFolderForPipeline({
   pipelineId: string;
   userId: string;
 }) {
+  assertGoogleIntegrationsEnabled();
+
   const pipeline = await prisma.pipeline.findFirst({
     where: {
       archivedAt: null,
@@ -606,6 +611,8 @@ export async function getUsableDriveAccessToken(
   },
   tokenKey: string
 ) {
+  assertGoogleIntegrationsEnabled();
+
   const aad = oauthTokenAad(connection.id);
   if (
     connection.encryptedAccessToken &&
@@ -670,6 +677,8 @@ export async function getUsableYouTubeAccessToken(
   },
   tokenKey: string
 ) {
+  assertGoogleIntegrationsEnabled();
+
   if (connection.kind !== ConnectionKind.YOUTUBE || connection.status !== ConnectionStatus.ACTIVE) {
     return null;
   }
@@ -734,6 +743,8 @@ async function verifyYouTubeVideoExists({
   accessToken: string;
   videoId: string;
 }) {
+  assertGoogleIntegrationsEnabled();
+
   const url = new URL("https://www.googleapis.com/youtube/v3/videos");
   url.searchParams.set("id", videoId);
   url.searchParams.set("part", "id");

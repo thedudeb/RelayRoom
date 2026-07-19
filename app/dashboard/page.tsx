@@ -7,6 +7,7 @@ import {
   getQueueItemsForUser,
   getWorkspaceUsers
 } from "@/lib/data/repository";
+import { areGoogleIntegrationsPaused, GOOGLE_INTEGRATIONS_PAUSED_MESSAGE } from "@/lib/google/integrations";
 import { selectedWorkspaceUserId } from "@/lib/workspace/users";
 
 // Server component for the operations queue. Resolves access (real user vs.
@@ -27,6 +28,7 @@ export default async function DashboardPage({
   const queueItems = access.isDemo
     ? await getQueueItemsForDemo()
     : await getQueueItemsForUser(access.userId, { userId: selectedUserId });
+  const googleIntegrationsPaused = areGoogleIntegrationsPaused();
 
   return (
     <AppShell
@@ -35,6 +37,12 @@ export default async function DashboardPage({
       account={access.account}
       isDemo={access.isDemo}
     >
+      {googleIntegrationsPaused ? (
+        <div className="notice" role="status">
+          {GOOGLE_INTEGRATIONS_PAUSED_MESSAGE} Upload, route-to-channel, and playlist recovery
+          actions are disabled; skip, restore, mark handled, history, and exports remain available.
+        </div>
+      ) : null}
       <WorkspaceUserFilter
         currentUserId={access.isDemo ? undefined : access.userId}
         selectedUserId={selectedUserId}

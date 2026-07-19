@@ -2,6 +2,11 @@ import { ConnectionKind, ConnectionStatus } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import {
+  areGoogleIntegrationsPaused,
+  assertGoogleIntegrationsEnabled,
+  googleIntegrationsPausedResponse
+} from "@/lib/google/integrations";
 import { markConnectionRefreshFailed } from "@/lib/oauth/connection-health";
 import { logGoogleApiError } from "@/lib/oauth/google-errors";
 import { rejectCrossSiteMutation, rejectCrossSiteRead } from "@/lib/security/request-guard";
@@ -39,6 +44,10 @@ interface CreatePlaylistResponse {
 }
 
 export async function GET(request: NextRequest) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   const originError = rejectCrossSiteRead(request);
   if (originError) {
     return originError;
@@ -54,6 +63,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (areGoogleIntegrationsPaused()) {
+    return googleIntegrationsPausedResponse();
+  }
+
   const originError = rejectCrossSiteMutation(request);
   if (originError) {
     return originError;
@@ -160,6 +173,8 @@ async function getYouTubeConnectionContext(request: NextRequest) {
 // page) until there are no more pages. On a mid-pagination API error it returns
 // whatever was collected so far rather than failing the whole request.
 async function fetchYouTubePlaylists(accessToken: string) {
+  assertGoogleIntegrationsEnabled();
+
   const playlists: Array<{ id: string; title: string }> = [];
   let pageToken: string | undefined;
 
@@ -209,6 +224,8 @@ async function getUsableYouTubeAccessToken(
   },
   tokenKey: string
 ) {
+  assertGoogleIntegrationsEnabled();
+
   // AAD binds the token ciphertext to this connection id (see token-vault).
   const aad = oauthTokenAad(connection.id);
   // Reuse the cached token only if it won't expire within the next 60s, leaving

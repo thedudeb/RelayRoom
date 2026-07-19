@@ -116,9 +116,16 @@ Drive and YouTube connections are separate OAuth grants. Set these before testin
 - `DETECTION_WEBHOOK_SECRET` — for the signed-webhook trigger path (must NOT share value with `CRON_SECRET`)
 - `CRON_SECRET` — Vercel sends this as a bearer token on cron invocations
 - `API_KEY_PEPPER` — optional; enables HMAC-hashed API keys, legacy SHA-256 keys keep working
+- `GOOGLE_INTEGRATIONS_DISABLED` — defaults to paused unless explicitly set to `false`; parking mode keeps RelayRoom online while blocking Drive/YouTube OAuth, detection, folder probing, watch maintenance, playlist calls, and uploads
 - `DRIVE_WATCH_WEBHOOK_URL` — optional; defaults to `${request origin}/api/webhooks/drive`. Override when the deployment URL Vercel reports doesn't match the one Google should call.
 
 The callbacks encrypt Google access and refresh tokens before saving them to `OAuthConnection`. Disconnect wipes both the access token and refresh token from the row.
+
+## Parked Mode
+
+RelayRoom defaults to parked mode unless `GOOGLE_INTEGRATIONS_DISABLED=false` is explicitly set. Use this when you want RelayRoom to stay available without spending Google Drive or YouTube API quota. The app still serves demo mode, queue history, settings, health, read-only APIs, and CSV exports. It blocks Drive/YouTube connect/reconnect, token vending, manual detection, folder probing, Drive watch maintenance, signed detection webhooks, playlist listing/creation, route-to-channel, and uploads.
+
+For the strongest stop, also keep the scheduled Vercel crons removed, disable or cap Drive/YouTube API quotas in Google Cloud, and disable/delete the Drive/YouTube OAuth client secrets. Google sign-in can stay enabled if you still want authenticated access to historical data. To resume live automation later, set `GOOGLE_INTEGRATIONS_DISABLED=false`, restore the Google Cloud controls, and re-add the Vercel cron schedules.
 
 ## Detection Design
 
